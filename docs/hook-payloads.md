@@ -31,3 +31,6 @@
 1. `Agent` 도구의 `PostToolUse`는 하위 에이전트가 끝나기 전에 즉시 온다(백그라운드 실행). 이 호출 자체는 팀장의 "작업 위임"일 뿐이다.
 2. `Stop`이 하위 에이전트가 아직 도는 중에도 온다(`background_tasks`가 있음). 팀원이 남아 있으면 팀장은 "끝남"이 아니라 `idle`(하위 에이전트 기다리는 중)로 두고, 완료 연출은 **팀원이 모두 퇴근한 뒤**의 `Stop`에서만 한다. `SubagentStop` 직후 알림 성격의 `UserPromptSubmit`(`<task-notification>…`)이 다시 오고 이어서 `Stop`이 한 번 더 온다.
 3. 사용자가 입력한 프롬프트와 하위 에이전트 완료 알림이 모두 `UserPromptSubmit`으로 온다. 본문이 `<task-notification>`으로 시작하면 사용자 요청이 아니다.
+
+## 종단 확인 (2026-10-21)
+임시 프로젝트의 로컬 설정에만 hook을 넣고 실제 `claude -p`로 확인했다. 서버 화면 상태가 `off → idle → read → run → write → (팀원 Explore 등장: write→read → 퇴근) → idle(완료) → off` 순으로 바뀌었고, 승인이 필요한 명령은 `wait`(승인 기다리는 중)으로 표시됐다. hook 1회 지연은 약 75ms(서버 켜짐/꺼짐 동일, 대부분 node 시작 시간)이고, 서버가 꺼져 있어도 Claude 작업은 정상 종료됐다.
