@@ -71,3 +71,21 @@ test('detail에는 비밀값이 없고 200자로 제한된다', () => {
   const env = normalizeEvent({ session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse', tool_name: 'Read', tool_input: { file_path: '/work/a/.env' } }, NOW);
   assert.ok(!env.detail.includes('.env'));
 });
+
+test('아주 긴 명령도 빠르게 처리되고 detail은 200자 이하이며 비밀이 새지 않는다', () => {
+  const t0 = Date.now();
+  const ev = normalizeEvent({
+    session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse', tool_name: 'Bash',
+    tool_input: { command: 'sk-aaaaaaaaaaaaaaaaaaaa '.repeat(5000) },
+  }, NOW);
+  assert.ok(Date.now() - t0 < 500);
+  assert.ok(ev.detail.length <= 200);
+  assert.ok(!ev.detail.includes('sk-'));
+});
+test('자르는 경계에 걸친 토큰의 일부가 detail에 남지 않는다', () => {
+  const ev = normalizeEvent({
+    session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse', tool_name: 'Bash',
+    tool_input: { command: 'x '.repeat(399) + 'ghp_abcdefghijklmnopqrstuvwxyz0123456789' },
+  }, NOW);
+  assert.ok(!ev.detail.includes('ghp_'));
+});

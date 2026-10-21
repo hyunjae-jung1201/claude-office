@@ -2,6 +2,7 @@ import { maskSecrets } from './mask.js';
 
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch']);
 const DETAIL_LIMIT = 200;
+const PRE_MASK_LIMIT = DETAIL_LIMIT * 4; // 마스킹 전에 먼저 자른다(입력 크기 제한)
 
 export function toolCategory(toolName) {
   if (READ_TOOLS.has(toolName)) return 'read';
@@ -14,7 +15,9 @@ function detailOf(input) {
   const v = input.command ?? input.file_path ?? input.notebook_path ?? input.path ?? input.pattern
     ?? input.url ?? input.query ?? input.description;
   if (typeof v !== 'string' || !v) return undefined;
-  return maskSecrets(v).slice(0, DETAIL_LIMIT);
+  // 자르는 경계에 걸친 토큰 조각이 가려지지 않은 채 남지 않도록 마지막 단어를 버린다.
+  const cut = v.length > PRE_MASK_LIMIT ? v.slice(0, PRE_MASK_LIMIT).replace(/\S*$/, '') : v;
+  return maskSecrets(cut).slice(0, DETAIL_LIMIT);
 }
 
 const str = (v) => (typeof v === 'string' && v ? v : undefined);
