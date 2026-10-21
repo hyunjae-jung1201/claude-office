@@ -52,3 +52,25 @@ test('응답 없는 서버에도 1.5초 안에 끝난다 (타임아웃 1초)', a
   assert.equal(code, 0);
   assert.ok(ms < 1500, `took ${ms}ms`);
 });
+
+// ---- 최종 검토: 포트는 config.json 한 곳에서만 정한다
+import { writeFileSync, mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+test('CLAUDE_OFFICE_URL이 없으면 설정 파일의 port로 보낸다', async () => {
+  let received = null;
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (c) => (body += c));
+    req.on('end', () => { received = body; res.writeHead(204).end(); });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  const cfg = join(mkdtempSync(join(tmpdir(), 'office-hook-')), 'config.json');
+  writeFileSync(cfg, JSON.stringify({ port, projects: [] }));
+  const { code } = await runHook('{"session_id":"s9"}', { CLAUDE_OFFICE_URL: '', CLAUDE_OFFICE_CONFIG: cfg });
+  server.close();
+  assert.equal(code, 0);
+  assert.equal(received, '{"session_id":"s9"}');
+});

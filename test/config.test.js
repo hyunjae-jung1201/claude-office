@@ -95,3 +95,10 @@ test('addProject: 6번째와 중복은 거절하고 파일을 바꾸지 않는�
   const file2 = cfgFile({ projects: [P('A', '/work/a')] });
   assert.throws(() => addProject(file2, '/work/a/'), /중복/);
 });
+
+// ---- 최종 검토: 화면은 팀원 4명까지만 배치할 수 있다
+test('maxMembers는 1~4만 허용한다', () => {
+  assert.throws(() => loadConfig(cfgFile({ maxMembers: 5, projects: [] })), /maxMembers/);
+  assert.throws(() => loadConfig(cfgFile({ maxMembers: 0, projects: [] })), /maxMembers/);
+  assert.equal(loadConfig(cfgFile({ maxMembers: 2, projects: [] })).maxMembers, 2);
+});

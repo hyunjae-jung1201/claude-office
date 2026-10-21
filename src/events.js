@@ -2,6 +2,8 @@ import { maskSecrets } from './mask.js';
 
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch']);
 const DETAIL_LIMIT = 200;
+// Claude가 사용자의 답을 기다리며 멈추는 도구들
+const USER_WAIT_TOOLS = { AskUserQuestion: 'answer', ExitPlanMode: 'plan' };
 const PRE_MASK_LIMIT = DETAIL_LIMIT * 4; // 마스킹 전에 먼저 자른다(입력 크기 제한)
 
 export function toolCategory(toolName) {
@@ -48,6 +50,7 @@ export function normalizeEvent(payload, now) {
     case 'PostToolUse': {
       const tool = str(payload.tool_name);
       if (!tool) return null;
+      if (name === 'PreToolUse' && USER_WAIT_TOOLS[tool]) return { ...base, type: 'wait', waitKind: USER_WAIT_TOOLS[tool], ...agent() };
       return {
         ...base,
         type: name === 'PreToolUse' ? 'tool' : 'toolDone',
@@ -57,9 +60,9 @@ export function normalizeEvent(payload, now) {
       };
     }
     case 'PermissionRequest':
-      return { ...base, type: 'wait', detail: detailOf(payload.tool_input), ...agent() };
+      return { ...base, type: 'wait', waitKind: 'approval', detail: detailOf(payload.tool_input), ...agent() };
     case 'Notification':
-      return payload.notification_type === 'permission_prompt' ? { ...base, type: 'wait' } : null;
+      return payload.notification_type === 'permission_prompt' ? { ...base, type: 'wait', waitKind: 'approval' } : null;
     case 'SubagentStart':
     case 'SubagentStop': {
       const a = agent();

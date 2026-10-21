@@ -97,3 +97,24 @@ test('비밀번호에 / 가 들어간 URL 자격증명도 가린다', () => {
 test('경로에 @가 있는 일반 URL은 건드리지 않는다', () => {
   assert.equal(maskSecrets('curl https://host.example/a/b@c'), 'curl https://host.example/a/b@c');
 });
+
+// ---- 최종 검토: 실제로 흔한 비밀 형태
+test('curl -u user:pass, Basic 인증 헤더를 가린다', () => {
+  gone('curl -u admin:Hunter2pass https://x', 'Hunter2pass');
+  gone('curl -H "Authorization: Basic YWRtaW46aHVudGVyMg==" x', 'YWRtaW46aHVudGVyMg');
+});
+test('PASS=, AUTH=, PRIVATE_KEY= 형태를 가린다', () => {
+  gone('export PASS=hunter2hunter2', 'hunter2hunter2');
+  gone('AUTH=abcd1234efgh', 'abcd1234efgh');
+  gone('export PRIVATE_KEY=abcd1234efgh', 'abcd1234efgh');
+});
+test('author: 같은 일반 단어는 건드리지 않는다', () => {
+  assert.equal(maskSecrets('git log --author=kim'), 'git log --author=kim');
+  assert.equal(maskSecrets('author: kim'), 'author: kim');
+});
+test('민감한 파일/폴더 경로: deploy_key, .ssh/·.aws/ 안, secrets.yml, .netrc, .npmrc, .p12', () => {
+  for (const p of ['~/.ssh/deploy_key', '~/.aws/config', 'config/secrets.yml', '~/.netrc', '~/.npmrc', 'cert/client.p12', '~/.ssh/config']) {
+    assert.equal(maskSecrets(`cat ${p}`), 'cat 설정 파일', p);
+  }
+  assert.equal(maskSecrets('cat src/server.js'), 'cat src/server.js');
+});

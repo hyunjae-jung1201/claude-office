@@ -24,7 +24,12 @@ function validateProjects(list) {
 
 export function loadConfig(path) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
-  return { ...DEFAULTS, ...raw, projects: validateProjects(raw.projects ?? []) };
+  const config = { ...DEFAULTS, ...raw, projects: validateProjects(raw.projects ?? []) };
+  // 화면은 팀당 팀원 4명까지만 자리를 배치한다
+  if (!Number.isInteger(config.maxMembers) || config.maxMembers < 1 || config.maxMembers > 4) {
+    throw new Error('maxMembers는 1~4 사이의 정수여야 합니다');
+  }
+  return config;
 }
 
 // `/office add`: 설정 파일에 프로젝트를 추가한다. 검증을 통과한 뒤에만 파일을 쓴다.

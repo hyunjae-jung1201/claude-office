@@ -203,3 +203,52 @@ test('WebSocket: 다른 출처에서의 접속은 거부, 자기 출처와 Origi
     assert.equal(await wsOpens(url, `http://127.0.0.1:${port}`), true);
     assert.equal(await wsOpens(url, null), true);
   }));
+
+// ---- 최종 검토 반영
+test('PostToolUse가 요약보다 먼저 와도 요약 문구가 표시된다', () => {
+  const pending = [];
+  const summarizer = { summarize: () => new Promise((resolve) => pending.push(resolve)) };
+  return withServer({ summarizer }, async ({ port }) => {
+    const c = await connect(port);
+    await post(port, hookPayload());
+    await post(port, hookPayload({ hook_event_name: 'PostToolUse' }));
+    while (pending.length < 1) await new Promise((r) => setTimeout(r, 10));
+    pending[0]('학습 데이터 다운 중');
+    await c.waitFor((s) => teamA(s).label === '학습 데이터 다운 중');
+    c.close();
+  });
+});
+
+test('AskUserQuestion/ExitPlanMode는 코드 작성이 아니라 답변·계획 승인 대기로 표시된다', () =>
+  withServer({}, async ({ port }) => {
+    const c = await connect(port);
+    await post(port, hookPayload({ tool_name: 'AskUserQuestion', tool_input: { questions: [] } }));
+    const s1 = await c.waitFor((s) => teamA(s).status === 'wait');
+    assert.equal(teamA(s1).label, '답변 기다리는 중');
+    await post(port, hookPayload({ tool_name: 'ExitPlanMode', tool_input: {} }));
+    await c.waitFor((s) => teamA(s).label === '계획 승인 기다리는 중');
+    c.close();
+  }));
+
+test('지정하지 않은 폴더의 이벤트는 브로드캐스트도 추적 상태도 만들지 않는다', () =>
+  withServer({}, async ({ port, stats }) => {
+    const c = await connect(port);
+    await c.waitFor(() => true);
+    const before = c.seen.length;
+    assert.equal((await post(port, hookPayload({ cwd: '/home/hyeanjae' }))).status, 204);
+    await new Promise((r) => setTimeout(r, 100));
+    assert.equal(c.seen.length, before);
+    assert.equal(stats().seqs, 0);
+    c.close();
+  }));
+
+test('tick으로 사라진 세션의 추적 상태도 정리된다', () => {
+  let t = 1_000_000;
+  return withServer({ now: () => t, tickMs: 20 }, async ({ port, stats }) => {
+    await post(port, hookPayload());
+    assert.equal(stats().seqs, 1);
+    t += 61 * 60 * 1000;
+    for (let i = 0; i < 100 && stats().seqs > 0; i++) await new Promise((r) => setTimeout(r, 20));
+    assert.equal(stats().seqs, 0);
+  });
+});

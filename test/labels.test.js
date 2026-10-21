@@ -22,3 +22,11 @@ test('명령은 첫 단어만 쓰고, 20자를 넘으면 …로 줄인다', () =
   assert.ok(long.length <= 20, long);
   assert.ok(long.includes('…'));
 });
+
+test('wait 종류별 문구', () => {
+  const w = (waitKind) => ({ sessionId: 's', cwd: '/c', ts: 0, type: 'wait', waitKind });
+  assert.equal(ruleLabel(w('approval')), '승인 기다리는 중');
+  assert.equal(ruleLabel(w('answer')), '답변 기다리는 중');
+  assert.equal(ruleLabel(w('plan')), '계획 승인 기다리는 중');
+  assert.equal(ruleLabel(w(undefined)), '승인 기다리는 중');
+});

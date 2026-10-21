@@ -30,6 +30,7 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 - `/office` 화면 열기, `/office add <폴더> [이름]` 프로젝트 추가(최대 5개), `/office list`
 - 말풍선 색: 파랑 읽는 중 / 청록 코드 작성 / 보라 명령 실행 / 주황 승인 대기(느낌표 깜빡임) / 회색 쉬는 중
 - 30초(`celebrateAfterSeconds`) 이상 일하고 끝나면 팔 들기 + "완료!" + 초록 링이 4초 나온다.
+- 한계: 승인을 눌러도 hook이 승인 완료 신호를 주지 않아서, 그 명령이 끝날 때까지 "승인 기다리는 중"으로 보인다.
 - Claude가 꺼져 있으면 휴게실에서 앉아서 잔다. 10분(`offAfterMinutes`) 동안 신호가 없어도 꺼진 것으로 본다.
 
 ## 화면 확인용 데모

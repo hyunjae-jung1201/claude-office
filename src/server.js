@@ -12,6 +12,7 @@ import { createSummarizer } from './summarizer.js';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = '127.0.0.1';
 const BODY_LIMIT = 1024 * 1024;
+const BUBBLE_EVENTS = new Set(['start', 'end', 'prompt', 'tool', 'wait', 'stop', 'agentStart', 'agentStop']);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -48,13 +49,16 @@ export async function startServer({
   };
 
   function handleEvent(ev) {
+    if (!matchProject(config, ev.cwd)) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
     applyEvent(state, ev, ev.ts);
     const key = `${ev.sessionId}|${ev.agentId ?? ''}`;
-    const seq = bump(key);
+    // 말풍선을 바꾸는 이벤트만 번호를 올린다(toolDone은 제외: 요약이 도구 종료 뒤에 도착해도 보이게)
+    const seq = BUBBLE_EVENTS.has(ev.type) ? bump(key) : (seqs.get(key) ?? 0);
     if (ev.type === 'end') for (const k of [...seqs.keys()]) if (k.startsWith(`${ev.sessionId}|`)) seqs.delete(k);
     if (ev.type === 'agentStop') seqs.delete(key);
 
-    if (ev.type === 'tool' && matchProject(config, ev.cwd)) {
+    if (ev.type === 'wait') setLabel(state, ev.sessionId, ev.agentId ?? null, ruleLabel(ev));
+    if (ev.type === 'tool') {
       setLabel(state, ev.sessionId, ev.agentId ?? null, ruleLabel(ev));
       if (summarizer) {
         summarizer.summarize(ev).then((label) => {
@@ -138,6 +142,7 @@ export async function startServer({
 
   const timer = setInterval(() => {
     tick(state, now());
+    for (const k of [...seqs.keys()]) if (!state.sessions.has(k.split('|')[0])) seqs.delete(k); // 사라진 세션의 추적 상태 정리
     broadcast();
   }, tickMs);
   timer.unref();
@@ -147,6 +152,7 @@ export async function startServer({
   return {
     port: server.address().port,
     host: HOST,
+    stats: () => ({ seqs: seqs.size, sessions: state.sessions.size }),
     close() {
       clearInterval(timer);
       for (const ws of clients) ws.terminate();

@@ -89,3 +89,13 @@ test('자르는 경계에 걸친 토큰의 일부가 detail에 남지 않는다'
   }, NOW);
   assert.ok(!ev.detail.includes('ghp_'));
 });
+
+test('AskUserQuestion/ExitPlanMode PreToolUse는 wait(답변/계획 승인)이고, PermissionRequest는 approval', () => {
+  const base = { session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse' };
+  const ask = normalizeEvent({ ...base, tool_name: 'AskUserQuestion', tool_input: {} }, NOW);
+  assert.deepEqual([ask.type, ask.waitKind], ['wait', 'answer']);
+  const plan = normalizeEvent({ ...base, tool_name: 'ExitPlanMode', tool_input: {} }, NOW);
+  assert.deepEqual([plan.type, plan.waitKind], ['wait', 'plan']);
+  const perm = normalizeEvent({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'rm x' } }, NOW);
+  assert.deepEqual([perm.type, perm.waitKind], ['wait', 'approval']);
+});

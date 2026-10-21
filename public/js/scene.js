@@ -311,6 +311,16 @@ export function createScene(canvas, overlay) {
     return entity;
   }
 
+  // 퇴근한 팀원: 화면에 남는 CSS2D 요소와 GPU 자원을 모두 정리한다(탭을 오래 켜 둬도 느려지지 않도록)
+  function disposeEntity(entity) {
+    entity.group.traverse((o) => {
+      if (o.isCSS2DObject) o.element.remove();
+      o.geometry?.dispose();
+      for (const m of [].concat(o.material ?? [])) m.dispose();
+    });
+    scene.remove(entity.group);
+  }
+
   function setBubble(entity, text, status, done = false) {
     const el = entity.bubble;
     el.classList.toggle('done', done);
@@ -327,6 +337,13 @@ export function createScene(canvas, overlay) {
     const now = performance.now();
     snapshot.teams.forEach((team, i) => {
       if (i >= 5) return;
+      try { updateTeam(team, i, now); } catch (err) { console.error(`team ${i} update failed`, err); } // 한 팀의 오류가 다른 팀을 멈추지 않게
+    });
+    firstSnapshot = false;
+  }
+
+  function updateTeam(team, i, now) {
+    {
       let leader = leaders[i];
       if (!leader) {
         const start = targetFor(team.status, i);
@@ -380,8 +397,7 @@ export function createScene(canvas, overlay) {
         leader.more.element.textContent = `+${team.overflow}`;
         leader.more.visible = true;
       } else if (leader.more) leader.more.visible = false;
-    });
-    firstSnapshot = false;
+    }
   }
 
   // ---- 프레임마다: 이동, 포즈 애니메이션, 장식
@@ -470,7 +486,7 @@ export function createScene(canvas, overlay) {
     for (const [key, m] of members) {
       const moving = step(m, dt);
       if (m.leaving && !moving) {
-        scene.remove(m.group);
+        disposeEntity(m);
         members.delete(key);
       }
     }
