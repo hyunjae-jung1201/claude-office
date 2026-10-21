@@ -15,11 +15,12 @@ function after(args, flag) {
 test('buildRoleSpawn: 읽기 도구만 허용하고, 쓰기·실행 계열은 허용 목록에 없고 거부 목록에 있다', () => {
   const { args } = buildRoleSpawn(ROLE, '프롬프트', '/r/app');
   assert.deepEqual(args.slice(0, 2), ['-p', '프롬프트']);
-  assert.deepEqual(after(args, '--allowedTools'), ['Read', 'Grep', 'Glob']);
+  // 읽기 도구는 저장소(작업 폴더) 안으로만 허용한다
+  assert.deepEqual(after(args, '--allowedTools'), ['Read(./**)', 'Grep(./**)', 'Glob(./**)']);
   const denied = after(args, '--disallowedTools');
   for (const t of ['Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent']) {
     assert.ok(denied.includes(t), t);
-    assert.ok(!after(args, '--allowedTools').includes(t), t);
+    assert.ok(!after(args, '--allowedTools').some((a) => a === t || a.startsWith(`${t}(`)), t);
   }
   assert.deepEqual(after(args, '--model'), ['sonnet']);
 });
@@ -27,7 +28,7 @@ test('buildRoleSpawn: 읽기 도구만 허용하고, 쓰기·실행 계열은 �
 test('buildRoleSpawn: 민감 경로 읽기 거부 규칙이 Read/Grep/Glob에 걸려 있다', () => {
   const denied = after(buildRoleSpawn(ROLE, 'p', '/r').args, '--disallowedTools');
   for (const tool of ['Read', 'Grep', 'Glob']) {
-    for (const pat of ['**/.env*', '~/.ssh/**', '~/.aws/**', '**/*.pem', '**/id_*']) assert.ok(denied.includes(`${tool}(${pat})`), `${tool}(${pat})`);
+    for (const pat of ['**/.env*', '~/.ssh/**', '~/.aws/**', '**/*.pem', '**/id_*', '~/.claude/**', '~/.config/**', '~/.docker/**', '~/.kube/**', '~/.git-credentials']) assert.ok(denied.includes(`${tool}(${pat})`), `${tool}(${pat})`);
   }
 });
 

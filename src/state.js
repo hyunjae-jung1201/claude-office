@@ -14,8 +14,61 @@ export const DEFAULT_LABEL = {
 const WAITING_FOR_AGENTS = '하위 에이전트 기다리는 중';
 const BACKGROUND_LABEL = '백그라운드 작업 중';
 
+export const ROLE_LINGER_MS = 8000; // 검토가 끝난 역할자가 화면에 남아 있는 시간
+const HISTORY_LIMIT = 20;
+const LIMIT_NOTICE = '오늘 검토 한도에 도달했습니다';
+
 export function createState(config) {
-  return { config, sessions: new Map() };
+  return { config, sessions: new Map(), roleActivity: new Map(), badges: new Map(), history: [], notice: null };
+}
+
+export const teamOfSession = (state, sessionId) => state.sessions.get(sessionId)?.project;
+
+const reviewSummary = (r) => ({
+  id: r.id, repoRoot: r.repoRoot, repoName: r.repoName, team: r.team, verdict: r.verdict, concerns: r.concerns, at: r.finishedAt,
+  summary: r.results.find((x) => x.verdict !== 'ok')?.summary || '문제 없음',
+});
+
+// 역할자 검토 이벤트(스케줄러)를 화면 상태에 반영한다
+export function applyReviewEvent(state, ev, now) {
+  const acts = ev.team ? state.roleActivity : null;
+  switch (ev.type) {
+    case 'start':
+      if (acts) acts.set(ev.team, new Map(ev.roles.map((r) => [r.id, { id: r.id, name: r.name, color: r.color, status: 'running', label: '검토 중', doneAt: 0 }])));
+      break;
+    case 'role': {
+      const entry = acts?.get(ev.team)?.get(ev.roleId);
+      if (!entry) break;
+      entry.status = ev.status;
+      if (ev.status !== 'running') {
+        entry.label = ev.status === 'failed' ? '검토 실패' : (ev.summary || '검토 끝').slice(0, 30);
+        entry.doneAt = now;
+      }
+      break;
+    }
+    case 'done': {
+      const r = ev.review;
+      state.history = [reviewSummary(r), ...state.history].slice(0, HISTORY_LIMIT);
+      if (ev.team) {
+        state.badges.set(ev.team, { verdict: r.verdict, concerns: r.concerns, at: now });
+        for (const e of acts.get(ev.team)?.values() ?? []) if (e.status === 'running') { e.status = 'done'; e.doneAt = now; }
+      }
+      state.notice = null;
+      break;
+    }
+    case 'skipped':
+      if (ev.reason === 'limit') state.notice = LIMIT_NOTICE;
+      break;
+    default:
+  }
+}
+
+// 서버 시작 때 저장된 검토(최근순)에서 목록과 팀 배지를 복원한다
+export function setReviewHistory(state, reviews) {
+  state.history = reviews.slice(0, HISTORY_LIMIT).map(reviewSummary);
+  for (const r of reviews) {
+    if (r.team && !state.badges.has(r.team)) state.badges.set(r.team, { verdict: r.verdict, concerns: r.concerns, at: r.finishedAt });
+  }
 }
 
 function sessionFor(state, ev, project) {
@@ -149,8 +202,13 @@ export function snapshot(state, now) {
     for (const s of state.sessions.values()) {
       if (s.project === p.name && (!latest || s.lastEventAt > latest.lastEventAt)) latest = s;
     }
+    const roleAct = state.roleActivity.get(p.name);
+    const roles = roleAct
+      ? [...roleAct.values()].filter((r) => r.status === 'running' || now - r.doneAt <= ROLE_LINGER_MS).map(({ id, name, color, status, label }) => ({ id, name, color, status, label }))
+      : [];
+    const badge = state.badges.get(p.name) ?? null;
     if (!latest) {
-      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, members: [], overflow: 0, finishedAt: null };
+      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, members: [], overflow: 0, finishedAt: null, roles, badge };
     }
     const all = [...latest.members.values()].sort((a, b) => a.startedAt - b.startedAt);
     // 응답은 끝났지만 백그라운드 명령이 도는 중이면 서버실에서 일하는 것으로 보여 준다
@@ -163,7 +221,9 @@ export function snapshot(state, now) {
       members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, startedAt: m.startedAt })),
       overflow: Math.max(0, all.length - maxMembers),
       finishedAt: latest.finishedAt,
+      roles,
+      badge,
     };
   });
-  return { ts: now, teams };
+  return { ts: now, teams, reviews: state.history, reviewNotice: state.notice ?? undefined };
 }

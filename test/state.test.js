@@ -191,3 +191,78 @@ test('live 신호가 계속 오면 10분 넘게 조용해도 꺼지지 않는다
   for (let t = 30_000; t <= 20 * MIN; t += 30_000) { feed(st, live('idle', { ts: t })); tick(st, t); }
   assert.equal(teamA(st, 20 * MIN).status, 'idle');
 });
+
+// ---- 역할자 검토 상태
+import { applyReviewEvent, setReviewHistory, teamOfSession, ROLE_LINGER_MS } from '../src/state.js';
+
+const ROLES3 = [{ id: 'pm', name: 'PM', color: '#e8637a' }, { id: 'developer', name: '개발자', color: '#2a7f8f' }, { id: 'qa', name: 'QA', color: '#8fb339' }];
+const rev = (o = {}) => ({ id: 'r1', repoRoot: '/w/a', repoName: 'a', team: 'A', startedAt: 1000, finishedAt: 9000, verdict: 'concern', concerns: 2, results: [{ roleId: 'pm', verdict: 'ok', summary: '충족', findings: [] }, { roleId: 'qa', verdict: 'concern', summary: '빈 값 미처리', findings: [] }], files: [], ...o });
+
+test('검토 시작: 팀에 역할자 3명이 running으로 나타난다', () => {
+  const st = createState(config);
+  applyReviewEvent(st, { type: 'start', repoRoot: '/w/a', repoName: 'a', team: 'A', roles: ROLES3 }, 1000);
+  const t = teamA(st, 1000);
+  assert.deepEqual(t.roles.map((r) => [r.id, r.name, r.color, r.status, r.label]), ROLES3.map((r) => [r.id, r.name, r.color, 'running', '검토 중']));
+  assert.equal(t.badge, null);
+});
+
+test('역할 결과가 오면 상태·문구가 바뀌고, 완료 후 일정 시간이 지나면 사라지며 배지가 남는다', () => {
+  const st = createState(config);
+  applyReviewEvent(st, { type: 'start', repoRoot: '/w/a', repoName: 'a', team: 'A', roles: ROLES3 }, 1000);
+  applyReviewEvent(st, { type: 'role', repoRoot: '/w/a', team: 'A', roleId: 'pm', status: 'done', summary: '요구사항 충족' }, 2000);
+  applyReviewEvent(st, { type: 'role', repoRoot: '/w/a', team: 'A', roleId: 'qa', status: 'failed' }, 2500);
+  let t = teamA(st, 3000);
+  assert.deepEqual(t.roles.map((r) => [r.id, r.status, r.label]), [['pm', 'done', '요구사항 충족'], ['developer', 'running', '검토 중'], ['qa', 'failed', '검토 실패']]);
+  applyReviewEvent(st, { type: 'done', repoRoot: '/w/a', team: 'A', review: rev() }, 9000);
+  t = teamA(st, 9000);
+  assert.deepEqual(t.badge, { verdict: 'concern', concerns: 2, at: 9000 });
+  assert.ok(t.roles.every((r) => r.status !== 'running')); // 남아 있던 running은 끝난 것으로 정리
+  t = teamA(st, 9000 + ROLE_LINGER_MS + 1);
+  assert.deepEqual(t.roles, []);
+  assert.equal(t.badge.verdict, 'concern'); // 배지는 다음 검토 때까지 유지
+});
+
+test('팀이 없는 저장소의 검토는 최근 검토 목록에만 반영된다', () => {
+  const st = createState(config);
+  applyReviewEvent(st, { type: 'start', repoRoot: '/x/free', repoName: 'free', roles: ROLES3 }, 1000);
+  applyReviewEvent(st, { type: 'done', repoRoot: '/x/free', review: rev({ repoRoot: '/x/free', repoName: 'free', team: undefined }) }, 9000);
+  const snap = snapshot(st, 9000);
+  assert.ok(snap.teams.every((t) => t.badge === null && t.roles.length === 0));
+  assert.deepEqual(snap.reviews.map((r) => [r.repoName, r.team, r.verdict, r.concerns, r.summary]), [['free', undefined, 'concern', 2, '빈 값 미처리']]);
+});
+
+test('최근 검토 목록은 최근순 20건, 한도 도달 알림은 이후 검토 완료 때 사라진다', () => {
+  const st = createState(config);
+  for (let i = 0; i < 25; i++) applyReviewEvent(st, { type: 'done', repoRoot: '/w/a', team: 'A', review: rev({ id: `r${i}`, finishedAt: 1000 + i }) }, 1000 + i);
+  const snap = snapshot(st, 5000);
+  assert.equal(snap.reviews.length, 20);
+  assert.equal(snap.reviews[0].id, 'r24');
+  applyReviewEvent(st, { type: 'skipped', repoRoot: '/w/a', team: 'A', reason: 'limit' }, 6000);
+  assert.equal(snapshot(st, 6000).reviewNotice, '오늘 검토 한도에 도달했습니다');
+  applyReviewEvent(st, { type: 'skipped', repoRoot: '/w/a', reason: 'no-roles' }, 6100);
+  assert.equal(snapshot(st, 6100).reviewNotice, '오늘 검토 한도에 도달했습니다'); // 다른 사유는 알림을 바꾸지 않는다
+  applyReviewEvent(st, { type: 'done', repoRoot: '/w/a', team: 'A', review: rev({ id: 'later' }) }, 7000);
+  assert.equal(snapshot(st, 7000).reviewNotice, undefined);
+});
+
+test('setReviewHistory: 서버 재시작 때 저장된 검토에서 목록과 팀 배지를 복원한다', () => {
+  const st = createState(config);
+  setReviewHistory(st, [rev({ id: 'new', finishedAt: 5000, verdict: 'ok', concerns: 0 }), rev({ id: 'old', finishedAt: 1000 })]);
+  const snap = snapshot(st, 6000);
+  assert.deepEqual(snap.reviews.map((r) => r.id), ['new', 'old']);
+  assert.deepEqual(teamA(st, 6000).badge, { verdict: 'ok', concerns: 0, at: 5000 });
+});
+
+test('teamOfSession: 세션이 속한 팀 이름, 없으면 undefined', () => {
+  const st = createState(config);
+  feed(st, ev('start', 0));
+  assert.equal(teamOfSession(st, 's1'), 'A');
+  assert.equal(teamOfSession(st, 'nope'), undefined);
+});
+
+test('검토 정보가 없는 스냅샷에도 새 필드가 기본값으로 있다', () => {
+  const snap = snapshot(createState(config), 0);
+  assert.ok(snap.teams.every((t) => Array.isArray(t.roles) && t.roles.length === 0 && t.badge === null));
+  assert.deepEqual(snap.reviews, []);
+  assert.equal(snap.reviewNotice, undefined);
+});

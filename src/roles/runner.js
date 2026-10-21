@@ -7,7 +7,7 @@ const MAX_OUTPUT = 8 * 1024 * 1024;
 
 const DENIED_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent'];
 // 비밀값이 있을 만한 경로는 읽기 도구로도 열지 못하게 한다
-const SENSITIVE_GLOBS = ['**/.env*', '**/*.pem', '**/*.key', '**/id_*', '**/.npmrc', '**/.netrc', '**/*secret*', '**/*credentials*', '~/.ssh/**', '~/.aws/**', '~/.gnupg/**'];
+const SENSITIVE_GLOBS = ['**/.env*', '**/*.pem', '**/*.key', '**/id_*', '**/.npmrc', '**/.netrc', '**/*secret*', '**/*credentials*', '~/.ssh/**', '~/.aws/**', '~/.gnupg/**', '~/.claude/**', '~/.config/**', '~/.docker/**', '~/.kube/**', '~/.git-credentials'];
 const DENY_READ = ['Read', 'Grep', 'Glob'].flatMap((tool) => SENSITIVE_GLOBS.map((g) => `${tool}(${g})`));
 
 export function buildRoleSpawn(role, prompt, repoRoot) {
@@ -16,7 +16,8 @@ export function buildRoleSpawn(role, prompt, repoRoot) {
       '-p', prompt,
       '--model', role.model,
       '--setting-sources', '', // 사용자 전역 설정·hook을 읽지 않는다
-      '--allowedTools', ...role.tools,
+      // 읽기 도구는 작업 폴더(저장소) 안으로만 허용한다. 저장소 밖의 홈 폴더 파일은 읽을 수 없다.
+      '--allowedTools', ...role.tools.map((t) => `${t}(./**)`),
       '--disallowedTools', ...DENIED_TOOLS, ...DENY_READ,
       '--no-session-persistence',
     ],
