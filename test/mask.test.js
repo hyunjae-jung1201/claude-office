@@ -66,3 +66,22 @@ test('아주 긴 입력도 빠르게 처리한다 (백트래킹 폭주 없음)',
   maskSecrets('x/'.repeat(3000));
   assert.ok(Date.now() - t0 < 500, `${Date.now() - t0}ms`);
 });
+
+// ---- 보안 리뷰 2차: 값에 쉼표/중괄호가 있는 비밀번호, 사용자명이 비었거나 콜론 없는 URL 자격증명
+test('쉼표나 중괄호가 들어간 따옴표 없는 비밀번호도 끝까지 가린다', () => {
+  gone('password=ab,cd}ef', 'cd}ef');
+  gone('DB_PASSWORD=pa,ss,word99', 'ss,word99');
+});
+test('따옴표로 감싼 값은 공백이 있어도 통째로 가린다', () => {
+  gone('password="correct horse battery"', 'horse battery');
+  gone("secret='two words'", 'two words');
+});
+test('JSON 형태에서 다음 필드는 지우지 않는다', () => {
+  const out = maskSecrets('{"password": "hunter2hunter2", "user": "kim"}');
+  assert.ok(out.includes('"user": "kim"'));
+});
+test('사용자명이 비었거나 콜론 없이 토큰만 있는 URL 자격증명을 가린다', () => {
+  gone('git clone https://:pw12345abc@host.example/r.git', 'pw12345abc');
+  gone('git clone https://sometoken123@host.example/r.git', 'sometoken123');
+  gone('git clone https://user:pass99@host.example/r.git', 'pass99');
+});
