@@ -1,0 +1,15 @@
+{
+  "name": "claude-office",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "프로젝트별 Claude Code 작업 상태를 3D 사무실로 보여주는 대시보드",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "three": "0.160.0",
+    "ws": "8.18.0"
+  }
+}
