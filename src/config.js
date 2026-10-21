@@ -35,6 +35,10 @@ function validateProjects(list, remotes = []) {
     paths.add(pathKey);
     const out = { name: p.name, path, color: p.color ?? PALETTE[i % PALETTE.length] };
     if (p.host) out.host = p.host;
+    if (p.roles !== undefined) {
+      if (!Array.isArray(p.roles) || p.roles.some((r) => typeof r !== 'string' || !r)) throw new Error(`프로젝트 ${p.name}의 roles는 역할 id 목록이어야 합니다`);
+      out.roles = [...p.roles];
+    }
     if (p.aliases !== undefined) {
       if (!Array.isArray(p.aliases) || p.aliases.some((a) => typeof a !== 'string' || !a)) throw new Error(`프로젝트 ${p.name}의 aliases는 문자열 목록이어야 합니다`);
       out.aliases = [...p.aliases];
@@ -49,10 +53,33 @@ function validateProjects(list, remotes = []) {
   });
 }
 
+const ROLES_DEFAULTS = { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report' };
+
+function validateRolesConfig(raw = {}) {
+  const roles = { ...ROLES_DEFAULTS, ...raw, projects: raw.projects ?? {} };
+  const ids = (v, where) => {
+    if (!Array.isArray(v) || v.some((x) => typeof x !== 'string' || !x)) throw new Error(`${where}는 역할 id 목록이어야 합니다`);
+  };
+  const posInt = (v, name, min) => {
+    if (!Number.isFinite(v) || v < min) throw new Error(`roles.${name}는 ${min} 이상의 숫자여야 합니다`);
+  };
+  ids(roles.default, 'roles.default');
+  posInt(roles.cooldownMinutes, 'cooldownMinutes', 0);
+  posInt(roles.minWrites, 'minWrites', 1);
+  posInt(roles.dailyLimit, 'dailyLimit', 1);
+  if (roles.deliver !== 'report') throw new Error('roles.deliver는 현재 "report"만 지원합니다');
+  for (const [path, v] of Object.entries(roles.projects)) {
+    if (v.roles !== undefined) ids(v.roles, `roles.projects ${path}의 roles`);
+    if (v.cooldownMinutes !== undefined) posInt(v.cooldownMinutes, 'projects.cooldownMinutes', 0);
+    if (v.minWrites !== undefined) posInt(v.minWrites, 'projects.minWrites', 1);
+  }
+  return roles;
+}
+
 export function loadConfig(path) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
   const remotes = validateRemotes(raw.remotes ?? []);
-  const config = { ...DEFAULTS, ...raw, remotes, projects: validateProjects(raw.projects ?? [], remotes) };
+  const config = { ...DEFAULTS, ...raw, remotes, projects: validateProjects(raw.projects ?? [], remotes), roles: validateRolesConfig(raw.roles) };
   // 화면은 팀당 팀원 4명까지만 자리를 배치한다
   if (!Number.isInteger(config.maxMembers) || config.maxMembers < 1 || config.maxMembers > 4) {
     throw new Error('maxMembers는 1~4 사이의 정수여야 합니다');

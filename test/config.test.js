@@ -146,3 +146,26 @@ test('aliases: 다른 host의 프로젝트와는 섞이지 않고, 중복 별칭
   assert.equal(matchProject(c, '/home', 'PC2', '공용').name, 'R');
   assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', aliases: ['z'] }, { name: 'B', path: '/b', aliases: ['Z'] }] })), /별칭|중복/);
 });
+
+// ---- roles 설정
+test('roles 기본값', () => {
+  const c = loadConfig(cfgFile({ projects: [] }));
+  assert.deepEqual(c.roles, { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', projects: {} });
+});
+
+test('roles: 값을 덮어쓸 수 있고, 형식 오류·deliver 값은 거부한다', () => {
+  const c = loadConfig(cfgFile({ roles: { cooldownMinutes: 10, default: ['pm'], projects: { '/r': { roles: ['qa'], minWrites: 3 } } }, projects: [] }));
+  assert.equal(c.roles.cooldownMinutes, 10);
+  assert.equal(c.roles.dailyLimit, 120);
+  assert.deepEqual(c.roles.projects['/r'], { roles: ['qa'], minWrites: 3 });
+  assert.throws(() => loadConfig(cfgFile({ roles: { deliver: 'session' }, projects: [] })), /deliver|report/);
+  assert.throws(() => loadConfig(cfgFile({ roles: { default: 'pm' }, projects: [] })), /default/);
+  assert.throws(() => loadConfig(cfgFile({ roles: { cooldownMinutes: -1 }, projects: [] })), /cooldownMinutes/);
+  assert.throws(() => loadConfig(cfgFile({ roles: { projects: { '/r': { roles: 'qa' } } }, projects: [] })), /roles/);
+});
+
+test('팀 항목의 roles는 목록이어야 하고 보존된다', () => {
+  const c = loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', roles: ['pm', 'qa'] }] }));
+  assert.deepEqual(c.projects[0].roles, ['pm', 'qa']);
+  assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', roles: 'pm' }] })), /roles/);
+});
