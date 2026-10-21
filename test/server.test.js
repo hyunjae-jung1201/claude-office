@@ -5,6 +5,7 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../src/server.js';
+import WebSocket from 'ws';
 import { connect } from './helpers/ws-client.js';
 
 const config = {
@@ -12,7 +13,7 @@ const config = {
   projects: [{ name: 'A', path: '/w/a', color: '#e8637a' }, { name: 'B', path: '/w/b', color: '#2a7f8f' }],
 };
 const hookPayload = (extra = {}) => ({ session_id: 's1', cwd: '/w/a', hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'npm test' }, ...extra });
-const post = (port, body) => fetch(`http://127.0.0.1:${port}/event`, { method: 'POST', body: typeof body === 'string' ? body : JSON.stringify(body) });
+const post = (port, body) => fetch(`http://127.0.0.1:${port}/event`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: typeof body === 'string' ? body : JSON.stringify(body) });
 const teamA = (snap) => snap.teams.find((t) => t.name === 'A');
 
 async function withServer(opts, fn) {
@@ -146,3 +147,59 @@ test('정적 파일: public, vendor/three 제공, 경로 탈출은 404', () => {
     assert.equal((await rawGet(port, '/nope')).status, 404);
   });
 });
+
+// ---- 보안 리뷰 반영: 브라우저를 통한 교차 출처 공격(CSRF, WebSocket 하이재킹, DNS 리바인딩) 차단
+function rawRequest(port, { method = 'GET', path = '/', headers = {}, body } = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({ host: '127.0.0.1', port, method, path, headers }, (res) => {
+      res.resume();
+      res.on('end', () => resolve(res.statusCode));
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
+test('/event: Origin 헤더가 있는 요청(웹 페이지에서 온 요청)은 403', () =>
+  withServer({}, async ({ port }) => {
+    const status = await rawRequest(port, {
+      method: 'POST', path: '/event', body: JSON.stringify(hookPayload()),
+      headers: { 'content-type': 'application/json', origin: 'https://evil.example', host: `127.0.0.1:${port}` },
+    });
+    assert.equal(status, 403);
+    const c = await connect(port);
+    await new Promise((r) => setTimeout(r, 50));
+    assert.ok(c.seen.every((s) => teamA(s).status === 'off'));
+    c.close();
+  }));
+
+test('/event: Content-Type이 application/json이 아니면 415 (프리플라이트 없는 단순 요청 차단)', () =>
+  withServer({}, async ({ port }) => {
+    const status = await rawRequest(port, { method: 'POST', path: '/event', body: JSON.stringify(hookPayload()), headers: { 'content-type': 'text/plain' } });
+    assert.equal(status, 415);
+  }));
+
+test('Host가 로컬 주소가 아니면 모든 요청이 403 (DNS 리바인딩 차단)', () =>
+  withServer({}, async ({ port }) => {
+    assert.equal(await rawRequest(port, { path: '/', headers: { host: 'evil.example' } }), 403);
+    assert.equal(await rawRequest(port, { method: 'POST', path: '/event', body: '{}', headers: { host: `evil.example:${port}`, 'content-type': 'application/json' } }), 403);
+    assert.equal(await rawRequest(port, { path: '/nope', headers: { host: `localhost:${port}` } }), 404);
+  }));
+
+function wsOpens(url, origin) {
+  return new Promise((resolve) => {
+    const ws = new WebSocket(url, origin ? { origin } : {});
+    ws.on('open', () => { ws.close(); resolve(true); });
+    ws.on('error', () => resolve(false));
+    ws.on('unexpected-response', () => resolve(false));
+  });
+}
+
+test('WebSocket: 다른 출처에서의 접속은 거부, 자기 출처와 Origin 없는 접속은 허용', () =>
+  withServer({}, async ({ port }) => {
+    const url = `ws://127.0.0.1:${port}/ws`;
+    assert.equal(await wsOpens(url, 'https://evil.example'), false);
+    assert.equal(await wsOpens(url, `http://localhost:${port}`), true);
+    assert.equal(await wsOpens(url, `http://127.0.0.1:${port}`), true);
+    assert.equal(await wsOpens(url, null), true);
+  }));

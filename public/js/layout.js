@@ -48,3 +48,17 @@ export function targetFor(status, teamIndex) {
   checkTeam(teamIndex);
   return spot(teamIndex);
 }
+
+// 팀원이 들어오고 나가는 입구(바닥 오른쪽 가장자리 복도).
+export const ENTRANCE = { x: FLOOR.w, y: ROOMS.hall.y + ROOMS.hall.d / 2 };
+
+const MEMBER_OFFSETS = [[0.35, 0.3], [-0.35, 0.3], [0.35, -0.3], [-0.35, -0.3]];
+
+// 팀원의 목표: 일하는 중(write)이면 팀 책상 자리, 그 밖에는 팀장 자리 곁에 비켜 선다.
+export function memberTarget(status, teamIndex, memberIndex) {
+  if (status === 'write') return { ...memberSeat(teamIndex, memberIndex), pose: 'type' };
+  const base = targetFor(status, teamIndex);
+  if (!MEMBER_OFFSETS[memberIndex]) throw new RangeError(`memberIndex ${memberIndex}`);
+  const [dx, dy] = MEMBER_OFFSETS[memberIndex];
+  return { x: base.x + dx, y: base.y + dy, pose: base.pose };
+}

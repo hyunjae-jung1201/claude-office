@@ -111,14 +111,24 @@ export async function startServer({
     }
   }
 
+  // 브라우저를 통한 교차 출처 공격(CSRF, DNS 리바인딩, WebSocket 하이재킹)을 막는다.
+  const ownPort = () => server.address().port;
+  const hostOk = (req) => [`127.0.0.1:${ownPort()}`, `localhost:${ownPort()}`].includes(req.headers.host);
+  const originOk = (origin) => !origin || [`http://127.0.0.1:${ownPort()}`, `http://localhost:${ownPort()}`].includes(origin);
+
   const server = http.createServer((req, res) => {
+    if (!hostOk(req)) return res.writeHead(403).end();
     const { pathname } = new URL(req.url, 'http://localhost');
-    if (req.method === 'POST' && pathname === '/event') return readBody(req, res);
+    if (req.method === 'POST' && pathname === '/event') {
+      if (req.headers.origin) return res.writeHead(403).end();
+      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
+      return readBody(req, res);
+    }
     if (req.method === 'GET') return serveStatic(pathname, res);
     res.writeHead(404).end();
   });
 
-  const wss = new WebSocketServer({ server, path: '/ws' });
+  const wss = new WebSocketServer({ server, path: '/ws', verifyClient: ({ origin, req }) => hostOk(req) && originOk(origin) });
   wss.on('connection', (ws) => {
     clients.add(ws);
     ws.on('close', () => clients.delete(ws));

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROOMS, FLOOR, targetFor, memberSeat, deskZone } from '../public/js/layout.js';
+import { ROOMS, FLOOR, ENTRANCE, targetFor, memberSeat, memberTarget, deskZone } from '../public/js/layout.js';
 
 const STATUSES = ['read', 'write', 'run', 'wait', 'idle', 'off'];
 const TEAMS = [0, 1, 2, 3, 4];
@@ -71,4 +71,24 @@ test('잘못된 입력은 오류', () => {
   assert.throws(() => targetFor('dancing', 0));
   assert.throws(() => targetFor('run', 5), RangeError);
   assert.throws(() => memberSeat(0, 4), RangeError);
+});
+
+test('팀원 목표: write는 팀 책상 자리, 그 밖의 상태는 해당 방 안에서 팀장·다른 팀원과 겹치지 않는다', () => {
+  const room = { read: ROOMS.library, run: ROOMS.server, wait: ROOMS.meeting, idle: ROOMS.hall };
+  for (const t of TEAMS) {
+    for (let m = 0; m < 4; m++) assert.deepEqual(memberTarget('write', t, m), { ...memberSeat(t, m), pose: 'type' });
+    for (const s of ['read', 'run', 'wait', 'idle']) {
+      const pts = [0, 1, 2, 3].map((m) => memberTarget(s, t, m));
+      pts.forEach((p) => {
+        assert.ok(inside(p, room[s]), `${s}/${t} ${JSON.stringify(p)}`);
+        assert.ok(dist(p, targetFor(s, t)) >= 0.25, `${s}/${t} leader`);
+      });
+      for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) assert.ok(dist(pts[i], pts[j]) >= 0.25, `${s}/${t} ${i}/${j}`);
+    }
+  }
+});
+
+test('입구는 바닥 가장자리 복도에 있다', () => {
+  assert.equal(ENTRANCE.x, FLOOR.w);
+  assert.ok(ENTRANCE.y >= ROOMS.hall.y && ENTRANCE.y <= ROOMS.hall.y + ROOMS.hall.d);
 });

@@ -85,3 +85,15 @@ test('사용자명이 비었거나 콜론 없이 토큰만 있는 URL 자격증�
   gone('git clone https://sometoken123@host.example/r.git', 'sometoken123');
   gone('git clone https://user:pass99@host.example/r.git', 'pass99');
 });
+
+// ---- 보안 리뷰 3차: 닫는 따옴표가 없는 값, 비밀번호에 / 가 든 URL
+test('닫는 따옴표가 없어도 줄 끝까지 가린다', () => {
+  gone('password="hunter2 extra words', 'hunter2');
+  gone("secret='abc123def", 'abc123def');
+});
+test('비밀번호에 / 가 들어간 URL 자격증명도 가린다', () => {
+  gone('git clone https://user:pa/ss9word@host.example/r.git', 'ss9word');
+});
+test('경로에 @가 있는 일반 URL은 건드리지 않는다', () => {
+  assert.equal(maskSecrets('curl https://host.example/a/b@c'), 'curl https://host.example/a/b@c');
+});

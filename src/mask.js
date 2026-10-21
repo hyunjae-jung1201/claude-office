@@ -6,10 +6,10 @@ const RULES = [
   [/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g, '***'],
   [/\bAKIA[0-9A-Z]{16}\b/g, '***'],
   [/\bBearer\s+[A-Za-z0-9._~+\/=-]+/gi, 'Bearer ***'],
-  // URL에 박힌 user:password@host, :password@host, token@host
-  [/(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/)[^\/\s@]+@/g, '$1***@'],
+  // URL에 박힌 user:password@host(비밀번호에 / 포함 가능), :password@host, token@host
+  [/(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:[^:\/\s@]*:[^@\s]+|[^\/\s@:]+)@/g, '$1***@'],
   // KEY=값, KEY: 값, "key": "값" (GITHUB_TOKEN, my_password 같은 접두사 포함)
-  [new RegExp(`([A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(?:"[^"]*"|'[^']*'|[^\\s"']+)`, 'gi'), '$1***'],
+  [new RegExp(`([A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(?:"[^"\\n]*"?|'[^'\\n]*'?|[^\\s"']+)`, 'gi'), '$1***'],
   // --password 값, --token 값 (공백 구분 플래그)
   [new RegExp(`(--?${KEY_WORDS}\\s+)["']?[^\\s"']+["']?`, 'gi'), '$1***'],
   // mysql -pVALUE (값이 붙은 형태만, `mkdir -p dir` 은 그대로)
