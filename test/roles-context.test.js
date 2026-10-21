@@ -163,3 +163,17 @@ test('민감 파일을 가리키는 새 심볼릭 링크도 내용을 읽지 않
   const d = await buildDiff(r, [join(r, 'innocent.txt')]);
   assert.ok(!d.diff.includes('ENVSECRET98765'));
 });
+
+test('buildPrompt: 제외한 설정 파일이 있으면 "내용을 못 보는 것은 문제로 지적하지 마라"고 안내한다', () => {
+  const p = buildPrompt(ROLE, bundle({ excluded: ['설정 파일'], diff: '+x\n\n# 설정 파일 변경(내용 제외): 1개\n' }));
+  assert.match(p, /일부러 제외|의도적으로 제외/);
+  assert.match(p, /지적하지 마라/);
+  const none = buildPrompt(ROLE, bundle());
+  assert.ok(!/일부러 제외|의도적으로 제외/.test(none));
+});
+
+test('buildPrompt: 이번에 바뀐 파일 밖의 변경(다른 작업)은 지적하지 말라고 범위를 안내한다', () => {
+  const p = buildPrompt(ROLE, bundle());
+  assert.match(p, /이번에 바뀐 파일.*범위|범위.*이번에 바뀐 파일/s);
+  assert.match(p, /다른 작업/);
+});

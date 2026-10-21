@@ -126,7 +126,8 @@ const clip = (s, n) => maskSecrets(String(s ?? '')).slice(0, n);
 const READ_ONLY_RULES = `## 읽기 전용 규칙
 - 파일을 수정하거나 실행하지 마라. 쓸 수 있는 도구는 읽기(Read), 검색(Grep), 파일 찾기(Glob)뿐이다.
 - .env, 키 파일, ~/.ssh 같은 비밀 파일은 읽지 마라. 코드 안에서 비밀값을 발견하면 값을 옮겨 적지 말고 "위치"만 알려라.
-- 아래 "변경 내용"에 없는 것도 필요하면 읽어서 확인해도 된다. 확인하지 않은 것은 단정하지 마라.`;
+- 아래 "변경 내용"에 없는 것도 필요하면 읽어서 확인해도 된다. 확인하지 않은 것은 단정하지 마라.
+- 검토 범위는 "이번에 바뀐 파일"이다. git 상태 등에서 그 밖의 파일 변경이 보여도 사용자가 하던 다른 작업일 수 있으니 이번 작업의 문제로 지적하지 마라.`;
 
 const OUTPUT_FORMAT = `## 출력 형식 (반드시 지킬 것)
 설명이나 코드 펜스 없이, 아래 JSON 객체 하나만 출력한다.
@@ -138,6 +139,9 @@ const OUTPUT_FORMAT = `## 출력 형식 (반드시 지킬 것)
 export function buildPrompt(role, bundle) {
   const requests = bundle.requests.slice(-REQUESTS_MAX).map((r, i) => `${i + 1}. ${clip(r, REQUEST_LIMIT)}`).join('\n') || '(없음)';
   const files = bundle.files.map((f) => `- ${clip(relative(bundle.repoRoot, f) || f, 200)}`).join('\n') || '(없음)';
+  const excludedNote = bundle.excluded?.length
+    ? `\n(보안상 비밀값이 들어 있을 수 있는 설정 파일 ${bundle.excluded.length}개의 변경 내용은 일부러 제외했다. 내용을 볼 수 없다는 것은 문제로 지적하지 마라.)`
+    : '';
   const change = bundle.truncated
     ? `변경이 너무 커서 diff 는 생략했다. 통계는 다음과 같고, 필요한 파일은 직접 읽어서 확인하라.\n${bundle.stats}`
     : `${bundle.stats ? bundle.stats + '\n' : ''}${bundle.diff || '(변경 내용 없음)'}`;
@@ -148,7 +152,7 @@ export function buildPrompt(role, bundle) {
     `## 사용자의 최근 요청 (오래된 순)\n${requests}`,
     `## Claude의 마지막 응답\n${clip(bundle.lastResponse, RESPONSE_LIMIT) || '(없음)'}`,
     `## 이번에 바뀐 파일\n${files}`,
-    `## 변경 내용\n${change}`,
+    `## 변경 내용\n${change}${excludedNote}`,
     OUTPUT_FORMAT,
   ].join('\n\n');
 }
