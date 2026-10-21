@@ -4,7 +4,8 @@ const KEY_WORDS = '(?:password|passwd|pwd|token|secret|api[_-]?key|access[_-]?ke
 
 // 식별자만으로 이루어진 완전한 함수 호출(getSecret(name), path.join(dir, name)). 리터럴·숫자 인자가 있으면 해당하지 않는다.
 const IDENT = '[A-Za-z_$][\\w$]*';
-const SAFE_CALL = `${IDENT}(?:\\.${IDENT})*\\(\\s*(?:${IDENT}(?:\\.${IDENT})*(?:\\s*,\\s*${IDENT}(?:\\.${IDENT})*)*)?\\s*\\);?`;
+// 여는 괄호 뒤 공백(\\s*) 하나만 두고, 인자 목록은 공백으로 끝나지 않게 해서 공백 반복이 겹치지 않도록 한다(정규식 폭주 방지).
+const SAFE_CALL = `${IDENT}(?:\\.${IDENT})*\\(\\s*(?:${IDENT}(?:\\.${IDENT})*(?:\\s*,\\s*${IDENT}(?:\\.${IDENT})*)*\\s*)?\\);?`;
 const SAFE_CALL_ONLY = new RegExp(`^${SAFE_CALL}$`);
 
 const RULES = [
@@ -19,7 +20,7 @@ const RULES = [
   [/(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:[^:\/\s@]*:[^@\s]+|[^\/\s@:]+)@/g, '$1***@'],
   // KEY=값, KEY: 값, "key": "값" (GITHUB_TOKEN, my_password 같은 접두사 포함)
   // 값이 식별자만으로 된 함수 호출이면 코드이므로 가리지 않는다. 따옴표 값, 괄호가 섞인 그 밖의 값(줄 끝까지), 일반 값은 가린다.
-  [new RegExp(`([A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(${SAFE_CALL}(?=\\s|$|[,;)\\]}])|"[^"\\n]*"?|'[^'\\n]*'?|[^\\s"'(]*\\([^\\n]*|[^\\s"']+)`, 'gi'), (m, key, value) => (SAFE_CALL_ONLY.test(value) ? m : `${key}***`)],
+  [new RegExp(`([A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(${SAFE_CALL}(?=\\s|$)|"[^"\\n]*"?|'[^'\\n]*'?|[^\\s"'(]*\\([^\\n]*|[^\\s"']+)`, 'gi'), (m, key, value) => (SAFE_CALL_ONLY.test(value) ? m : `${key}***`)],
   // --password 값, --token 값 (공백 구분 플래그)
   [new RegExp(`(--?${KEY_WORDS}\\s+)["']?[^\\s"']+["']?`, 'gi'), '$1***'],
   // mysql -pVALUE (값이 붙은 형태만, `mkdir -p dir` 은 그대로)

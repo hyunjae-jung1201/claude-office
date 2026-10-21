@@ -157,3 +157,21 @@ test('식별자만으로 된 완전한 호출은 코드이므로 그대로 둔�
     assert.equal(maskSecrets(code), code, code);
   }
 });
+
+// ---- 보안 리뷰 2차: 호출 뒤에 바로 이어지는 글자, 정규식 폭주
+test('안전한 호출 바로 뒤에 , ; ) 로 이어지는 글자가 있어도 남지 않는다', () => {
+  gone('password=getSecret(name),hunter2realsecret', 'hunter2realsecret');
+  gone('token=read(x);leakedvalue987', 'leakedvalue987');
+  gone('secret=build(a)]trailingsecret55', 'trailingsecret55');
+  assert.equal(maskSecrets('let token = readToken();'), 'let token = readToken();'); // 줄 끝의 ; 는 코드
+  assert.equal(maskSecrets('secret = get(a, b); // 주석'), 'secret = get(a, b); // 주석');
+});
+
+test('공백·인자가 아주 많은 입력도 빠르게 처리한다 (정규식 폭주 없음)', () => {
+  const t0 = Date.now();
+  maskSecrets('password=a(' + ' '.repeat(60000));
+  maskSecrets('password=a(' + 'b,'.repeat(30000));
+  maskSecrets('password=a(b' + ' ,b'.repeat(20000) + ' ');
+  maskSecrets(('token = f(' + ' '.repeat(500) + 'x) ').repeat(100));
+  assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0}ms`);
+});
