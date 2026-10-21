@@ -90,3 +90,25 @@ test('CLAUDE_OFFICE_SUMMARIZER=1이면 hook.js는 아무것도 보내지 않는�
   assert.equal(code, 0);
   assert.equal(hits, 0);
 });
+
+// ---- 보안 리뷰 반영: 요약기가 띄우는 claude의 실행 환경
+import { statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { buildSpawn } from '../src/summarizer.js';
+
+test('요약기 claude는 전용 비공개 폴더에서, 설정 파일을 읽지 않고, 최소 환경변수만으로 실행된다', () => {
+  process.env.SUPER_SECRET_FOR_TEST = 'leak-me';
+  const { args, options } = buildSpawn('프롬프트');
+  delete process.env.SUPER_SECRET_FOR_TEST;
+
+  assert.notEqual(options.cwd, tmpdir());
+  assert.equal(statSync(options.cwd).mode & 0o777, 0o700);
+
+  const i = args.indexOf('--setting-sources');
+  assert.ok(i >= 0 && args[i + 1] === '');
+  assert.ok(args.includes('--tools') && args.includes('--no-session-persistence'));
+
+  assert.equal(options.env.CLAUDE_OFFICE_SUMMARIZER, '1');
+  assert.ok(options.env.PATH && options.env.HOME);
+  assert.equal(options.env.SUPER_SECRET_FOR_TEST, undefined);
+});

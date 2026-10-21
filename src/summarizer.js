@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { maskSecrets } from './mask.js';
 import { ruleLabel } from './labels.js';
 
@@ -14,14 +16,25 @@ function withTimeout(promise, ms) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
 }
 
+const ENV_ALLOWLIST = ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TMPDIR', 'XDG_CONFIG_HOME', 'XDG_DATA_HOME', 'XDG_STATE_HOME', 'XDG_CACHE_HOME'];
+
+// 요약기가 띄우는 claude: 전용 비공개 폴더(0700)에서 실행하고, 어떤 설정 파일도 읽지 않으며, 환경변수는 최소만 넘긴다.
+let workDir;
+export function buildSpawn(prompt) {
+  workDir ??= mkdtempSync(join(tmpdir(), 'claude-office-'));
+  const env = { CLAUDE_OFFICE_SUMMARIZER: '1' };
+  for (const k of ENV_ALLOWLIST) if (process.env[k] !== undefined) env[k] = process.env[k];
+  return {
+    args: ['-p', prompt, '--model', 'haiku', '--setting-sources', '', '--tools', '', '--no-session-persistence'],
+    options: { cwd: workDir, env, stdio: ['ignore', 'pipe', 'ignore'] },
+  };
+}
+
 // 헤드리스 claude로 한 줄 요약. hook이 재귀하지 않도록 환경변수로 표시한다(hook.js가 무시).
 export function defaultRun(prompt) {
   return new Promise((resolve, reject) => {
-    const child = spawn(
-      'claude',
-      ['-p', prompt, '--model', 'haiku', '--setting-sources', 'project', '--tools', '', '--no-session-persistence'],
-      { cwd: tmpdir(), env: { ...process.env, CLAUDE_OFFICE_SUMMARIZER: '1' }, stdio: ['ignore', 'pipe', 'ignore'] },
-    );
+    const { args, options } = buildSpawn(prompt);
+    const child = spawn('claude', args, options);
     let out = '';
     child.stdout.on('data', (c) => (out += c));
     child.on('error', reject);
