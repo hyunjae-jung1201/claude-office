@@ -2,6 +2,9 @@
 // Claude Code hook: stdin의 hook JSON을 로컬 서버로 보낸다. 실패해도 조용히 종료 코드 0.
 import http from 'node:http';
 
+// 요약기가 띄운 claude 세션의 hook은 무시한다(재귀·루프 방지)
+if (process.env.CLAUDE_OFFICE_SUMMARIZER) process.exit(0);
+
 const base = process.env.CLAUDE_OFFICE_URL || 'http://127.0.0.1:7410';
 
 const done = () => process.exit(0);
