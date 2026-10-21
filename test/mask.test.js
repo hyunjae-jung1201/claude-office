@@ -118,3 +118,13 @@ test('민감한 파일/폴더 경로: deploy_key, .ssh/·.aws/ 안, secrets.yml,
   }
   assert.equal(maskSecrets('cat src/server.js'), 'cat src/server.js');
 });
+
+// ---- isSensitivePath (역할자 diff 제외용)
+import { isSensitivePath } from '../src/mask.js';
+
+test('isSensitivePath: 비밀값이 들어 있을 만한 파일·폴더', () => {
+  for (const p of ['.env', 'cfg/.env.production', 'a/.ssh/config', '~/.aws/credentials', 'k/server.pem', 'k/id_rsa', 'a/secrets.yml', '.npmrc', 'x/deploy_key', 'c/client.p12']) {
+    assert.equal(isSensitivePath(p), true, p);
+  }
+  for (const p of ['src/app.js', 'README.md', 'docs/env-setup.md', 'src/keyboard.js']) assert.equal(isSensitivePath(p), false, p);
+});
