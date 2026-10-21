@@ -1,0 +1,1 @@
+{"session_id":"sess-1","transcript_path":"/x/t.jsonl","cwd":"/work/a","permission_mode":"default","agent_id":"a4502aa6e3dc370ca","agent_type":"general-purpose","effort":"medium","hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/work/a/data/notes.txt"},"tool_use_id":"tu2"}

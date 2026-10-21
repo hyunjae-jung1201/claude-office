@@ -1,0 +1,1 @@
+{"session_id":"sess-1","transcript_path":"/x/t.jsonl","cwd":"/work/a","permission_mode":"default","effort":"medium","hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"rm -f out.txt"},"permission_suggestions":[]}
