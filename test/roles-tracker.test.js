@@ -179,3 +179,50 @@ test('roles.excludePaths 아래 저장소는 검토 대상에서 제외된다 (�
   await ex.tracker.onEvent(ex.ev('stop'));
   assert.equal(ex.due.length, 1);
 });
+
+// ---- 최종 검토 반영
+test('live 하트비트가 사이사이 와도 쿨다운 후 지연 검토가 시작된다 (spec §5.1-2)', async () => {
+  const { tracker, due, ev, advance } = setup();
+  await tracker.onEvent(ev('tool', edit('/r1/a.js')));
+  await tracker.onEvent(ev('stop'));
+  advance(1 * MIN);
+  await tracker.onEvent(ev('tool', edit('/r1/b.js')));
+  await tracker.onEvent(ev('stop'));
+  assert.equal(due.length, 1);
+  for (let i = 0; i < 12 && due.length < 2; i++) { // 30초마다 하트비트 + tick
+    advance(30_000);
+    await tracker.onEvent(ev('live', { liveStatus: 'idle' }));
+    await tracker.tick();
+  }
+  assert.equal(due.length, 2);
+  assert.equal(due[1].reason, 'deferred');
+});
+
+test('live 이벤트는 추적 상태를 만들지 않는다', async () => {
+  const { tracker, ev } = setup();
+  await tracker.onEvent(ev('live', { liveStatus: 'idle' }));
+  assert.equal(tracker.stats().sessions, 0);
+});
+
+test('오래 조용한 세션은 tick에서 정리되고, 저장소 밖 파일은 stop 뒤에 버려진다', async () => {
+  const { tracker, ev, advance } = setup();
+  await tracker.onEvent(ev('tool', edit('/plain/x.txt')));
+  await tracker.onEvent(ev('stop'));
+  assert.deepEqual([tracker.stats().sessions, tracker.stats().files], [1, 0]);
+  advance(7 * 60 * MIN);
+  await tracker.tick();
+  assert.equal(tracker.stats().sessions, 0);
+});
+
+test('첫 편집 시점의 HEAD를 baseSha로 job에 담고, 검토 뒤 다음 편집에서 새로 잡는다', async () => {
+  const heads = ['aaa111', 'bbb222'];
+  const { tracker, due, ev, advance } = setup(baseConfig(), { headOf: async () => heads.shift() });
+  await tracker.onEvent(ev('tool', edit('/r1/a.js')));
+  await tracker.onEvent(ev('tool', edit('/r1/b.js'))); // 같은 턴의 두 번째 편집은 baseSha를 바꾸지 않는다
+  await tracker.onEvent(ev('stop'));
+  assert.equal(due[0].baseSha, 'aaa111');
+  advance(6 * MIN);
+  await tracker.onEvent(ev('tool', edit('/r1/c.js')));
+  await tracker.onEvent(ev('stop'));
+  assert.equal(due[1].baseSha, 'bbb222');
+});

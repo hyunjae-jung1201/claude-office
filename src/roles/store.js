@@ -45,8 +45,12 @@ export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
   const filesOf = (d) => {
     try { return readdirSync(d).filter((f) => f.endsWith('.json')).sort().reverse(); } catch { return []; }
   };
+  // 형식이 어긋난 파일(JSON이지만 보고서가 아닌 것 포함)은 없는 것으로 본다
   const read = (d, f) => {
-    try { return JSON.parse(readFileSync(join(d, f), 'utf8')); } catch { return null; }
+    try {
+      const r = JSON.parse(readFileSync(join(d, f), 'utf8'));
+      return r && typeof r === 'object' && Array.isArray(r.results) && Number.isFinite(r.finishedAt) && typeof r.repoRoot === 'string' ? r : null;
+    } catch { return null; }
   };
 
   function forRepo(repoRoot, limit = 20) {

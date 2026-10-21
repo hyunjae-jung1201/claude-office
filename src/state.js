@@ -65,8 +65,9 @@ export function applyReviewEvent(state, ev, now) {
 
 // 서버 시작 때 저장된 검토(최근순)에서 목록과 팀 배지를 복원한다
 export function setReviewHistory(state, reviews) {
-  state.history = reviews.slice(0, HISTORY_LIMIT).map(reviewSummary);
-  for (const r of reviews) {
+  const valid = reviews.filter((r) => r && Array.isArray(r.results));
+  state.history = valid.slice(0, HISTORY_LIMIT).map(reviewSummary);
+  for (const r of valid) {
     if (r.team && !state.badges.has(r.team)) state.badges.set(r.team, { verdict: r.verdict, concerns: r.concerns, at: r.finishedAt });
   }
 }

@@ -35,10 +35,16 @@ export async function repoRootOf(filePath) {
   if (!isAbsolute(filePath)) return null;
   const dir = realpathSync(existingDir(filePath));
   if (rootCache.has(dir)) return rootCache.get(dir);
+  if (rootCache.size > 500) rootCache.clear(); // 오래 떠 있는 서버에서 무한히 늘지 않게
   let root = null;
   try { root = realpathSync((await git(dir, ['rev-parse', '--show-toplevel'])).trim()); } catch { /* 저장소 아님 */ }
   rootCache.set(dir, root);
   return root;
+}
+
+// 저장소의 현재 HEAD(없으면 undefined). 검토의 기준점으로 첫 편집 시점에 기록한다.
+export async function gitHead(repoRoot) {
+  try { return (await git(repoRoot, ['rev-parse', '--verify', '-q', 'HEAD'])).trim() || undefined; } catch { return undefined; }
 }
 
 // 파일들을 저장소 루트별로 묶는다. 저장소 밖·상대 경로·홈 폴더 자체가 저장소인 경우는 제외.
@@ -89,34 +95,46 @@ function newFileDiff(root, rel) {
   return header + text.split('\n').map((l) => '+' + l).join('\n') + (more ? '\n(이후 생략)\n' : '\n');
 }
 
-export async function buildDiff(repoRoot, files, { limit = DIFF_LIMIT } = {}) {
+export async function buildDiff(repoRoot, files, { limit = DIFF_LIMIT, base } = {}) {
   const rels = [...new Set(files.map((f) => relPath(repoRoot, f)))];
   const sensitive = rels.filter((r) => isSensitivePath(r));
   const normal = rels.filter((r) => !isSensitivePath(r));
+  // 기준점: 첫 편집 시점의 커밋(같은 턴에 커밋했어도 변경이 보이도록). 올바르지 않으면 HEAD.
+  let baseRef = 'HEAD';
+  if (base) {
+    try { await git(repoRoot, ['rev-parse', '--verify', '-q', `${base}^{commit}`]); baseRef = base; } catch { /* HEAD 사용 */ }
+  }
   let hasHead = true;
-  try { await git(repoRoot, ['rev-parse', '--verify', '-q', 'HEAD']); } catch { hasHead = false; }
+  try { await git(repoRoot, ['rev-parse', '--verify', '-q', baseRef]); } catch { hasHead = false; }
 
   const tracked = new Set();
   if (normal.length) {
     try { (await git(repoRoot, ['ls-files', '--', ...normal])).split('\n').filter(Boolean).forEach((t) => tracked.add(t)); } catch { /* 없음 */ }
   }
+  // 추적 안 되는 파일 중 .gitignore 에 걸린 것(로컬 설정 등)은 이름 규칙으로 못 거르는 비밀이 있을 수 있어 내용을 읽지 않는다
+  const notIgnored = new Set();
+  if (normal.length) {
+    try { (await git(repoRoot, ['ls-files', '-z', '--others', '--exclude-standard', '--', ...normal])).split('\0').filter(Boolean).forEach((f) => notIgnored.add(f)); } catch { /* 없음 */ }
+  }
   const trackedFiles = normal.filter((r) => tracked.has(r));
-  const untracked = normal.filter((r) => !tracked.has(r) && existsSync(`${repoRoot}/${r}`)).slice(0, MAX_NEW_FILES);
+  const untracked = normal.filter((r) => notIgnored.has(r) && existsSync(`${repoRoot}/${r}`)).slice(0, MAX_NEW_FILES);
+  const ignored = normal.filter((r) => !tracked.has(r) && !notIgnored.has(r) && existsSync(`${repoRoot}/${r}`));
 
   let diff = '';
   let stats = '';
   if (trackedFiles.length && hasHead) {
-    try { diff += await git(repoRoot, ['diff', 'HEAD', '--no-color', '--no-ext-diff', '--', ...trackedFiles]); } catch { /* 무시 */ }
-    try { stats += await git(repoRoot, ['diff', 'HEAD', '--stat', '--no-color', '--', ...trackedFiles]); } catch { /* 무시 */ }
+    try { diff += await git(repoRoot, ['diff', baseRef, '--no-color', '--no-ext-diff', '--', ...trackedFiles]); } catch { /* 무시 */ }
+    try { stats += await git(repoRoot, ['diff', baseRef, '--stat', '--no-color', '--', ...trackedFiles]); } catch { /* 무시 */ }
   }
   for (const rel of untracked) {
     diff += newFileDiff(repoRoot, rel);
     stats += ` ${rel} | (새 파일)\n`;
   }
-  if (sensitive.length) diff += `\n# 설정 파일 변경(내용 제외): ${sensitive.length}개\n`;
+  const hidden = [...sensitive, ...ignored];
+  if (hidden.length) diff += `\n# 설정 파일 변경(내용 제외): ${hidden.length}개\n`;
 
   diff = maskSecrets(diff);
-  const excluded = sensitive.map((r) => maskSecrets(r));
+  const excluded = hidden.map((r) => maskSecrets(r));
   const truncated = Buffer.byteLength(diff) > limit;
   return { diff: truncated ? '' : diff, truncated, stats: maskSecrets(stats), excluded };
 }

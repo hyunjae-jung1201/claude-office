@@ -2,6 +2,8 @@
 // pass/auth는 뒤에 글자가 이어지면(author 등) 제외한다
 const KEY_WORDS = '(?:password|passwd|pwd|token|secret|api[_-]?key|access[_-]?key|private[_-]?key|pass(?![a-zA-Z])|auth(?![a-zA-Z]))';
 
+const CODE_CALL = /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\(/;
+
 const RULES = [
   [/\bsk-[A-Za-z0-9_-]{16,}/g, '***'],
   [/\b(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,})/g, '***'],
@@ -13,7 +15,8 @@ const RULES = [
   // URL에 박힌 user:password@host(비밀번호에 / 포함 가능), :password@host, token@host
   [/(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:[^:\/\s@]*:[^@\s]+|[^\/\s@:]+)@/g, '$1***@'],
   // KEY=값, KEY: 값, "key": "값" (GITHUB_TOKEN, my_password 같은 접두사 포함)
-  [new RegExp(`([A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(?:"[^"\\n]*"?|'[^'\\n]*'?|[^\\s"']+)`, 'gi'), '$1***'],
+  // 값이 함수 호출(getSecret(name), path.join(a, b))처럼 보이면 코드이므로 가리지 않는다. 따옴표 값·그 밖의 값은 가린다.
+  [new RegExp(`([A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)("[^"\\n]*"?|'[^'\\n]*'?|[^\\s"']+)`, 'gi'), (m, key, value) => (CODE_CALL.test(value) ? m : `${key}***`)],
   // --password 값, --token 값 (공백 구분 플래그)
   [new RegExp(`(--?${KEY_WORDS}\\s+)["']?[^\\s"']+["']?`, 'gi'), '$1***'],
   // mysql -pVALUE (값이 붙은 형태만, `mkdir -p dir` 은 그대로)
@@ -32,9 +35,13 @@ export function isSensitivePath(path) {
   return SENSITIVE_NAME.test(parts.at(-1)) || parts.some((p) => SENSITIVE_DIRS.has(p.toLowerCase()));
 }
 
+// 파일·경로처럼 생긴 토큰만 본다(코드의 식별자 clientSecret, config.secret 같은 것은 건드리지 않는다)
+const FILE_EXT = /\.(?:env|ya?ml|json|pem|key|p12|pfx|jks|crt|cer|der|txt|conf|cfg|ini|toml|properties|xml|kdbx|npmrc|netrc|pypirc)$/i;
+const looksLikePath = (tok) => tok.includes('/') || tok.startsWith('.') || /^id_/i.test(tok) || FILE_EXT.test(tok);
+
 // 공백 단위 토큰마다 민감한 경로인지 본다. 선형 시간.
 function maskPaths(text) {
-  return text.replace(/[^\s"']+/g, (tok) => (isSensitivePath(tok) ? '설정 파일' : tok));
+  return text.replace(/[^\s"']+/g, (tok) => (looksLikePath(tok) && isSensitivePath(tok) ? '설정 파일' : tok));
 }
 
 export function maskSecrets(text) {

@@ -266,3 +266,9 @@ test('검토 정보가 없는 스냅샷에도 새 필드가 기본값으로 있�
   assert.deepEqual(snap.reviews, []);
   assert.equal(snap.reviewNotice, undefined);
 });
+
+test('setReviewHistory: results가 없거나 이상한 검토가 섞여 있어도 예외 없이 건너뛴다', () => {
+  const st = createState(config);
+  assert.doesNotThrow(() => setReviewHistory(st, [{ id: 'bad' }, null, rev({ id: 'ok1', finishedAt: 3000 }), { id: 'bad2', results: 'x' }]));
+  assert.deepEqual(snapshot(st, 5000).reviews.map((r) => r.id), ['ok1']);
+});

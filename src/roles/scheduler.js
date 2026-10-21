@@ -13,7 +13,7 @@ const hasKind = (files, set) => files.some((f) => set.has(extname(f).toLowerCase
 const matchesWhen = (role, files) => role.when === 'always' || (role.when === 'code' && hasKind(files, CODE_EXT)) || (role.when === 'docs' && hasKind(files, DOC_EXT));
 
 export async function defaultBuildBundle(job) {
-  const { diff, truncated, stats, excluded } = await buildDiff(job.repoRoot, job.files);
+  const { diff, truncated, stats, excluded } = await buildDiff(job.repoRoot, job.files, { base: job.baseSha });
   return { repoRoot: job.repoRoot, repoName: basename(job.repoRoot), requests: job.requests, lastResponse: job.lastResponse, files: job.files, diff, truncated, stats, excluded };
 }
 
@@ -38,6 +38,9 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     const base = { repoRoot: job.repoRoot, team };
     let bundle;
     try { bundle = await buildBundle(job); } catch { safeEmit({ type: 'skipped', ...base, reason: 'error' }); return; }
+
+    // 바뀐 내용이 전혀 없으면(예: 편집이 바로 되돌려진 경우) 역할자를 돌리지 않는다
+    if (!bundle.diff && !bundle.stats && !bundle.truncated && !(bundle.excluded?.length)) { safeEmit({ type: 'skipped', ...base, reason: 'no-changes' }); return; }
 
     const selected = rolesFor(config, job.repoRoot, team).map((id) => roles.get(id)).filter(Boolean).filter((r) => matchesWhen(r, job.files));
     if (selected.length === 0) { safeEmit({ type: 'skipped', ...base, reason: 'no-roles' }); return; }
@@ -80,7 +83,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     if (closed) return;
     if (running.has(job.repoRoot)) {
       const prev = dirty.get(job.repoRoot);
-      dirty.set(job.repoRoot, prev ? { ...job, files: [...new Set([...prev.files, ...job.files])] } : job);
+      dirty.set(job.repoRoot, prev ? { ...job, files: [...new Set([...prev.files, ...job.files])], baseSha: prev.baseSha ?? job.baseSha } : job);
       return;
     }
     running.add(job.repoRoot);

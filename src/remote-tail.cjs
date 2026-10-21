@@ -58,8 +58,18 @@ const cwdBySid = new Map(); // 기록에서 본 가장 최근 작업 폴더
 const liveSeen = new Map(); // sid -> { st, at, name, cwd } (이미 알린 상태)
 const HEARTBEAT_MS = 30000;
 
-function pidAlive(pid) {
-  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+function startTimeOf(pid) {
+  try {
+    const s = fs.readFileSync('/proc/' + pid + '/stat', 'utf8');
+    return s.slice(s.lastIndexOf(')') + 2).split(' ')[19];
+  } catch { return undefined; }
+}
+
+function pidAlive(pid, procStart) {
+  try { process.kill(pid, 0); } catch (e) { if (e.code !== 'EPERM') return false; }
+  const start = startTimeOf(pid);
+  if (procStart != null && start !== undefined && String(procStart) !== start) return false; // PID 재사용
+  return true;
 }
 
 function loadRegistry() {
@@ -73,7 +83,7 @@ function loadRegistry() {
       const o = JSON.parse(fs.readFileSync(path.join(SESS_DIR, f), 'utf8'));
       if (!o || typeof o.sessionId !== 'string') continue;
       if (typeof o.name === 'string' && o.name) nextNames.set(o.sessionId, o.name);
-      if (Number.isInteger(o.pid) && pidAlive(o.pid)) next.push({ sid: o.sessionId, name: o.name, cwd: o.cwd, st: typeof o.status === 'string' ? o.status : 'idle' });
+      if (Number.isInteger(o.pid) && pidAlive(o.pid, o.procStart)) next.push({ sid: o.sessionId, name: o.name, cwd: o.cwd, st: typeof o.status === 'string' ? o.status : 'idle' });
     } catch { /* 무시 */ }
   }
   names = nextNames;
@@ -93,7 +103,9 @@ function emitLive() {
     if (c) emit({ k: 'live', s: e.sid, c, st: e.st, ...(e.name ? { n: e.name } : {}) });
   }
   for (const [sid, prev] of [...liveSeen]) {
-    if (present.has(sid)) continue;
+    if (present.has(sid)) { prev.missed = 0; continue; }
+    prev.missed = (prev.missed || 0) + 1;
+    if (prev.missed < 2) continue; // 파일을 다시 쓰는 중 한 번 못 읽은 것으로 지우지 않는다
     liveSeen.delete(sid);
     if (prev.cwd) emit({ k: 'live', s: sid, c: prev.cwd, st: 'gone', ...(prev.name ? { n: prev.name } : {}) });
   }

@@ -73,3 +73,35 @@ test('liveSessions: 살아 있는 프로세스의 세션만 이름·폴더·상�
 test('liveSessions: 폴더가 없으면 빈 목록', () => {
   assert.deepEqual(createSessionRegistry({ dir: join(tmpdir(), 'no-dir-live-xyz') }).liveSessions(), []);
 });
+
+// ---- 최종 검토: 재사용된 PID, 헤드리스 도우미 프로세스
+import { readFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+
+const startTimeOf = (pid) => readFileSync(`/proc/${pid}/stat`, 'utf8').slice(readFileSync(`/proc/${pid}/stat`, 'utf8').lastIndexOf(')') + 2).split(' ')[19];
+
+test('liveSessions: procStart가 실제 프로세스 시작 시각과 다르면(PID 재사용) 제외한다', () => {
+  const start = Number(startTimeOf(process.pid));
+  const dir = dirWith({
+    'a.json': { pid: process.pid, sessionId: 'SAME', name: 'a', cwd: '/x', status: 'idle', procStart: start },
+    'b.json': { pid: process.pid, sessionId: 'REUSED', name: 'b', cwd: '/x', status: 'idle', procStart: start + 1 },
+    'c.json': { pid: process.pid, sessionId: 'NOSTAMP', name: 'c', cwd: '/x', status: 'idle' },
+  });
+  assert.deepEqual(createSessionRegistry({ dir }).liveSessions().map((s) => s.sessionId).sort(), ['NOSTAMP', 'SAME']);
+});
+
+test('liveSessions: 역할자·요약기가 띄운 헤드리스 claude(CLAUDE_OFFICE_ROLE/SUMMARIZER 환경)는 제외한다', async () => {
+  const mk = (env) => spawn(process.execPath, ['-e', 'setTimeout(()=>{},5000)'], { env: { ...process.env, ...env }, stdio: 'ignore' });
+  const role = mk({ CLAUDE_OFFICE_ROLE: '1' });
+  const summ = mk({ CLAUDE_OFFICE_SUMMARIZER: '1' });
+  const plain = mk({});
+  try {
+    await new Promise((r) => setTimeout(r, 150));
+    const dir = dirWith({
+      'r.json': { pid: role.pid, sessionId: 'ROLE', cwd: '/repo', status: 'idle' },
+      's.json': { pid: summ.pid, sessionId: 'SUMM', cwd: '/tmp', status: 'idle' },
+      'p.json': { pid: plain.pid, sessionId: 'PLAIN', cwd: '/repo', status: 'idle' },
+    });
+    assert.deepEqual(createSessionRegistry({ dir }).liveSessions().map((s) => s.sessionId), ['PLAIN']);
+  } finally { role.kill(); summ.kill(); plain.kill(); }
+});

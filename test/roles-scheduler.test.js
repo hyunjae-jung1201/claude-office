@@ -159,3 +159,14 @@ test('buildBundle이 실패해도 submit은 예외를 던지지 않고 skipped�
   await sched.idle();
   assert.deepEqual(events.map((e) => [e.type, e.reason]), [['skipped', 'error']]);
 });
+
+test('변경 내용이 전혀 없으면(diff·통계·제외 모두 비어 있음) 역할자를 돌리지 않고 skipped(no-changes)', async () => {
+  const events = [];
+  let calls = 0;
+  const empty = { repoRoot: '/r/app', repoName: 'app', requests: [], lastResponse: '', files: ['/r/app/a.js'], diff: '', truncated: false, stats: '', excluded: [] };
+  const sched = createScheduler({ config: cfg(), roles: ROLES, store: fakeStore(), run: async () => { calls++; return OK; }, buildBundle: async () => empty, emit: (e) => events.push(e) });
+  sched.submit(job());
+  await sched.idle();
+  assert.deepEqual(events.map((e) => [e.type, e.reason]), [['skipped', 'no-changes']]);
+  assert.equal(calls, 0);
+});

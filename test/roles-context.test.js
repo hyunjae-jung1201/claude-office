@@ -177,3 +177,33 @@ test('buildPrompt: 이번에 바뀐 파일 밖의 변경(다른 작업)은 지�
   assert.match(p, /이번에 바뀐 파일.*범위|범위.*이번에 바뀐 파일/s);
   assert.match(p, /다른 작업/);
 });
+
+// ---- 최종 검토 반영: 같은 턴 커밋, 무시된(gitignored) 파일
+test('buildDiff: 같은 턴에 커밋했어도 base(첫 편집 시점 HEAD) 기준으로 변경이 보인다', async () => {
+  const r = repo({ 'a.js': 'one\n' });
+  const base = git(r, 'rev-parse', 'HEAD').trim();
+  writeFileSync(join(r, 'a.js'), 'two\n');
+  git(r, 'add', '-A');
+  git(r, 'commit', '-qm', 'same turn');
+  assert.equal((await buildDiff(r, [join(r, 'a.js')])).diff, ''); // HEAD 기준이면 비어 보인다
+  const d = await buildDiff(r, [join(r, 'a.js')], { base });
+  assert.match(d.diff, /-one/);
+  assert.match(d.diff, /\+two/);
+});
+
+test('buildDiff: base가 잘못됐으면 HEAD로 대신한다', async () => {
+  const r = repo({ 'a.js': 'x\n' });
+  writeFileSync(join(r, 'a.js'), 'y\n');
+  const d = await buildDiff(r, [join(r, 'a.js')], { base: 'not-a-commit' });
+  assert.match(d.diff, /\+y/);
+});
+
+test('buildDiff: .gitignore된 추적 안 되는 파일(로컬 설정 등)은 내용을 읽지 않고 제외로 알린다', async () => {
+  const r = repo({ 'a.js': 'x\n', '.gitignore': 'local-settings.txt\n' });
+  writeFileSync(join(r, 'local-settings.txt'), 'LOCALSECRET_VALUE_31337\n');
+  writeFileSync(join(r, 'new.js'), 'visible\n');
+  const d = await buildDiff(r, [join(r, 'local-settings.txt'), join(r, 'new.js')]);
+  assert.ok(!d.diff.includes('LOCALSECRET_VALUE_31337'));
+  assert.equal(d.excluded.length, 1);
+  assert.match(d.diff, /visible/);
+});

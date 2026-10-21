@@ -132,3 +132,13 @@ test('isSensitivePath: 비밀값이 들어 있을 만한 파일·폴더', () => 
 test('isSensitivePath: 대소문자를 구분하지 않는다', () => {
   for (const p of ['.ENV', 'a/.SSH/config', 'ID_RSA', 'a/Secrets.yml', 'K/SERVER.PEM', 'x/.AWS/credentials', 'Cert/Client.P12']) assert.equal(isSensitivePath(p), true, p);
 });
+
+// ---- 최종 검토: 코드의 식별자를 "설정 파일"로 바꾸지 않는다
+test('코드 식별자(clientSecret, getSecretValue, config.secret 등)는 그대로 두고, 파일 경로만 가린다', () => {
+  for (const code of ['const clientSecret = getSecretValue(name);', 'secretsManager.get(key)', 'return config.secret.value;', 'const privateKeyPath = path.join(dir, name);', 'this.credentialsProvider.load()']) {
+    assert.equal(maskSecrets(code), code, code);
+  }
+  assert.equal(maskSecrets('cat secrets.yml'), 'cat 설정 파일');
+  assert.equal(maskSecrets('cat deploy/credentials.json'), 'cat 설정 파일');
+  assert.ok(!maskSecrets('docker run --env-file .env.production img').includes('.env.production'));
+});

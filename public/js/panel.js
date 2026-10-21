@@ -27,7 +27,7 @@ export function createPanel({ button, panel, fetchJson = (url) => fetch(url).the
     try { reviews = await fetchJson(`/api/reviews?repo=${encodeURIComponent(item.repoRoot)}`); } catch { /* 아래에서 처리 */ }
     const r = reviews.find((x) => x.id === item.id) ?? reviews[0];
     detail.replaceChildren();
-    if (!r) { detail.append(el('div', 'rp-muted', '상세를 불러오지 못했습니다.')); return; }
+    if (!r || !Array.isArray(r.results)) { detail.append(el('div', 'rp-muted', '상세를 불러오지 못했습니다.')); return; }
     detail.append(el('div', 'rp-title', `${r.repoName} · ${kst(r.finishedAt)}`));
     for (const res of r.results) {
       const [icon, label] = VERDICT[res.verdict] ?? VERDICT.concern;

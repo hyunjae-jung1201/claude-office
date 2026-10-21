@@ -10,6 +10,7 @@ import { ruleLabel } from './labels.js';
 import { createSummarizer } from './summarizer.js';
 import { startRemote } from './remote.js';
 import { createSessionRegistry } from './sessions.js';
+import { createLiveMonitor } from './live.js';
 import { validateRoleIds } from './roles/loader.js';
 import { createReviewTracker } from './roles/tracker.js';
 import { createScheduler } from './roles/scheduler.js';
@@ -20,7 +21,6 @@ import { runRole } from './roles/runner.js';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = '127.0.0.1';
 const BODY_LIMIT = 1024 * 1024;
-const LIVE_HEARTBEAT_MS = 30_000;
 const BUBBLE_EVENTS = new Set(['start', 'end', 'prompt', 'tool', 'wait', 'stop', 'agentStart', 'agentStop']);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -185,23 +185,8 @@ export async function startServer({
   });
 
   // 이 PC에서 실행 중인 세션: 등록 정보를 주기적으로 읽어 상태 변화·하트비트를 이벤트로 흘려 넣는다
-  const liveKnown = new Map(); // sessionId -> { status, at }
-  function pollLive() {
-    const t = now();
-    const seen = new Set();
-    for (const s of registry.liveSessions()) {
-      seen.add(s.sessionId);
-      const prev = liveKnown.get(s.sessionId);
-      if (prev && prev.status === s.status && t - prev.at < LIVE_HEARTBEAT_MS) continue;
-      liveKnown.set(s.sessionId, { status: s.status, at: t });
-      handleEvent({ sessionId: s.sessionId, cwd: s.cwd ?? '/', sessionName: s.name, type: 'live', liveStatus: s.status ?? 'idle', ts: t });
-    }
-    for (const id of [...liveKnown.keys()]) {
-      if (seen.has(id)) continue;
-      liveKnown.delete(id);
-      handleEvent({ sessionId: id, cwd: '/', type: 'live', liveStatus: 'gone', ts: t });
-    }
-  }
+  const liveMonitor = createLiveMonitor({ list: () => registry.liveSessions(), emit: handleEvent, now });
+  const pollLive = () => liveMonitor.poll();
   const liveTimer = setInterval(pollLive, liveMs);
   liveTimer.unref();
 

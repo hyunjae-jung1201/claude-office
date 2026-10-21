@@ -103,3 +103,16 @@ test('깨진 카운터 파일에서도 오류 없이 0으로 시작하고 보고
   s.save(review());
   assert.equal(s.list().length, 1);
 });
+
+// ---- 최종 검토: 깨진 보고서 파일 하나가 서버 시작을 막지 않는다
+test('형식이 어긋난 보고서 파일(JSON이지만 results 없음 등)은 목록에서 건너뛴다', () => {
+  const dir = tmp();
+  const s = createReviewStore({ dir });
+  s.save(review({ finishedAt: 500 }));
+  const repoDir = join(dir, readdirSync(dir).find((n) => n.startsWith('app-')));
+  writeFileSync(join(repoDir, '900-bad1.json'), JSON.stringify({ id: 'x' }));
+  writeFileSync(join(repoDir, '901-bad2.json'), '[1,2,3]');
+  writeFileSync(join(repoDir, '902-bad3.json'), 'null');
+  assert.deepEqual(s.list().map((r) => r.finishedAt), [500]);
+  assert.deepEqual(s.forRepo('/work/app').map((r) => r.finishedAt), [500]);
+});
