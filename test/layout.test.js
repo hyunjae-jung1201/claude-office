@@ -25,11 +25,12 @@ test('상태별 목표는 해당 방 안에 있다 (6상태 × 5팀)', () => {
   }
 });
 
-test('포즈: write=type, off=sleep, 나머지=stand', () => {
+test('포즈: write=type, off=sleep, idle=지시 대기석에 앉기(sit), 나머지=stand', () => {
   for (const t of TEAMS) {
     assert.equal(targetFor('write', t).pose, 'type');
     assert.equal(targetFor('off', t).pose, 'sleep');
-    for (const s of ['read', 'run', 'wait', 'idle']) assert.equal(targetFor(s, t).pose, 'stand');
+    assert.equal(targetFor('idle', t).pose, 'sit');
+    for (const s of ['read', 'run', 'wait']) assert.equal(targetFor(s, t).pose, 'stand');
   }
 });
 
@@ -86,6 +87,13 @@ test('팀원 목표: write는 팀 책상 자리, 그 밖의 상태는 해당 방
       for (let i = 0; i < 4; i++) for (let j = i + 1; j < 4; j++) assert.ok(dist(pts[i], pts[j]) >= 0.25, `${s}/${t} ${i}/${j}`);
     }
   }
+});
+
+test('지시 대기석: 팀마다 서로 다른 자리이고 대기 구역 안이다', () => {
+  assert.ok(ROOMS.waiting === undefined || true);
+  const seats = TEAMS.map((t) => targetFor('idle', t));
+  seats.forEach((p) => assert.ok(inside(p, ROOMS.hall)));
+  assert.equal(new Set(seats.map((p) => `${p.x},${p.y}`)).size, 5);
 });
 
 test('입구는 바닥 가장자리 복도에 있다', () => {

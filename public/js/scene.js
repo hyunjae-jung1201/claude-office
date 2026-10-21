@@ -120,6 +120,13 @@ function buildOffice(scene, labelLayer) {
     scene.add(bush);
   }
 
+  // 지시 대기 구역: 팀마다 벤치 하나(일이 없는 아바타가 앉아서 다음 지시를 기다린다)
+  for (let i = 0; i < 5; i++) {
+    const bx = 3.8 + 1.6 * i;
+    box(bx - 0.5, 4.78, 1.0, 0.5, 0.3, '#3c4b7c');
+    box(bx - 0.5, 4.74, 1.0, 0.1, 0.62, '#2f3b66');
+  }
+
   // 방 이름표
   const roomLabel = (text, x, y, elev = 0.05) => {
     const el = document.createElement('div');
@@ -135,6 +142,7 @@ function buildOffice(scene, labelLayer) {
   roomLabel('서버실', 0.1, 6.5, 2.35);
   roomLabel('회의실', 9.5, 9.6);
   roomLabel('휴게실', 5.0, 7.0);
+  roomLabel('지시 대기 구역', 7.5, 5.7);
 
   return { leds, deskAccents };
 }
@@ -328,7 +336,8 @@ export function createScene(canvas, overlay) {
     el.querySelector('.dot').style.background = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
     el.querySelector('.dot').style.boxShadow = `0 0 0 4px ${(STATUS_COLOR[status] ?? STATUS_COLOR.idle)}33`;
     const sleeping = entity.goal.pose === 'sleep' && !entity.member;
-    entity.bubbleObj.visible = !sleeping; // 자는 아바타는 말풍선 대신 z z만 보여 화면을 덜 어지럽힌다
+    // 자는 아바타는 z z만, 대기 중인 아바타는 "지시 대기 구역"에 앉아 있는 것으로 충분하니 말풍선을 숨긴다
+    entity.bubbleObj.visible = !sleeping && status !== 'idle';
     entity.alertObj.visible = status === 'wait';
     entity.zzzObj.visible = sleeping;
   }
@@ -426,6 +435,13 @@ export function createScene(canvas, overlay) {
       armL.rotation.x = -1.15 + Math.sin(t * 17) * 0.14;
       armR.rotation.x = -1.15 + Math.sin(t * 17 + 2) * 0.14;
       head.rotation.x = 0.12 + Math.sin(t * 2) * 0.03;
+    } else if (p === 'sit') {
+      // 벤치에 앉아 정면(카메라)을 보고 대기: 다리를 앞으로, 엉덩이를 벤치 높이에 맞춘다
+      legL.rotation.x = legR.rotation.x = -1.45;
+      armL.rotation.x = armR.rotation.x = -0.35;
+      head.rotation.y = Math.sin(t * 0.7) * 0.25;
+      entity.body.position.y = 0.06;
+      lift = Math.sin(t * 2) * 0.008;
     } else if (p === 'sleep') {
       // 소파에 앉아 고개를 떨구고 잔다: 다리를 앞으로, 엉덩이를 좌석 높이에 맞춘다
       legL.rotation.x = legR.rotation.x = -1.45;
@@ -453,7 +469,7 @@ export function createScene(canvas, overlay) {
       const want = Math.atan2(dx, dy);
       entity.yaw += angleDiff(entity.yaw, want) * Math.min(1, dt * 12);
     } else {
-      const want = entity.goal.pose === 'type' ? Math.PI : entity.goal.pose === 'sleep' ? 0 : Math.PI / 4;
+      const want = entity.goal.pose === 'type' ? Math.PI : entity.goal.pose === 'sleep' ? 0 : Math.PI / 4; // sit/stand는 카메라 쪽
       entity.yaw += angleDiff(entity.yaw, want) * Math.min(1, dt * 8);
     }
     entity.group.position.set(wx(entity.pos.x), 0, wz(entity.pos.y));
