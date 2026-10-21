@@ -7,7 +7,7 @@ const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: 
 const WALK_SPEED = 2.8; // 타일/초
 const CELEBRATE_MS = 4000;
 const MEMBER_SCALE = 0.82;
-const BUBBLE_LEVELS = [1.75, 2.35, 2.95]; // 이웃 팀 말풍선이 겹치지 않도록 높이를 번갈아 둔다
+const BUBBLE_LEVELS = [1.6, 2.05]; // 이웃 팀 말풍선이 겹치지 않도록 2단계로 번갈아 둔다(머리 바로 위가 1단계) 
 
 const wx = (x) => x - FLOOR.w / 2;
 const wz = (y) => y - FLOOR.d / 2;
@@ -258,7 +258,7 @@ export function createScene(canvas, overlay) {
     tag.querySelector('span').textContent = name;
     entity.tag = tag;
     entity.tagObj = new CSS2DObject(tag);
-    entity.tagObj.position.set(0, member ? -0.1 : -0.12 - (entity.team % 3) * 0.42, 0);
+    entity.tagObj.position.set(0, member ? -0.05 : -0.03 - (entity.team % 2) * 0.3, 0);
     entity.group.add(entity.tagObj);
 
     const bubble = document.createElement('div');
@@ -274,7 +274,7 @@ export function createScene(canvas, overlay) {
     alert.append(el('b'));
     alert.firstChild.textContent = '!';
     entity.alertObj = new CSS2DObject(alert);
-    entity.alertObj.position.set(0.5, member ? 1.3 : 1.45, 0);
+    entity.alertObj.position.set(0.55, member ? 1.0 : 1.15, 0);
     entity.alertObj.visible = false;
     entity.group.add(entity.alertObj);
 
@@ -347,7 +347,7 @@ export function createScene(canvas, overlay) {
       let leader = leaders[i];
       if (!leader) {
         const start = targetFor(team.status, i);
-        leader = leaders[i] = makeEntity({ team: i, id: `L${i}`, tile: start, name: team.name, color: team.color, bubbleHeight: BUBBLE_LEVELS[i % 3] });
+        leader = leaders[i] = makeEntity({ team: i, id: `L${i}`, tile: start, name: team.name, color: team.color, bubbleHeight: BUBBLE_LEVELS[i % BUBBLE_LEVELS.length] });
         office.deskAccents[i].material.color.set(team.color);
       }
       leader.status = team.status;
@@ -368,7 +368,7 @@ export function createScene(canvas, overlay) {
         seen.add(key);
         let ent = members.get(key);
         if (!ent) {
-          ent = makeEntity({ team: i, member: true, id: m.id, tile: ENTRANCE, scale: MEMBER_SCALE, name: m.type, color: team.color, bubbleHeight: 1.55 });
+          ent = makeEntity({ team: i, member: true, id: m.id, tile: ENTRANCE, scale: MEMBER_SCALE, name: m.type, color: team.color, bubbleHeight: 1.3 });
           members.set(key, ent);
         }
         ent.leaving = false;
