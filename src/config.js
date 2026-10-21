@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
-const DEFAULTS = { port: 7410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30 };
+const DEFAULTS = { port: 9410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30 };
 const MAX_PROJECTS = 5;
 const PALETTE = ['#e8637a', '#2a7f8f', '#8fb339', '#d9822b', '#6c63d9'];
 

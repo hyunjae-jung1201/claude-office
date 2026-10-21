@@ -15,7 +15,7 @@ const P = (name, path) => ({ name, path, color: '#e8637a' });
 
 test('기본값을 채운다', () => {
   const c = loadConfig(cfgFile({ projects: [P('A', '/work/a')] }));
-  assert.equal(c.port, 7410);
+  assert.equal(c.port, 9410);
   assert.equal(c.offAfterMinutes, 10);
   assert.equal(c.maxMembers, 4);
   assert.equal(c.celebrateAfterSeconds, 30);

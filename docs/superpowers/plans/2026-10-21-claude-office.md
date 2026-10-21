@@ -67,7 +67,7 @@ claude-office/
 - Create: `package.json`, `.gitignore`, `src/hook.js`, `scripts/capture-hooks.js`, `docs/hook-payloads.md`
 
 **Interfaces:**
-- Produces: `src/hook.js` — stdin의 hook JSON을 `POST http://127.0.0.1:{port}/event`로 보내고(타임아웃 1초) 항상 종료 코드 0. 서버 주소는 환경변수 `CLAUDE_OFFICE_URL`(기본 `http://127.0.0.1:7410`).
+- Produces: `src/hook.js` — stdin의 hook JSON을 `POST http://127.0.0.1:{port}/event`로 보내고(타임아웃 1초) 항상 종료 코드 0. 서버 주소는 환경변수 `CLAUDE_OFFICE_URL`(기본 `http://127.0.0.1:9410`).
 - Produces: `docs/hook-payloads.md` — 실제로 받은 이벤트별 필드 목록과 아래 4가지 질문의 답.
 
 - [ ] **Step 1: `git init`, `package.json`(type module, scripts.test = `node --test test/`), `npm i ws@8.18.0 three@0.160.0`**
@@ -86,7 +86,7 @@ claude-office/
 - Test: `test/config.test.js`
 
 **Interfaces:**
-- Produces: `loadConfig(path: string): Config` — `Config = { port: number, offAfterMinutes: number, maxMembers: number, celebrateAfterSeconds: number, projects: Project[] }`, `Project = { name: string, path: string, color: string }`. 기본값 port 7410, offAfterMinutes 10, maxMembers 4, celebrateAfterSeconds 30. `projects`가 5개를 넘거나 `name`/`path` 중복이면 `Error`.
+- Produces: `loadConfig(path: string): Config` — `Config = { port: number, offAfterMinutes: number, maxMembers: number, celebrateAfterSeconds: number, projects: Project[] }`, `Project = { name: string, path: string, color: string }`. 기본값 port 9410, offAfterMinutes 10, maxMembers 4, celebrateAfterSeconds 30. `projects`가 5개를 넘거나 `name`/`path` 중복이면 `Error`.
 - Produces: `matchProject(config: Config, cwd: string): Project | null` — 경로 접두사(경로 경계 기준, `/a/b`는 `/a/bc`와 매칭되지 않음) 중 가장 긴 것.
 
 - [ ] **Step 1: 실패하는 테스트** — 정확히 같은 폴더, 하위 폴더, `/a/b`와 `/a/bc`, 홈 폴더(미지정→`null`), 접두사가 겹치는 두 프로젝트(긴 쪽 승), 6번째 프로젝트 → Error, 기본값 채우기.
@@ -163,7 +163,7 @@ claude-office/
 
 - [ ] **Step 1: 실패하는 테스트** — 정상 이벤트 204 후 WS 클라이언트가 해당 팀의 `status`를 받음, 깨진 JSON·알 수 없는 이벤트 400이고 스냅샷 불변 *(Review Focus 3)*, 이후 클라이언트가 접속하면 즉시 스냅샷 수신, `0.0.0.0`이 아닌 `127.0.0.1` 바인딩, 요약이 늦어도 `/event` 응답은 즉시, 서버를 새로 띄우면 모든 팀이 `off` *(Review Focus 5)*.
 - [ ] **Step 2: FAIL 확인, 구현, 통과 확인.** Run: `node --test test/server.test.js`
-- [ ] **Step 3: 수동 확인** — `node src/server.js`를 띄우고 `curl -X POST localhost:7410/event -d '<fixture>'` 후 `wscat`/브라우저 콘솔로 스냅샷 확인.
+- [ ] **Step 3: 수동 확인** — `node src/server.js`를 띄우고 `curl -X POST localhost:9410/event -d '<fixture>'` 후 `wscat`/브라우저 콘솔로 스냅샷 확인.
 - [ ] **Step 4: Commit** — `feat: event server with websocket broadcast`
 
 ### Task 7: 방 배치와 이동 목표 (순수 로직)
@@ -195,7 +195,7 @@ claude-office/
 
 - [ ] **Step 1: `index.html`(importmap으로 `three`→`/vendor/three/build/three.module.js`), `scene.js`, `main.js` 작성.** 말풍선은 CSS 오버레이(`CSS2DRenderer` 사용 가능, `three/examples/jsm`).
 - [ ] **Step 2: 서버를 띄우고 가짜 이벤트 스크립트로 5팀 모든 상태를 순서대로 일으킨다**(`scripts/demo.js`: 상태 6종과 팀원 3명 투입·퇴근을 돌려 가며 POST).
-- [ ] **Step 3: Playwright MCP로 `http://localhost:7410`을 열어 스크린샷을 찍어 확인:** 5팀 모두 보임, 말풍선 겹침 없음, 긴 한국어 문구가 말줄임표로 줄어 있음, 팀원이 나타났다 사라짐, 콘솔 에러 0건. 문제가 있으면 고치고 다시 찍는다.
+- [ ] **Step 3: Playwright MCP로 `http://localhost:9410`을 열어 스크린샷을 찍어 확인:** 5팀 모두 보임, 말풍선 겹침 없음, 긴 한국어 문구가 말줄임표로 줄어 있음, 팀원이 나타났다 사라짐, 콘솔 에러 0건. 문제가 있으면 고치고 다시 찍는다.
 - [ ] **Step 3-0: `scripts/demo.js`에 40초 일한 뒤 끝나는 팀(완료 연출), 10초 만에 끝나는 팀(연출 없음), 승인 대기 팀을 포함해 Playwright 스크린샷으로 초록 링과 주황 느낌표가 보이는지, 짧은 작업은 연출이 없는지 확인한다.**
 - [ ] **Step 3-1: 탭을 숨겼다 다시 켰을 때 렌더가 멈췄다 재개되는지 확인**(`document.hidden` 에뮬레이션 또는 탭 전환).
 - [ ] **Step 4: Commit** — `feat: 3D isometric office view`
@@ -214,7 +214,7 @@ claude-office/
 
 - [ ] **Step 1: 실패하는 테스트** — 기존 hook이 있는 설정에 추가 후에도 기존 항목이 그대로, 두 번 적용해도 항목 수가 같음, 빈 설정에서도 동작.
 - [ ] **Step 2: FAIL 확인, 구현, 통과 확인.**
-- [ ] **Step 3: `node scripts/install-hooks.js`의 diff를 사용자에게 보여 주고 승인받은 뒤에만 `--apply`, 서비스 설치, `/office` 명령 파일 배치를 실행한다. WSL 네트워크(미러드/NAT)에서 Windows 브라우저가 `http://localhost:7410`에 접속되는지 확인하고, 안 되면 사용자에게 알리고 대안(포트 포워딩 또는 `--host`)을 제안한다.**
+- [ ] **Step 3: `node scripts/install-hooks.js`의 diff를 사용자에게 보여 주고 승인받은 뒤에만 `--apply`, 서비스 설치, `/office` 명령 파일 배치를 실행한다. WSL 네트워크(미러드/NAT)에서 Windows 브라우저가 `http://localhost:9410`에 접속되는지 확인하고, 안 되면 사용자에게 알리고 대안(포트 포워딩 또는 `--host`)을 제안한다.**
 - [ ] **Step 4: Commit** — `feat: installers and /office command`
 
 ### Task 10: 실제 환경 종합 확인

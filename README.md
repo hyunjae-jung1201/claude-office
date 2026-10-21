@@ -24,7 +24,7 @@ bash scripts/install-service.sh --apply  # WSL 시작 시 서버 자동 실행
 mkdir -p ~/.claude/commands
 sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md   # /office 명령
 ```
-브라우저에서 `http://localhost:7410` 을 열어 두면 된다. 새로 시작하는 Claude Code 세션부터 반영된다.
+브라우저에서 `http://localhost:9410` 을 열어 두면 된다. (포트 9410: Windows가 예약한 7317~7416 구간을 피하기 위함 — 그 안의 포트는 Windows 브라우저에서 안 열린다.) 새로 시작하는 Claude Code 세션부터 반영된다.
 
 ## 사용
 - `/office` 화면 열기, `/office add <폴더> [이름]` 프로젝트 추가(최대 5개), `/office list`

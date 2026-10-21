@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 // 화면 확인용 데모: 가짜 hook 이벤트를 서버로 보내 5개 팀의 모든 상태와 팀원 출퇴근을 재현한다.
-// 사용: node scripts/demo.js [서버주소] [config경로]   예) node scripts/demo.js http://127.0.0.1:7410
+// 사용: node scripts/demo.js [서버주소] [config경로]   예) node scripts/demo.js http://127.0.0.1:9410
 import { readFileSync } from 'node:fs';
 
-const base = process.argv[2] ?? 'http://127.0.0.1:7410';
+const base = process.argv[2] ?? 'http://127.0.0.1:9410';
 const cfg = JSON.parse(readFileSync(process.argv[3] ?? new URL('../config.json', import.meta.url), 'utf8'));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fast = process.env.DEMO_FAST === '1'; // 40초 대신 짧은 시간 사용(config.celebrateAfterSeconds를 낮춘 서버용)

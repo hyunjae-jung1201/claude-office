@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createState, applyEvent, tick, snapshot, setLabel } from '../src/state.js';
 
 const config = {
-  port: 7410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30,
+  port: 9410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30,
   projects: [
     { name: 'A', path: '/w/a', color: '#e8637a' },
     { name: 'B', path: '/w/b', color: '#2a7f8f' },
