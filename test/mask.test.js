@@ -142,3 +142,18 @@ test('코드 식별자(clientSecret, getSecretValue, config.secret 등)는 그�
   assert.equal(maskSecrets('cat deploy/credentials.json'), 'cat 설정 파일');
   assert.ok(!maskSecrets('docker run --env-file .env.production img').includes('.env.production'));
 });
+
+// ---- 보안 리뷰: 함수 호출 예외는 "식별자만으로 된 완전한 호출"에만 적용한다
+test('호출의 인자에 리터럴 비밀이 들어 있으면 가린다', () => {
+  gone('password = getSecret("hunter2pass")', 'hunter2pass');
+  gone("token = decrypt('abc123def456')", 'abc123def456');
+  gone('TOKEN=abc(123456789)', '123456789');
+  gone('password=foo(bar)realsecret99', 'realsecret99');
+  gone('secret = build(arg1, "literal-secret-77")', 'literal-secret-77');
+});
+
+test('식별자만으로 된 완전한 호출은 코드이므로 그대로 둔다', () => {
+  for (const code of ['const clientSecret = getSecretValue(name);', 'const privateKeyPath = path.join(dir, name);', 'let token = readToken();', 'password = prompt(user, host)']) {
+    assert.equal(maskSecrets(code), code, code);
+  }
+});
