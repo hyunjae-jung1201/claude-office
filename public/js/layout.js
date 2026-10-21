@@ -39,7 +39,8 @@ const SPOTS = {
   run: (i) => ({ x: 1.8, y: 4.2 + 1.2 * i, pose: 'stand' }),
   wait: (i) => ({ x: 7.6 + 0.9 * i, y: 6.4, pose: 'stand' }),
   idle: (i) => ({ x: 3.8 + 1.6 * i, y: 5.0, pose: 'stand' }),
-  off: (i) => ({ x: 3.5 + 0.7 * i, y: 9.4, pose: 'sleep' }),
+  // 앞의 3팀은 소파에, 나머지 2팀은 탁자 양옆 쿠션에서 앉아 잔다
+  off: (i) => (i < 3 ? { x: 3.75 + 1.25 * i, y: 9.45, pose: 'sleep' } : { x: i === 3 ? 3.6 : 6.3, y: 8.1, pose: 'sleep' }),
 };
 
 export function targetFor(status, teamIndex) {

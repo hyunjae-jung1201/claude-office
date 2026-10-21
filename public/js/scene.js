@@ -67,7 +67,7 @@ function buildOffice(scene, labelLayer) {
   for (let row = 0; row < 3; row++) {
     for (let i = 0; i < 13; i++) {
       const h = 0.34 + ((i * 7 + row * 3) % 5) * 0.04;
-      box(0.55 + i * 0.22, 0.62, 0.15, 0.1, h, bookColors[(i + row) % 6], 0.2 + row * 0.62);
+      box(0.55 + i * 0.22, 0.7, 0.15, 0.1, h, bookColors[(i + row) % 6], 0.2 + row * 0.62);
     }
   }
   // 서버실: 랙과 깜빡이는 LED
@@ -110,6 +110,8 @@ function buildOffice(scene, labelLayer) {
   box(3.2, 9.0, 0.28, 0.95, 0.7, '#2f8268');
   box(6.52, 9.0, 0.28, 0.95, 0.7, '#2f8268');
   box(4.5, 7.7, 1.0, 0.8, 0.4, '#d8b98a');
+  box(3.2, 7.75, 0.8, 0.7, 0.28, '#e0a15a'); // 바닥 쿠션
+  box(5.9, 7.75, 0.8, 0.7, 0.28, '#e0a15a');
   for (const [px, py] of [[3.2, 7.3], [11.4, 4.4]]) {
     box(px, py, 0.42, 0.42, 0.32, '#b98450');
     const bush = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10), mat('#4fb08f'));
@@ -119,17 +121,18 @@ function buildOffice(scene, labelLayer) {
   }
 
   // 방 이름표
-  const roomLabel = (text, x, y) => {
+  const roomLabel = (text, x, y, elev = 0.05) => {
     const el = document.createElement('div');
     el.className = 'room';
     el.textContent = text;
     const o = new CSS2DObject(el);
-    o.position.set(wx(x), 0.05, wz(y));
+    o.position.set(wx(x), elev, wz(y));
     scene.add(o);
   };
-  roomLabel('자료실', 2.0, 2.7);
-  roomLabel('작업실', 8.0, 0.3);
-  roomLabel('서버실', 1.5, 3.1);
+  // 벽에 붙은 방은 이름표를 벽 위쪽에 둬서 아바타·가구에 가려지지 않게 한다
+  roomLabel('자료실', 2.0, 0.1, 2.35);
+  roomLabel('작업실', 8.0, 0.1, 2.35);
+  roomLabel('서버실', 0.1, 6.5, 2.35);
   roomLabel('회의실', 9.5, 9.6);
   roomLabel('휴게실', 5.0, 7.0);
 
@@ -208,6 +211,8 @@ export function createScene(canvas, overlay) {
   controls.maxPolarAngle = 1.25;
   controls.minAzimuthAngle = az - 0.9;
   controls.maxAzimuthAngle = az + 0.9;
+  camera.zoom = 1.22;
+  camera.updateProjectionMatrix();
   controls.update();
 
   const office = buildOffice(scene, overlay);
@@ -244,7 +249,7 @@ export function createScene(canvas, overlay) {
     tag.querySelector('span').textContent = name;
     entity.tag = tag;
     entity.tagObj = new CSS2DObject(tag);
-    entity.tagObj.position.set(0, -0.1, 0);
+    entity.tagObj.position.set(0, member ? -0.1 : -0.12 - (entity.team % 3) * 0.42, 0);
     entity.group.add(entity.tagObj);
 
     const bubble = document.createElement('div');
@@ -257,7 +262,8 @@ export function createScene(canvas, overlay) {
 
     const alert = document.createElement('div');
     alert.className = 'alert';
-    alert.textContent = '!';
+    alert.append(el('b'));
+    alert.firstChild.textContent = '!';
     entity.alertObj = new CSS2DObject(alert);
     entity.alertObj.position.set(0.5, member ? 1.3 : 1.45, 0);
     entity.alertObj.visible = false;
@@ -265,9 +271,10 @@ export function createScene(canvas, overlay) {
 
     const zzz = document.createElement('div');
     zzz.className = 'zzz';
-    zzz.textContent = 'z z';
+    zzz.append(el('b'));
+    zzz.firstChild.textContent = 'z z';
     entity.zzzObj = new CSS2DObject(zzz);
-    entity.zzzObj.position.set(0.3, 1.2, 0);
+    entity.zzzObj.position.set(0.3, 1.65, 0);
     entity.zzzObj.visible = false;
     entity.group.add(entity.zzzObj);
   }
@@ -301,8 +308,10 @@ export function createScene(canvas, overlay) {
     el.querySelector('.txt').textContent = text;
     el.querySelector('.dot').style.background = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
     el.querySelector('.dot').style.boxShadow = `0 0 0 4px ${(STATUS_COLOR[status] ?? STATUS_COLOR.idle)}33`;
+    const sleeping = entity.goal.pose === 'sleep' && !entity.member;
+    entity.bubbleObj.visible = !sleeping; // 자는 아바타는 말풍선 대신 z z만 보여 화면을 덜 어지럽힌다
     entity.alertObj.visible = status === 'wait';
-    entity.zzzObj.visible = entity.goal.pose === 'sleep' && !entity.member;
+    entity.zzzObj.visible = sleeping;
   }
 
   function update(snapshot) {
@@ -393,10 +402,11 @@ export function createScene(canvas, overlay) {
       armR.rotation.x = -1.15 + Math.sin(t * 17 + 2) * 0.14;
       head.rotation.x = 0.12 + Math.sin(t * 2) * 0.03;
     } else if (p === 'sleep') {
-      // 소파 위에 누워 잔다: 몸 축을 X 방향으로 눕히고 좌석 높이(0.45)에 얹는다
-      entity.body.rotation.z = Math.PI / 2;
-      entity.body.position.set(0.55, 0.62, 0);
-      lift = Math.sin(t * 1.6) * 0.012;
+      // 소파에 앉아 고개를 떨구고 잔다: 다리를 앞으로, 엉덩이를 좌석 높이에 맞춘다
+      legL.rotation.x = legR.rotation.x = -1.45;
+      armL.rotation.x = armR.rotation.x = -0.25;
+      head.rotation.x = 0.55 + Math.sin(t * 1.6) * 0.04;
+      entity.body.position.y = 0.17;
     } else {
       armL.rotation.x = Math.sin(t * 2) * 0.05;
       armR.rotation.x = -Math.sin(t * 2) * 0.05;

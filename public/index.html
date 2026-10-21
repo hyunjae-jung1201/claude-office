@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude Office</title>
+<link rel="icon" href="data:,">
 <style>
   :root {
     --ink: #1d2540;
@@ -47,7 +48,7 @@
   .bubble {
     position: relative; display: flex; align-items: center; gap: 7px; max-width: 230px;
     background: var(--paper); border-radius: 999px; padding: 6px 13px 6px 9px; font-size: 12.5px; font-weight: 700;
-    box-shadow: 0 2px 8px rgba(29,37,64,.25); white-space: nowrap; transform: translateY(-6px);
+    box-shadow: 0 2px 8px rgba(29,37,64,.25); white-space: nowrap; margin-bottom: 8px;
   }
   .bubble::after {
     content: ""; position: absolute; left: 50%; bottom: -5px; width: 10px; height: 10px; margin-left: -5px;
@@ -73,12 +74,15 @@
   .more { background: var(--ink); color: #fff; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; }
   .alert {
     width: 22px; height: 22px; border-radius: 50%; background: var(--wait); color: #fff; font-weight: 900; font-size: 15px;
-    display: grid; place-items: center; box-shadow: 0 2px 6px rgba(29,37,64,.3); animation: blink .9s steps(2) infinite;
+    display: grid; place-items: center; box-shadow: 0 2px 6px rgba(29,37,64,.3);
   }
-  .zzz { font-weight: 800; font-size: 14px; color: #5a6a8f; animation: floatz 2.2s ease-in-out infinite; }
+  /* 애니메이션은 안쪽 요소에만: CSS2D가 바깥 요소의 transform으로 위치를 잡기 때문 */
+  .alert > b { font-weight: 900; animation: blink .9s steps(2) infinite; }
+  .zzz { font-weight: 900; font-size: 17px; color: #3b4a73; text-shadow: 0 0 4px #fff, 0 0 4px #fff; }
+  .zzz > b { display: inline-block; animation: floatz 2.2s ease-in-out infinite; }
   @keyframes blink { 50% { opacity: .2; transform: scale(.85); } }
   @keyframes floatz { 0%, 100% { transform: translateY(0); opacity: .9; } 50% { transform: translateY(-5px); opacity: .5; } }
-  @media (prefers-reduced-motion: reduce) { .alert, .zzz { animation: none; } }
+  @media (prefers-reduced-motion: reduce) { .alert > b, .zzz > b { animation: none; } }
 </style>
 <script type="importmap">
 { "imports": {
