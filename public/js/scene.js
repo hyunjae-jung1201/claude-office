@@ -27,8 +27,8 @@ function buildOffice(scene, labelLayer) {
     add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, extra)), {}), {}).position.set(wx(x + w / 2), elev + h / 2, wz(y + d / 2));
 
   // 바닥 슬래브와 방 색
-  add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(FLOOR.w, 0.3, FLOOR.d), mat('#f1f4f9')), {}), { cast: false }).position.set(0, -0.15, 0);
-  const tint = { library: '#dde8f8', work: '#dcefe8', server: '#e5e0f6', meeting: '#f6ebd5', lounge: '#e1f0e4', hall: '#eceff5' };
+  add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(FLOOR.w, 0.3, FLOOR.d), mat('#232a43')), {}), { cast: false }).position.set(0, -0.15, 0);
+  const tint = { library: '#2b3a60', work: '#244640', server: '#34294f', meeting: '#4b3c2c', lounge: '#25453b', hall: '#2a3149' };
   for (const [name, r] of Object.entries(ROOMS)) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), mat(tint[name]));
     m.rotation.x = -Math.PI / 2;
@@ -37,8 +37,8 @@ function buildOffice(scene, labelLayer) {
     scene.add(m);
   }
   // 바닥 격자
-  const grid = new THREE.GridHelper(Math.max(FLOOR.w, FLOOR.d), Math.max(FLOOR.w, FLOOR.d), '#1d2540', '#1d2540');
-  grid.material.opacity = 0.05;
+  const grid = new THREE.GridHelper(Math.max(FLOOR.w, FLOOR.d), Math.max(FLOOR.w, FLOOR.d), '#aab7e8', '#aab7e8');
+  grid.material.opacity = 0.07;
   grid.material.transparent = true;
   grid.scale.set(FLOOR.w / Math.max(FLOOR.w, FLOOR.d), 1, FLOOR.d / Math.max(FLOOR.w, FLOOR.d));
   grid.position.y = 0.012;
@@ -46,14 +46,14 @@ function buildOffice(scene, labelLayer) {
 
   // 뒷벽 두 면 + 창문
   const H = 2.5;
-  add(new THREE.Mesh(new THREE.BoxGeometry(FLOOR.w + 0.2, H, 0.2), mat('#d6deed')), { cast: false }).position.set(-0.1, H / 2, -FLOOR.d / 2 - 0.1);
-  add(new THREE.Mesh(new THREE.BoxGeometry(0.2, H, FLOOR.d), mat('#c7d1e4')), { cast: false }).position.set(-FLOOR.w / 2 - 0.1, H / 2, 0);
+  add(new THREE.Mesh(new THREE.BoxGeometry(FLOOR.w + 0.2, H, 0.2), mat('#3b4569')), { cast: false }).position.set(-0.1, H / 2, -FLOOR.d / 2 - 0.1);
+  add(new THREE.Mesh(new THREE.BoxGeometry(0.2, H, FLOOR.d), mat('#30385c')), { cast: false }).position.set(-FLOOR.w / 2 - 0.1, H / 2, 0);
   const glass = (w, h, px, py, pz, ry) => {
-    const g = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.06), new THREE.MeshLambertMaterial({ color: '#cfe5fb', emissive: '#9cc3ee', emissiveIntensity: 0.35 }));
+    const g = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.06), new THREE.MeshLambertMaterial({ color: '#16254a', emissive: '#3b64c0', emissiveIntensity: 0.75 }));
     g.position.set(px, py, pz);
     g.rotation.y = ry;
     scene.add(g);
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.04), mat('#ffffff'));
+    const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.04), mat('#5b6896'));
     frame.position.set(px, py, pz - 0.02 * Math.cos(ry));
     frame.rotation.y = ry;
     scene.add(frame);
@@ -185,8 +185,8 @@ export function createScene(canvas, overlay) {
   const labelRenderer = new CSS2DRenderer({ element: overlay });
   const scene = new THREE.Scene();
 
-  scene.add(new THREE.HemisphereLight('#ffffff', '#b9c4d8', 1.05));
-  const sun = new THREE.DirectionalLight('#fff6e8', 1.35);
+  scene.add(new THREE.HemisphereLight('#9fb2e6', '#1b2036', 0.95));
+  const sun = new THREE.DirectionalLight('#ffe6c4', 0.95);
   sun.position.set(-7, 14, 9);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
@@ -215,11 +215,20 @@ export function createScene(canvas, overlay) {
   camera.updateProjectionMatrix();
   controls.update();
 
+  // 방마다 은은한 조명: 서버실 보라, 작업실 청록, 휴게실 따뜻한 색
+  for (const [color, x, y, intensity] of [['#8b5cf6', 1.5, 6.5, 14], ['#2bd4b0', 8, 2.2, 9], ['#ffb870', 5, 8.6, 9]]) {
+    const lamp = new THREE.PointLight(color, intensity, 9, 1.6);
+    lamp.position.set(wx(x), 2.2, wz(y));
+    scene.add(lamp);
+  }
+
   const office = buildOffice(scene, overlay);
 
+  // CSS2DRenderer.setSize가 overlay의 폭·높이를 px로 고정하므로, 크기는 항상 바깥 컨테이너를 기준으로 잰다.
+  const host = overlay.parentElement;
   function resize() {
-    const w = overlay.clientWidth || canvas.clientWidth || 1;
-    const h = overlay.clientHeight || canvas.clientHeight || 1;
+    const w = host.clientWidth || 1;
+    const h = host.clientHeight || 1;
     renderer.setSize(w, h, false);
     labelRenderer.setSize(w, h);
     const aspect = w / h;
@@ -230,7 +239,7 @@ export function createScene(canvas, overlay) {
     camera.bottom = -halfH;
     camera.updateProjectionMatrix();
   }
-  new ResizeObserver(resize).observe(overlay);
+  new ResizeObserver(resize).observe(host);
   resize();
 
   // ---- 엔티티(팀장·팀원)
