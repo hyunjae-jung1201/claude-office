@@ -5,11 +5,17 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { loadConfig, matchProject } from './config.js';
 import { normalizeEvent } from './events.js';
-import { createState, applyEvent, tick, snapshot, setLabel } from './state.js';
+import { createState, applyEvent, tick, snapshot, setLabel, applyReviewEvent, setReviewHistory, teamOfSession } from './state.js';
 import { ruleLabel } from './labels.js';
 import { createSummarizer } from './summarizer.js';
 import { startRemote } from './remote.js';
 import { createSessionRegistry } from './sessions.js';
+import { validateRoleIds } from './roles/loader.js';
+import { createReviewTracker } from './roles/tracker.js';
+import { createScheduler } from './roles/scheduler.js';
+import { createReviewStore } from './roles/store.js';
+import { groupFilesByRepo } from './roles/context.js';
+import { runRole } from './roles/runner.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = '127.0.0.1';
@@ -37,9 +43,18 @@ export async function startServer({
   remoteFactory = startRemote,
   sessionsDir,
   liveMs = 3000,
+  roles = null, // 역할 정의(Map). 없거나 config.roles.enabled 가 거짓이면 역할자 검토를 하지 않는다
+  reviewStore = null,
+  reviewRun = runRole,
 } = {}) {
   const registry = createSessionRegistry(sessionsDir ? { dir: sessionsDir } : {});
   const state = createState(config);
+
+  // 역할자 검토: 설정이 잘못됐으면 서버를 띄우기 전에 알린다
+  const rolesOn = Boolean(roles && config.roles?.enabled);
+  if (rolesOn) validateRoleIds(config, roles);
+  const store = rolesOn ? (reviewStore ?? createReviewStore({ dir: join(ROOT, 'data', 'reviews') })) : null;
+  if (rolesOn) setReviewHistory(state, store.list(20));
   const clients = new Set();
   const seqs = new Map(); // 세션/에이전트별 최신 이벤트 번호: 늦게 끝난 요약이 최신 문구를 덮지 않게 한다
 
@@ -55,7 +70,12 @@ export async function startServer({
     return n;
   };
 
+  let scheduler = null;
+  let tracker = null;
+
   function handleEvent(ev) {
+    // 역할자 검토는 화면 팀에 안 맞는 세션(홈 폴더 등)도 보므로 가장 먼저 넘긴다
+    tracker?.onEvent(ev).catch(() => {});
     if (ev.type === 'live' && ev.liveStatus === 'gone') {
       applyEvent(state, ev, ev.ts);
       broadcast();
@@ -110,6 +130,14 @@ export async function startServer({
     req.on('error', () => res.writeHead(400).end());
   }
 
+  // 보고서 상세: ?repo=<저장소 루트>(없으면 전체 최근 20건). 저장소가 화면 팀이 아니어도 볼 수 있다.
+  function serveReviews(url, res) {
+    const repo = url.searchParams.get('repo');
+    if (repo !== null && (repo.length > 500 || !repo.startsWith('/') || repo.includes('\0'))) return res.writeHead(400).end();
+    const data = !store ? [] : repo ? store.forRepo(repo, 20) : store.list(20);
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(data));
+  }
+
   async function serveStatic(pathname, res) {
     let rel;
     try { rel = decodeURIComponent(pathname); } catch { return res.writeHead(400).end(); }
@@ -136,7 +164,9 @@ export async function startServer({
 
   const server = http.createServer((req, res) => {
     if (!hostOk(req)) return res.writeHead(403).end();
-    const { pathname } = new URL(req.url, 'http://localhost');
+    const url = new URL(req.url, 'http://localhost');
+    const { pathname } = url;
+    if (req.method === 'GET' && pathname === '/api/reviews') return serveReviews(url, res);
     if (req.method === 'POST' && pathname === '/event') {
       if (req.headers.origin) return res.writeHead(403).end();
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
@@ -177,10 +207,21 @@ export async function startServer({
 
   const timer = setInterval(() => {
     tick(state, now());
+    tracker?.tick().catch(() => {});
     for (const k of [...seqs.keys()]) if (!state.sessions.has(k.split('|')[0])) seqs.delete(k); // 사라진 세션의 추적 상태 정리
     broadcast();
   }, tickMs);
   timer.unref();
+
+  if (rolesOn) {
+    scheduler = createScheduler({
+      config, roles, store, run: reviewRun, now,
+      // 화면에 보일 팀: 그 세션이 속한 팀 → 저장소를 덮는 팀 → 없음(보고서 패널에만 남는다)
+      resolveTeam: (job) => teamOfSession(state, job.sessionId) ?? matchProject(config, job.repoRoot)?.name,
+      emit: (e) => { applyReviewEvent(state, e, now()); broadcast(); },
+    });
+    tracker = createReviewTracker({ config, now, groupFiles: groupFilesByRepo, onDue: (job) => scheduler.submit(job) });
+  }
 
   await new Promise((r) => server.listen(port, HOST, r));
   pollLive();
@@ -191,10 +232,11 @@ export async function startServer({
   return {
     port: server.address().port,
     host: HOST,
-    stats: () => ({ seqs: seqs.size, sessions: state.sessions.size, remotes: remotes.map((r) => r.status()) }),
+    stats: () => ({ seqs: seqs.size, sessions: state.sessions.size, remotes: remotes.map((r) => r.status()), reviews: scheduler?.stats() }),
     close() {
       clearInterval(timer);
       clearInterval(liveTimer);
+      scheduler?.close();
       for (const r of remotes) r.stop();
       for (const ws of clients) ws.terminate();
       return new Promise((r) => {
@@ -208,7 +250,10 @@ export async function startServer({
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const configPath = process.env.CLAUDE_OFFICE_CONFIG ?? join(ROOT, 'config.json');
   const config = loadConfig(configPath);
-  const srv = await startServer({ config, summarizer: createSummarizer() });
+  const { loadRoles } = await import('./roles/loader.js');
+  const roles = config.roles?.enabled ? loadRoles(join(ROOT, 'roles')) : null;
+  const reviewRun = process.env.CLAUDE_OFFICE_FAKE_ROLES ? (await import('./roles/fake.js')).fakeRun : runRole;
+  const srv = await startServer({ config, summarizer: createSummarizer(), roles, reviewRun });
   console.log(`Claude Office: http://localhost:${srv.port}  (프로젝트 ${config.projects.length}개)`);
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => srv.close().then(() => process.exit(0)));
 }

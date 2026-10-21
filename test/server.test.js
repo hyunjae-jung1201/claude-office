@@ -325,3 +325,145 @@ test('등록 정보의 shell 상태는 "백그라운드 작업 중", idle이면 
     c.close();
   });
 });
+
+// ---- 역할자 검토 통합
+import { execFileSync } from 'node:child_process';
+import { realpathSync } from 'node:fs';
+import { createReviewStore } from '../src/roles/store.js';
+
+const ROLES_MAP = new Map(['pm', 'developer', 'qa'].map((id) => [id, { id, name: id.toUpperCase(), color: '#112233', model: 'sonnet', when: 'always', tools: ['Read', 'Grep', 'Glob'], prompt: `나는 ${id}` }]));
+const OK_JSON = JSON.stringify({ verdict: 'ok', summary: '문제 없음', findings: [] });
+const gitIn = (cwd, ...a) => execFileSync('git', ['-C', cwd, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
+function makeRepo(files = { 'a.js': 'const a = 1;\n' }) {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'office-repo-')));
+  gitIn(root, 'init', '-q');
+  for (const [n, t] of Object.entries(files)) writeFileSync(join(root, n), t);
+  gitIn(root, 'add', '-A');
+  gitIn(root, 'commit', '-qm', 'init');
+  return root;
+}
+const rolesCfg = (over = {}) => ({ enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', projects: {}, ...over });
+const roleServer = (repoRoot, extra = {}) => ({
+  config: { ...config, projects: repoRoot ? [{ name: 'A', path: repoRoot, color: '#e8637a' }, config.projects[1]] : config.projects, roles: rolesCfg(extra.rolesCfg) },
+  roles: ROLES_MAP,
+  reviewStore: createReviewStore({ dir: mkdtempSync(join(tmpdir(), 'office-rev-')) }),
+  reviewRun: extra.run ?? (async () => { await new Promise((r) => setTimeout(r, 30)); return OK_JSON; }),
+});
+const editThenStop = async (port, { cwd, session = 'rs1', file, resp = '고쳤습니다' }) => {
+  await post(port, { session_id: session, cwd, hook_event_name: 'UserPromptSubmit', prompt: '기능을 고쳐줘' });
+  await post(port, { session_id: session, cwd, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: file } });
+  await post(port, { session_id: session, cwd, hook_event_name: 'Stop', last_assistant_message: resp });
+};
+const getJson = (port, path, headers = {}) => new Promise((resolve, reject) => {
+  http.get({ host: '127.0.0.1', port, path, headers }, (res) => {
+    let body = '';
+    res.on('data', (c) => (body += c));
+    res.on('end', () => resolve({ status: res.statusCode, body: body ? (res.headers['content-type']?.includes('json') ? JSON.parse(body) : body) : null }));
+  }).on('error', reject);
+});
+const until = async (fn, ms = 4000) => { const t0 = Date.now(); while (Date.now() - t0 < ms) { const v = await fn(); if (v) return v; await new Promise((r) => setTimeout(r, 30)); } throw new Error('timeout'); };
+
+test('편집 후 Stop → 역할자 3명이 나타나고, 끝나면 배지와 최근 검토 목록이 생긴다', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  await withServer(roleServer(repo), async ({ port }) => {
+    const c = await connect(port);
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js') });
+    const s1 = await c.waitFor((s) => teamA(s).roles.length === 3 && teamA(s).roles.every((r) => r.status === 'running'));
+    assert.deepEqual(teamA(s1).roles.map((r) => r.name), ['PM', 'DEVELOPER', 'QA']);
+    const s2 = await c.waitFor((s) => teamA(s).badge && s.reviews.length === 1);
+    assert.equal(teamA(s2).badge.verdict, 'ok');
+    assert.equal(s2.reviews[0].repoName, repo.split('/').pop());
+    c.close();
+  });
+});
+
+test('세션이 홈 폴더에서 두 저장소를 편집하면 저장소마다 검토되고, 팀이 없어도 API로 볼 수 있다 (Review Focus 1)', async () => {
+  const r1 = makeRepo({ 'a.js': 'x\n' });
+  const r2 = makeRepo({ 'b.js': 'y\n' });
+  writeFileSync(join(r1, 'a.js'), 'x2\n');
+  writeFileSync(join(r2, 'b.js'), 'y2\n');
+  await withServer(roleServer(null), async ({ port }) => {
+    const cwd = '/home/hyeanjae';
+    await post(port, { session_id: 'h1', cwd, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: join(r1, 'a.js') } });
+    await post(port, { session_id: 'h1', cwd, hook_event_name: 'PreToolUse', tool_name: 'Write', tool_input: { file_path: join(r2, 'b.js') } });
+    await post(port, { session_id: 'h1', cwd, hook_event_name: 'Stop', last_assistant_message: '끝' });
+    const all = await until(async () => { const r = await getJson(port, '/api/reviews'); return r.body.length === 2 && r.body; });
+    assert.deepEqual(all.map((x) => x.repoRoot).sort(), [r1, r2].sort());
+    const one = await getJson(port, `/api/reviews?repo=${encodeURIComponent(r1)}`);
+    assert.equal(one.body.length, 1);
+    assert.equal(one.body[0].results.length, 3);
+    assert.ok(!JSON.stringify(one.body).includes('기능을'));
+  });
+});
+
+test('/api/reviews: 다른 Origin/Host는 403, 이상한 repo 값은 400, 검토가 없으면 빈 배열', () =>
+  withServer(roleServer(null), async ({ port }) => {
+    assert.equal((await getJson(port, '/api/reviews', { host: 'evil.example' })).status, 403);
+    assert.equal((await getJson(port, '/api/reviews?repo=relative/path')).status, 400);
+    assert.equal((await getJson(port, `/api/reviews?repo=${encodeURIComponent('/a/' + 'x'.repeat(600))}`)).status, 400);
+    const ok = await getJson(port, '/api/reviews?repo=/nope');
+    assert.deepEqual([ok.status, ok.body], [200, []]);
+  }));
+
+test('diff 속 비밀값과 .env 변경은 역할자 프롬프트에 원문으로 전달되지 않는다 (Review Focus 3)', async () => {
+  const repo = makeRepo({ 'a.js': 'x\n', '.env': 'K=old\n' });
+  writeFileSync(join(repo, 'a.js'), 'const t = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";\n');
+  writeFileSync(join(repo, '.env'), 'K=ENVSECRETVALUE424242\n');
+  const prompts = [];
+  const run = async ({ prompt }) => { prompts.push(prompt); return OK_JSON; };
+  await withServer(roleServer(repo, { run }), async ({ port }) => {
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js'), resp: '토큰 sk-abcdefghijklmnopqrstuvwx1234 를 넣었습니다' });
+    await post(port, { session_id: 'rs1', cwd: repo, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: join(repo, '.env') } });
+    await until(() => prompts.length >= 3);
+    for (const p of prompts) {
+      assert.ok(!p.includes('ghp_abcdefghijklmnopqrstuvwxyz0123456789'));
+      assert.ok(!p.includes('ENVSECRETVALUE424242'));
+      assert.ok(!p.includes('sk-abcdefghijklmnopqrstuvwx1234'));
+    }
+  });
+});
+
+test('알 수 없는 역할 id가 설정에 있으면 서버 시작이 한국어 오류로 거부된다 (Review Focus 5)', async () => {
+  const opts = roleServer(null);
+  opts.config.roles.default = ['pm', 'ghost'];
+  await assert.rejects(startServer(opts), /알 수 없는 역할 id: ghost/);
+});
+
+test('roles.enabled=false면 검토하지 않는다', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'z\n');
+  let calls = 0;
+  await withServer(roleServer(repo, { rolesCfg: { enabled: false }, run: async () => { calls++; return OK_JSON; } }), async ({ port }) => {
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js') });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(calls, 0);
+  });
+});
+
+test('검토가 진행 중일 때 서버를 닫아도 오류 없이 끝난다 (Review Focus 5: 재시작)', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'z\n');
+  const srv = await startServer({ ...roleServer(repo, { run: () => new Promise(() => {}) }), port: 0 });
+  await editThenStop(srv.port, { cwd: repo, file: join(repo, 'a.js') });
+  await until(async () => (await getJson(srv.port, '/api/reviews')).status === 200);
+  await new Promise((r) => setTimeout(r, 150));
+  await assert.doesNotReject(srv.close());
+});
+
+test('서버를 다시 띄우면 저장된 검토에서 목록과 팀 배지가 복원된다', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'z\n');
+  const opts = roleServer(repo);
+  await withServer(opts, async ({ port }) => {
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js') });
+    await until(async () => (await getJson(port, '/api/reviews')).body.length === 1);
+  });
+  await withServer(opts, async ({ port }) => {
+    const c = await connect(port);
+    const s = await c.waitFor(() => true);
+    assert.equal(s.reviews.length, 1);
+    assert.equal(teamA(s).badge.verdict, 'ok');
+    c.close();
+  });
+});
