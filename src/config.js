@@ -1,4 +1,5 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { basename } from 'node:path';
 
 const DEFAULTS = { port: 7410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30 };
 const MAX_PROJECTS = 5;
@@ -6,14 +7,11 @@ const PALETTE = ['#e8637a', '#2a7f8f', '#8fb339', '#d9822b', '#6c63d9'];
 
 const trimSlash = (p) => (p.length > 1 ? p.replace(/\/+$/, '') : p);
 
-export function loadConfig(path) {
-  const raw = JSON.parse(readFileSync(path, 'utf8'));
-  const list = raw.projects ?? [];
+function validateProjects(list) {
   if (list.length > MAX_PROJECTS) throw new Error(`프로젝트는 최대 ${MAX_PROJECTS}개까지 지정할 수 있습니다`);
-
   const names = new Set();
   const paths = new Set();
-  const projects = list.map((p, i) => {
+  return list.map((p, i) => {
     if (!p.name) throw new Error(`projects[${i}]에 name이 없습니다`);
     if (!p.path) throw new Error(`projects[${i}]에 path가 없습니다`);
     const path = trimSlash(p.path);
@@ -22,8 +20,22 @@ export function loadConfig(path) {
     paths.add(path);
     return { name: p.name, path, color: p.color ?? PALETTE[i % PALETTE.length] };
   });
+}
 
-  return { ...DEFAULTS, ...raw, projects };
+export function loadConfig(path) {
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
+  return { ...DEFAULTS, ...raw, projects: validateProjects(raw.projects ?? []) };
+}
+
+// `/office add`: 설정 파일에 프로젝트를 추가한다. 검증을 통과한 뒤에만 파일을 쓴다.
+export function addProject(path, folder, name) {
+  const raw = JSON.parse(readFileSync(path, 'utf8'));
+  const list = raw.projects ?? [];
+  const folderPath = trimSlash(folder);
+  const added = { name: name ?? basename(folderPath), path: folderPath, color: PALETTE[list.length % PALETTE.length] };
+  validateProjects([...list, added]);
+  writeFileSync(path, JSON.stringify({ ...raw, projects: [...list, added] }, null, 2) + '\n');
+  return added;
 }
 
 export function matchProject(config, cwd) {

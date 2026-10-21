@@ -63,3 +63,35 @@ test('경로 끝 슬래시는 무시된다', () => {
   const c = loadConfig(cfgFile({ projects: [P('A', '/work/a/')] }));
   assert.equal(matchProject(c, '/work/a/x').name, 'A');
 });
+
+// ---- /office add
+import { addProject } from '../src/config.js';
+import { readFileSync as readJson } from 'node:fs';
+
+test('addProject: 폴더를 추가하고 이름은 폴더 이름, 색은 다음 팔레트 색', () => {
+  const file = cfgFile({ projects: [P('A', '/work/a')] });
+  const p = addProject(file, '/work/new-proj');
+  assert.equal(p.name, 'new-proj');
+  assert.equal(p.path, '/work/new-proj');
+  assert.match(p.color, /^#[0-9a-f]{6}$/i);
+  const saved = JSON.parse(readJson(file, 'utf8'));
+  assert.deepEqual(saved.projects.map((x) => x.name), ['A', 'new-proj']);
+});
+
+test('addProject: 이름을 직접 줄 수 있고, 다른 설정은 유지된다', () => {
+  const file = cfgFile({ port: 7777, projects: [] });
+  addProject(file, '/work/x', '내 프로젝트');
+  const saved = JSON.parse(readJson(file, 'utf8'));
+  assert.equal(saved.port, 7777);
+  assert.equal(saved.projects[0].name, '내 프로젝트');
+});
+
+test('addProject: 6번째와 중복은 거절하고 파일을 바꾸지 않는다', () => {
+  const projects = Array.from({ length: 5 }, (_, i) => P(`P${i}`, `/work/p${i}`));
+  const file = cfgFile({ projects });
+  const before = readJson(file, 'utf8');
+  assert.throws(() => addProject(file, '/work/sixth'), /5/);
+  assert.equal(readJson(file, 'utf8'), before);
+  const file2 = cfgFile({ projects: [P('A', '/work/a')] });
+  assert.throws(() => addProject(file2, '/work/a/'), /중복/);
+});
