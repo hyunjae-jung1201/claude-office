@@ -3,8 +3,8 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 
-// 요약기가 띄운 claude 세션의 hook은 무시한다(재귀·루프 방지)
-if (process.env.CLAUDE_OFFICE_SUMMARIZER) process.exit(0);
+// 요약기·역할자가 띄운 claude 세션의 hook은 무시한다(재귀·루프 방지)
+if (process.env.CLAUDE_OFFICE_SUMMARIZER || process.env.CLAUDE_OFFICE_ROLE) process.exit(0);
 
 // 서버 주소: 환경변수 > config.json의 port > 9410. 포트는 config.json 한 곳에서만 정한다.
 function resolveBase() {

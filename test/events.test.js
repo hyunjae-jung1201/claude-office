@@ -99,3 +99,45 @@ test('AskUserQuestion/ExitPlanMode PreToolUse는 wait(답변/계획 승인)이�
   const perm = normalizeEvent({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'rm x' } }, NOW);
   assert.deepEqual([perm.type, perm.waitKind], ['wait', 'approval']);
 });
+
+// ---- 역할자 검토용 보강 필드
+test('편집 도구는 toolName과 마스킹하지 않은 filePath를 가진다, 읽기 도구는 filePath가 없다', () => {
+  const base = { session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse' };
+  const edit = normalizeEvent({ ...base, tool_name: 'Edit', tool_input: { file_path: '/r/src/0123456789abcdef0123456789abcdef.js' } }, NOW);
+  assert.deepEqual([edit.toolName, edit.filePath], ['Edit', '/r/src/0123456789abcdef0123456789abcdef.js']);
+  const nb = normalizeEvent({ ...base, tool_name: 'NotebookEdit', tool_input: { notebook_path: '/r/a.ipynb' } }, NOW);
+  assert.equal(nb.filePath, '/r/a.ipynb');
+  const write = normalizeEvent({ ...base, tool_name: 'Write', tool_input: { file_path: '/r/new.md' } }, NOW);
+  assert.equal(write.filePath, '/r/new.md');
+  const read = normalizeEvent({ ...base, tool_name: 'Read', tool_input: { file_path: '/r/a.js' } }, NOW);
+  assert.equal(read.toolName, 'Read');
+  assert.equal(read.filePath, undefined);
+  const done = normalizeEvent({ ...base, hook_event_name: 'PostToolUse', tool_name: 'Edit', tool_input: { file_path: '/r/a.js' } }, NOW);
+  assert.equal(done.toolName, 'Edit');
+});
+
+test('filePath는 1000자까지만, 문자열이 아니면 없다', () => {
+  const base = { session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse', tool_name: 'Edit' };
+  assert.equal(normalizeEvent({ ...base, tool_input: { file_path: '/' + 'a'.repeat(3000) } }, NOW).filePath, undefined);
+  assert.equal(normalizeEvent({ ...base, tool_input: { file_path: 42 } }, NOW).filePath, undefined);
+  assert.equal(normalizeEvent({ ...base, tool_input: null }, NOW).filePath, undefined);
+});
+
+test('prompt는 마스킹된 promptText(300자), 하위 에이전트 알림은 여전히 null', () => {
+  const base = { session_id: 's', cwd: '/c', hook_event_name: 'UserPromptSubmit' };
+  const ev = normalizeEvent({ ...base, prompt: '로그인을 고쳐줘 sk-abcdefghijklmnopqrstuvwx1234 ' + 'x'.repeat(500) }, NOW);
+  assert.equal(ev.type, 'prompt');
+  assert.ok(ev.promptText.length <= 300);
+  assert.ok(!ev.promptText.includes('sk-abcdefghijklmnopqrstuvwx1234'));
+  assert.ok(ev.promptText.startsWith('로그인을 고쳐줘'));
+  assert.equal(normalizeEvent({ ...base, prompt: '<task-notification>x' }, NOW), null);
+  assert.equal(normalizeEvent({ ...base }, NOW).promptText, undefined);
+});
+
+test('stop은 마스킹된 assistantText(2000자)를 가진다', () => {
+  const base = { session_id: 's', cwd: '/c', hook_event_name: 'Stop' };
+  const ev = normalizeEvent({ ...base, last_assistant_message: '완료했습니다. token=abcd1234efgh ' + 'y'.repeat(3000) }, NOW);
+  assert.ok(ev.assistantText.length <= 2000);
+  assert.ok(!ev.assistantText.includes('abcd1234efgh'));
+  assert.equal(normalizeEvent(base, NOW).assistantText, undefined);
+});

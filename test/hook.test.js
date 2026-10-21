@@ -74,3 +74,14 @@ test('CLAUDE_OFFICE_URL이 없으면 설정 파일의 port로 보낸다', async 
   assert.equal(code, 0);
   assert.equal(received, '{"session_id":"s9"}');
 });
+
+test('CLAUDE_OFFICE_ROLE이 있으면 아무것도 보내지 않는다 (역할자 프로세스의 hook 재귀 차단)', async () => {
+  let hits = 0;
+  const server = http.createServer((req, res) => { hits++; res.writeHead(204).end(); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const { port } = server.address();
+  const { code } = await runHook('{"session_id":"s"}', { CLAUDE_OFFICE_ROLE: '1', CLAUDE_OFFICE_URL: `http://127.0.0.1:${port}` });
+  server.close();
+  assert.equal(code, 0);
+  assert.equal(hits, 0);
+});
