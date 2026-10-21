@@ -1,0 +1,53 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { createSessionRegistry } from '../src/sessions.js';
+
+function dirWith(entries) {
+  const dir = mkdtempSync(join(tmpdir(), 'sessions-'));
+  for (const [file, obj] of Object.entries(entries)) writeFileSync(join(dir, file), typeof obj === 'string' ? obj : JSON.stringify(obj));
+  return dir;
+}
+
+test('sessionId로 세션 이름을 찾는다', () => {
+  const dir = dirWith({ '1.json': { pid: 1, sessionId: 'S1', name: '팅크웨어' }, '2.json': { pid: 2, sessionId: 'S2', name: 'Pin-It' } });
+  const reg = createSessionRegistry({ dir });
+  assert.equal(reg.nameOf('S1'), '팅크웨어');
+  assert.equal(reg.nameOf('S2'), 'Pin-It');
+  assert.equal(reg.nameOf('nope'), undefined);
+});
+
+test('깨진 파일, 이름 없는 항목, .key 파일은 무시한다', () => {
+  const dir = dirWith({ 'bad.json': '{not json', '3.json': { pid: 3, sessionId: 'S3' }, '4.abc.key': 'secret', '5.json': { pid: 5, sessionId: 'S5', name: 'ok' } });
+  const reg = createSessionRegistry({ dir });
+  assert.equal(reg.nameOf('S3'), undefined);
+  assert.equal(reg.nameOf('S5'), 'ok');
+});
+
+test('폴더가 없어도 오류 없이 undefined', () => {
+  assert.equal(createSessionRegistry({ dir: join(tmpdir(), 'no-such-dir-xyz') }).nameOf('S'), undefined);
+});
+
+test('ttl 동안은 캐시하고, 지나면 다시 읽는다', () => {
+  const dir = dirWith({ '1.json': { pid: 1, sessionId: 'S1', name: 'A' } });
+  let t = 0;
+  const reg = createSessionRegistry({ dir, ttlMs: 1000, now: () => t });
+  assert.equal(reg.nameOf('S1'), 'A');
+  writeFileSync(join(dir, '1.json'), JSON.stringify({ pid: 1, sessionId: 'S1', name: 'B' }));
+  t = 500;
+  assert.equal(reg.nameOf('S1'), 'A');
+  t = 1500;
+  assert.equal(reg.nameOf('S1'), 'B');
+});
+
+test('아직 없는 세션이면 ttl 안이어도 한 번 더 읽어 본다 (막 시작한 세션)', () => {
+  const dir = dirWith({});
+  let t = 0;
+  const reg = createSessionRegistry({ dir, ttlMs: 60_000, now: () => t });
+  assert.equal(reg.nameOf('S9'), undefined);
+  writeFileSync(join(dir, '9.json'), JSON.stringify({ pid: 9, sessionId: 'S9', name: 'new' }));
+  t = 100;
+  assert.equal(reg.nameOf('S9'), 'new');
+});

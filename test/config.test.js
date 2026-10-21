@@ -102,3 +102,47 @@ test('maxMembers는 1~4만 허용한다', () => {
   assert.throws(() => loadConfig(cfgFile({ maxMembers: 0, projects: [] })), /maxMembers/);
   assert.equal(loadConfig(cfgFile({ maxMembers: 2, projects: [] })).maxMembers, 2);
 });
+
+// ---- 원격 PC
+const REMOTE = { name: 'PC2', ssh: 'me@192.168.0.20', key: '~/.ssh/k' };
+const PH = (name, path) => ({ name, path, host: 'PC2' });
+
+test('remotes: 이름·ssh가 필요하고, 프로젝트의 host는 정의된 remote여야 한다', () => {
+  assert.throws(() => loadConfig(cfgFile({ remotes: [{ name: 'PC2' }], projects: [] })), /ssh/);
+  assert.throws(() => loadConfig(cfgFile({ projects: [PH('R', '/r')] })), /PC2/);
+  const c = loadConfig(cfgFile({ remotes: [REMOTE], projects: [PH('R', '/r')] }));
+  assert.equal(c.remotes[0].name, 'PC2');
+  assert.deepEqual(loadConfig(cfgFile({ projects: [] })).remotes, []);
+});
+
+test('같은 경로라도 host가 다르면 다른 팀이고, 이름은 전체에서 유일해야 한다', () => {
+  const c = loadConfig(cfgFile({ remotes: [REMOTE], projects: [P('Local', '/work/a'), PH('Remote', '/work/a')] }));
+  assert.equal(matchProject(c, '/work/a/x').name, 'Local');
+  assert.equal(matchProject(c, '/work/a/x', 'PC2').name, 'Remote');
+  assert.equal(matchProject(c, '/work/a/x', 'other'), null);
+  assert.throws(() => loadConfig(cfgFile({ remotes: [REMOTE], projects: [P('X', '/a'), PH('X', '/b')] })), /중복/);
+  assert.throws(() => loadConfig(cfgFile({ remotes: [REMOTE], projects: [PH('A', '/r'), PH('B', '/r/')] })), /중복/);
+});
+
+// ---- 세션 이름(aliases)으로도 팀을 찾는다 (세션이 모두 홈 폴더에서 열려 있어도 이름으로 구분)
+test('aliases: cwd가 지정되지 않은 폴더여도 세션 이름이 별칭과 같으면 그 팀', () => {
+  const c = loadConfig(cfgFile({ projects: [{ name: 'Standup', path: '/w/standup', aliases: ['standup 봇'] }, P('B', '/w/b')] }));
+  assert.equal(matchProject(c, '/home/me', null, 'standup 봇').name, 'Standup');
+  assert.equal(matchProject(c, '/home/me', null, 'STANDUP 봇').name, 'Standup'); // 대소문자 무시
+  assert.equal(matchProject(c, '/home/me', null, '다른 이름'), null);
+  assert.equal(matchProject(c, '/home/me'), null);
+});
+
+test('aliases: 폴더가 맞으면 폴더가 우선이고, 팀 이름 자체도 별칭으로 쓰인다', () => {
+  const c = loadConfig(cfgFile({ projects: [{ name: 'Standup', path: '/w/standup', aliases: ['x'] }, P('B', '/w/b')] }));
+  assert.equal(matchProject(c, '/w/b/sub', null, 'x').name, 'B');
+  assert.equal(matchProject(c, '/home/me', null, 'B').name, 'B');
+});
+
+test('aliases: 다른 host의 프로젝트와는 섞이지 않고, 중복 별칭은 거절', () => {
+  const rc = { remotes: [{ name: 'PC2', ssh: 'a@b' }] };
+  const c = loadConfig(cfgFile({ ...rc, projects: [P('L', '/l'), { name: 'R', path: '/r', host: 'PC2', aliases: ['공용'] }] }));
+  assert.equal(matchProject(c, '/home', null, '공용'), null);
+  assert.equal(matchProject(c, '/home', 'PC2', '공용').name, 'R');
+  assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', aliases: ['z'] }, { name: 'B', path: '/b', aliases: ['Z'] }] })), /별칭|중복/);
+});

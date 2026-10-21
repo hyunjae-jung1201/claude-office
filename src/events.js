@@ -3,7 +3,7 @@ import { maskSecrets } from './mask.js';
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch']);
 const DETAIL_LIMIT = 200;
 // Claude가 사용자의 답을 기다리며 멈추는 도구들
-const USER_WAIT_TOOLS = { AskUserQuestion: 'answer', ExitPlanMode: 'plan' };
+export const USER_WAIT_TOOLS = { AskUserQuestion: 'answer', ExitPlanMode: 'plan' };
 const PRE_MASK_LIMIT = DETAIL_LIMIT * 4; // 마스킹 전에 먼저 자른다(입력 크기 제한)
 
 export function toolCategory(toolName) {
@@ -12,14 +12,17 @@ export function toolCategory(toolName) {
   return 'write';
 }
 
-function detailOf(input) {
-  if (!input || typeof input !== 'object') return undefined;
-  const v = input.command ?? input.file_path ?? input.notebook_path ?? input.path ?? input.pattern
-    ?? input.url ?? input.query ?? input.description;
+export function maskDetail(v) {
   if (typeof v !== 'string' || !v) return undefined;
   // 자르는 경계에 걸친 토큰 조각이 가려지지 않은 채 남지 않도록 마지막 단어를 버린다.
   const cut = v.length > PRE_MASK_LIMIT ? v.slice(0, PRE_MASK_LIMIT).replace(/\S*$/, '') : v;
   return maskSecrets(cut).slice(0, DETAIL_LIMIT);
+}
+
+function detailOf(input) {
+  if (!input || typeof input !== 'object') return undefined;
+  return maskDetail(input.command ?? input.file_path ?? input.notebook_path ?? input.path ?? input.pattern
+    ?? input.url ?? input.query ?? input.description);
 }
 
 const str = (v) => (typeof v === 'string' && v ? v : undefined);

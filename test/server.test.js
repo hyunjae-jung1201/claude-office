@@ -252,3 +252,57 @@ test('tick으로 사라진 세션의 추적 상태도 정리된다', () => {
     assert.equal(stats().seqs, 0);
   });
 });
+
+// ---- 원격 PC
+test('원격 수집기가 보낸 이벤트는 host가 같은 팀에만 반영된다', () => {
+  let push;
+  const remoteFactory = ({ remote, onEvent }) => { push = onEvent; return { stop() {}, status: () => 'connected' }; };
+  const rconfig = {
+    ...config,
+    remotes: [{ name: 'PC2', ssh: 'me@10.0.0.2', key: '/k' }],
+    projects: [...config.projects, { name: 'R', path: '/w/a', host: 'PC2', color: '#6c63d9' }],
+  };
+  return withServer({ config: rconfig, remoteFactory }, async ({ port }) => {
+    const c = await connect(port);
+    push({ sessionId: 'r1', cwd: '/w/a/sub', host: 'PC2', type: 'tool', category: 'run', detail: 'make', ts: Date.now() });
+    const snap = await c.waitFor((s) => s.teams.find((t) => t.name === 'R').status === 'run');
+    assert.equal(teamA(snap).status, 'off'); // 같은 경로의 로컬 팀 A는 영향 없음
+    c.close();
+  });
+});
+
+test('서버를 닫으면 원격 수집기도 멈춘다', async () => {
+  let stopped = 0;
+  const remoteFactory = () => ({ stop: () => stopped++, status: () => 'connected' });
+  const rconfig = { ...config, remotes: [{ name: 'PC2', ssh: 'me@10.0.0.2', key: '/k' }] };
+  await withServer({ config: rconfig, remoteFactory }, async () => {});
+  assert.equal(stopped, 1);
+});
+
+// ---- 세션 이름으로 팀 찾기
+test('홈 폴더에서 열린 세션도 이름(별칭)으로 팀에 연결된다', () => {
+  const sessionsDir = mkdtempSync(join(tmpdir(), 'office-sess-'));
+  writeFileSync(join(sessionsDir, '7.json'), JSON.stringify({ pid: 7, sessionId: 'named-1', name: '에이 팀' }));
+  const nconfig = { ...config, projects: [{ name: 'A', path: '/w/a', color: '#e8637a', aliases: ['에이 팀'] }, config.projects[1]] };
+  return withServer({ config: nconfig, sessionsDir }, async ({ port }) => {
+    const c = await connect(port);
+    await post(port, hookPayload({ session_id: 'named-1', cwd: '/home/hyeanjae' }));
+    await c.waitFor((s) => teamA(s).status === 'run');
+    await post(port, hookPayload({ session_id: 'stranger', cwd: '/home/hyeanjae', tool_name: 'Read', tool_input: { file_path: '/x' } }));
+    await new Promise((r) => setTimeout(r, 80));
+    assert.ok(c.seen.every((s) => teamA(s).status !== 'read'));
+    c.close();
+  });
+});
+
+test('원격 이벤트의 sessionName으로도 팀이 정해진다', () => {
+  let push;
+  const remoteFactory = ({ onEvent }) => { push = onEvent; return { stop() {}, status: () => 'connected' }; };
+  const rconfig = { ...config, remotes: [{ name: 'PC2', ssh: 'a@b', key: '/k' }], projects: [...config.projects, { name: 'R', path: '/r', host: 'PC2', aliases: ['원격 이름'], color: '#6c63d9' }] };
+  return withServer({ config: rconfig, remoteFactory }, async ({ port }) => {
+    const c = await connect(port);
+    push({ sessionId: 'r1', cwd: '/home/other', host: 'PC2', sessionName: '원격 이름', type: 'tool', category: 'read', detail: 'x', ts: Date.now() });
+    await c.waitFor((s) => s.teams.find((t) => t.name === 'R').status === 'read');
+    c.close();
+  });
+});

@@ -50,7 +50,7 @@ function applyMemberEvent(s, ev) {
 }
 
 export function applyEvent(state, ev, now) {
-  const project = matchProject(state.config, ev.cwd);
+  const project = matchProject(state.config, ev.cwd, ev.host, ev.sessionName);
   if (!project) return;
   const ts = ev.ts ?? now;
 

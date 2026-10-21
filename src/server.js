@@ -8,6 +8,8 @@ import { normalizeEvent } from './events.js';
 import { createState, applyEvent, tick, snapshot, setLabel } from './state.js';
 import { ruleLabel } from './labels.js';
 import { createSummarizer } from './summarizer.js';
+import { startRemote } from './remote.js';
+import { createSessionRegistry } from './sessions.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = '127.0.0.1';
@@ -31,7 +33,10 @@ export async function startServer({
   tickMs = 30_000,
   port = config.port,
   publicDir = join(ROOT, 'public'),
+  remoteFactory = startRemote,
+  sessionsDir,
 } = {}) {
+  const registry = createSessionRegistry(sessionsDir ? { dir: sessionsDir } : {});
   const state = createState(config);
   const clients = new Set();
   const seqs = new Map(); // 세션/에이전트별 최신 이벤트 번호: 늦게 끝난 요약이 최신 문구를 덮지 않게 한다
@@ -49,7 +54,9 @@ export async function startServer({
   };
 
   function handleEvent(ev) {
-    if (!matchProject(config, ev.cwd)) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
+    // 이 PC의 세션은 등록 정보에서 이름을 찾는다(원격 이벤트는 수집기가 이름을 실어 보낸다)
+    ev.sessionName ??= ev.host ? undefined : registry.nameOf(ev.sessionId);
+    if (!matchProject(config, ev.cwd, ev.host, ev.sessionName)) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
     applyEvent(state, ev, ev.ts);
     const key = `${ev.sessionId}|${ev.agentId ?? ''}`;
     // 말풍선을 바꾸는 이벤트만 번호를 올린다(toolDone은 제외: 요약이 도구 종료 뒤에 도착해도 보이게)
@@ -149,12 +156,16 @@ export async function startServer({
 
   await new Promise((r) => server.listen(port, HOST, r));
 
+  // 원격 PC: 읽기 전용으로 세션 기록을 받아 같은 이벤트로 흘려 넣는다
+  const remotes = (config.remotes ?? []).map((remote) => remoteFactory({ remote, onEvent: handleEvent }));
+
   return {
     port: server.address().port,
     host: HOST,
-    stats: () => ({ seqs: seqs.size, sessions: state.sessions.size }),
+    stats: () => ({ seqs: seqs.size, sessions: state.sessions.size, remotes: remotes.map((r) => r.status()) }),
     close() {
       clearInterval(timer);
+      for (const r of remotes) r.stop();
       for (const ws of clients) ws.terminate();
       return new Promise((r) => {
         wss.close(() => server.close(() => r()));

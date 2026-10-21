@@ -33,6 +33,23 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 - 한계: 승인을 눌러도 hook이 승인 완료 신호를 주지 않아서, 그 명령이 끝날 때까지 "승인 기다리는 중"으로 보인다.
 - Claude가 꺼져 있으면 휴게실에서 앉아서 잔다. 10분(`offAfterMinutes`) 동안 신호가 없어도 꺼진 것으로 본다.
 
+## 세션 이름으로 팀 찾기
+세션을 홈 폴더에서 열고 이름만 프로젝트 이름으로 붙여 쓰는 경우가 많아서, 폴더가 안 맞으면 Claude Code가 `~/.claude/sessions`에 적어 둔 **세션 이름**을 팀 이름/`aliases`와 비교한다(대소문자 무시). 폴더가 맞으면 폴더가 우선이다.
+```json
+{ "name": "Standup", "path": "/home/me/projects/standup-bot", "aliases": ["standup 봇"] }
+```
+
+## 다른 PC 연결 (읽기 전용)
+다른 PC의 Claude Code 세션 기록(`~/.claude/projects/*/*.jsonl`)과 실행 중 세션 등록 정보를 SSH로 읽는다. 그 PC의 Claude Code 설정은 바꾸지 않고, 이미 켜져 있는 세션도 바로 반영된다. 대신 승인 대기와 세션 종료 신호는 없어서 10분 조용하면 꺼진 것으로 본다. 하위 에이전트(팀원)는 표시되지 않는다.
+```json
+{
+  "remotes": [{ "name": "PC2", "ssh": "사용자@192.168.0.20" }],
+  "projects": [{ "name": "사고 판별", "path": "/home/사용자/accident", "host": "PC2", "aliases": ["사고 판별 모델"] }]
+}
+```
+- 키 전용 접속: `~/.ssh/claude_office_ed25519` (원격 `authorized_keys`에 `no-port-forwarding,no-pty` 옵션으로 등록). 비밀번호는 저장하지 않는다.
+- 원격에는 `node`(18 이상)가 있어야 한다. 끊기면 3초부터 최대 30초 간격으로 다시 연결한다.
+
 ## 화면 확인용 데모
 ```bash
 node src/server.js
