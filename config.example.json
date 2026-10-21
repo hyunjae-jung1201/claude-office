@@ -1,0 +1,9 @@
+{
+  "port": 7410,
+  "offAfterMinutes": 10,
+  "maxMembers": 4,
+  "celebrateAfterSeconds": 30,
+  "projects": [
+    { "name": "예시 프로젝트", "path": "/home/me/projects/example", "color": "#e8637a" }
+  ]
+}
