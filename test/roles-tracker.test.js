@@ -167,3 +167,15 @@ test('요청은 최근 5개만, 원격(host) 이벤트와 비활성 설정은 �
 
   for (const bad of [null, undefined, {}, { type: 'stop' }, { sessionId: 's', type: 'mystery' }]) await tracker.onEvent(bad);
 });
+
+test('roles.excludePaths 아래 저장소는 검토 대상에서 제외된다 (접두사 경계 기준)', async () => {
+  const { tracker, due, ev } = setup(baseConfig({ excludePaths: ['/r2'] }));
+  await tracker.onEvent(ev('tool', edit('/r1/a.js')));
+  await tracker.onEvent(ev('tool', edit('/r2/b.js')));
+  await tracker.onEvent(ev('stop'));
+  assert.deepEqual(due.map((j) => j.repoRoot), ['/r1']);
+  const ex = setup(baseConfig({ excludePaths: ['/r'] })); // /r 는 /r1 의 접두사 문자열이지만 경로 경계가 다르다
+  await ex.tracker.onEvent(ex.ev('tool', edit('/r1/a.js')));
+  await ex.tracker.onEvent(ex.ev('stop'));
+  assert.equal(ex.due.length, 1);
+});

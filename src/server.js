@@ -253,7 +253,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const { loadRoles } = await import('./roles/loader.js');
   const roles = config.roles?.enabled ? loadRoles(join(ROOT, 'roles')) : null;
   const reviewRun = process.env.CLAUDE_OFFICE_FAKE_ROLES ? (await import('./roles/fake.js')).fakeRun : runRole;
-  const srv = await startServer({ config, summarizer: createSummarizer(), roles, reviewRun });
+  const reviewStore = process.env.CLAUDE_OFFICE_REVIEW_DIR ? createReviewStore({ dir: process.env.CLAUDE_OFFICE_REVIEW_DIR }) : undefined;
+  const srv = await startServer({ config, summarizer: createSummarizer(), roles, reviewRun, reviewStore });
   console.log(`Claude Office: http://localhost:${srv.port}  (프로젝트 ${config.projects.length}개)`);
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => srv.close().then(() => process.exit(0)));
 }

@@ -150,7 +150,7 @@ test('aliases: 다른 host의 프로젝트와는 섞이지 않고, 중복 별칭
 // ---- roles 설정
 test('roles 기본값', () => {
   const c = loadConfig(cfgFile({ projects: [] }));
-  assert.deepEqual(c.roles, { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', projects: {} });
+  assert.deepEqual(c.roles, { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', excludePaths: [], projects: {} });
 });
 
 test('roles: 값을 덮어쓸 수 있고, 형식 오류·deliver 값은 거부한다', () => {
@@ -168,4 +168,10 @@ test('팀 항목의 roles는 목록이어야 하고 보존된다', () => {
   const c = loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', roles: ['pm', 'qa'] }] }));
   assert.deepEqual(c.projects[0].roles, ['pm', 'qa']);
   assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', roles: 'pm' }] })), /roles/);
+});
+
+test('roles.excludePaths: 기본은 빈 목록, 문자열 목록이어야 한다', () => {
+  assert.deepEqual(loadConfig(cfgFile({ projects: [] })).roles.excludePaths, []);
+  assert.deepEqual(loadConfig(cfgFile({ roles: { excludePaths: ['/secret/repo'] }, projects: [] })).roles.excludePaths, ['/secret/repo']);
+  assert.throws(() => loadConfig(cfgFile({ roles: { excludePaths: '/x' }, projects: [] })), /excludePaths/);
 });

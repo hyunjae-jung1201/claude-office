@@ -46,6 +46,45 @@
   .legend span { display: inline-flex; align-items: center; gap: 6px; }
   .legend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
 
+  .head-right { display: flex; gap: 8px; align-items: center; pointer-events: auto; }
+  #rp-btn {
+    font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--paper); border: 0; cursor: pointer;
+    padding: 5px 12px; border-radius: 999px; box-shadow: 0 0 0 1px var(--line), 0 2px 10px rgba(0,0,0,.4);
+  }
+  #rp-btn:hover, #rp-btn[aria-expanded="true"] { background: #2a3558; }
+  #rp-btn:focus-visible, .rp-item:focus-visible, .rp-close:focus-visible { outline: 2px solid #8fb2ff; outline-offset: 2px; }
+  #rp {
+    position: fixed; top: 52px; right: 16px; bottom: 56px; width: min(420px, calc(100vw - 32px)); z-index: 6;
+    background: rgba(24,31,54,.96); border-radius: 14px; box-shadow: 0 0 0 1px var(--line), 0 10px 30px rgba(0,0,0,.55);
+    display: flex; flex-direction: column; overflow: hidden; font-size: 13px;
+  }
+  #rp[hidden] { display: none; }
+  .rp-head { display: flex; justify-content: space-between; align-items: center; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .rp-close { background: none; border: 0; color: var(--ink); font-size: 14px; cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+  .rp-notice { padding: 8px 14px; background: rgba(245,165,36,.16); color: #ffd28a; font-weight: 700; }
+  .rp-list { overflow: auto; max-height: 45%; padding: 6px; border-bottom: 1px solid var(--line); }
+  .rp-detail { overflow: auto; flex: 1; padding: 10px 14px; }
+  .rp-muted { color: #9aa6c8; padding: 10px 8px; line-height: 1.5; }
+  .rp-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; font: inherit; color: var(--ink); background: transparent; border: 0; border-radius: 10px; padding: 8px; cursor: pointer; }
+  .rp-item:hover { background: rgba(255,255,255,.06); }
+  .rp-icon { flex: none; min-width: 34px; text-align: center; font-weight: 800; }
+  .rp-item.ok .rp-icon { color: #4ad58a; } .rp-item.concern .rp-icon { color: #f5a524; } .rp-item.block .rp-icon { color: #ff6b6f; }
+  .rp-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .rp-name { font-weight: 700; } .rp-sum { color: #b4bfdc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .rp-time { flex: none; color: #8d99bd; font-size: 11px; }
+  .rp-title { font-weight: 800; margin-bottom: 8px; }
+  .rp-role { background: rgba(255,255,255,.05); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; border-left: 3px solid #4ad58a; }
+  .rp-role.concern { border-color: #f5a524; } .rp-role.block, .rp-role.failed { border-color: #ff6b6f; }
+  .rp-role-head { font-weight: 800; } .rp-summary { color: #c9d3f5; margin: 3px 0 6px; }
+  .rp-finding { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; padding: 4px 0; border-top: 1px solid var(--line); }
+  .rp-sev { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: #34406a; }
+  .rp-finding.major .rp-sev { background: #7a5a16; } .rp-finding.critical .rp-sev { background: #8a2b30; }
+  .rp-file { color: #8fb2ff; font-size: 12px; } .rp-text { flex-basis: 100%; line-height: 1.5; }
+
+  /* 팀장 곁의 판정 배지 */
+  .badge { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--paper); box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgba(0,0,0,.5); white-space: nowrap; }
+  .badge.ok { color: #4ad58a; } .badge.concern { color: #f5a524; } .badge.block { color: #ff6b6f; }
+
   /* ---- 3D 위에 얹는 말풍선, 이름표 ---- */
   .bubble {
     position: relative; display: flex; align-items: center; gap: 7px; max-width: 230px;
@@ -97,8 +136,17 @@
   <div id="stage"><canvas id="c"></canvas><div id="overlay"></div></div>
   <header>
     <div class="brand">Claude Office</div>
-    <div id="conn" class="down" role="status"><i></i><span>연결 중…</span></div>
+    <div class="head-right">
+      <button id="rp-btn" type="button" aria-expanded="false" aria-controls="rp">보고서</button>
+      <div id="conn" class="down" role="status"><i></i><span>연결 중…</span></div>
+    </div>
   </header>
+  <aside id="rp" hidden aria-label="검토 보고서">
+    <div class="rp-head"><b>검토 보고서</b><button class="rp-close" type="button" aria-label="닫기">✕</button></div>
+    <div class="rp-notice" hidden></div>
+    <div class="rp-list"></div>
+    <div class="rp-detail"></div>
+  </aside>
   <div class="legend" aria-label="상태 색">
     <span><i style="background:var(--read)"></i>읽는 중</span>
     <span><i style="background:var(--write)"></i>코드 쓰는 중</span>

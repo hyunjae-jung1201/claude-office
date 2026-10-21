@@ -19,6 +19,8 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
       cooldownMs: (best?.v.cooldownMinutes ?? config.roles.cooldownMinutes) * MIN,
     };
   };
+  // 검토를 받고 싶지 않은 저장소(roles.excludePaths 아래)는 모은 파일도 버린다
+  const isExcluded = (repoRoot) => (config.roles.excludePaths ?? []).some((p) => repoRoot === p || repoRoot.startsWith(p.replace(/\/+$/, '') + '/'));
   const cooledDown = (repoRoot) => {
     const last = repoLast.get(repoRoot);
     return last === undefined || now() - last >= settingsFor(repoRoot).cooldownMs;
@@ -38,6 +40,7 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
     const groups = await groupFiles([...s.files]);
     let fired = false;
     for (const [repoRoot, files] of groups) {
+      if (isExcluded(repoRoot)) { for (const f of files) s.files.delete(f); continue; }
       if (onlyPending && !s.pending.has(repoRoot)) continue;
       if (files.length < settingsFor(repoRoot).minWrites) continue;
       if (!ignoreCooldown && !cooledDown(repoRoot)) { s.pending.add(repoRoot); continue; }

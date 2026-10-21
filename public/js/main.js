@@ -1,10 +1,12 @@
 import { createScene } from './scene.js';
+import { createPanel } from './panel.js';
 
 const canvas = document.getElementById('c');
 const overlay = document.getElementById('overlay');
 const conn = document.getElementById('conn');
 const connText = conn.querySelector('span');
 const scene = createScene(canvas, overlay);
+const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
 window.__office = scene; // 화면 검증용
 
 function setConn(up) {
@@ -17,7 +19,11 @@ function connect() {
   const ws = new WebSocket(`ws://${location.host}/ws`);
   ws.onopen = () => setConn(true);
   ws.onmessage = (e) => {
-    try { scene.update(JSON.parse(e.data)); } catch (err) { console.error('bad snapshot', err); }
+    try {
+      const snap = JSON.parse(e.data);
+      scene.update(snap);
+      panel.update(snap);
+    } catch (err) { console.error('bad snapshot', err); }
   };
   ws.onclose = () => {
     setConn(false);

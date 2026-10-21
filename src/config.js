@@ -53,7 +53,7 @@ function validateProjects(list, remotes = []) {
   });
 }
 
-const ROLES_DEFAULTS = { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report' };
+const ROLES_DEFAULTS = { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', excludePaths: [] };
 
 function validateRolesConfig(raw = {}) {
   const roles = { ...ROLES_DEFAULTS, ...raw, projects: raw.projects ?? {} };
@@ -64,6 +64,7 @@ function validateRolesConfig(raw = {}) {
     if (!Number.isFinite(v) || v < min) throw new Error(`roles.${name}는 ${min} 이상의 숫자여야 합니다`);
   };
   ids(roles.default, 'roles.default');
+  ids(roles.excludePaths, 'roles.excludePaths');
   posInt(roles.cooldownMinutes, 'cooldownMinutes', 0);
   posInt(roles.minWrites, 'minWrites', 1);
   posInt(roles.dailyLimit, 'dailyLimit', 1);

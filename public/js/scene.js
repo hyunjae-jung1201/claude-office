@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { FLOOR, ROOMS, ENTRANCE, targetFor, memberTarget, deskZone } from './layout.js';
+import { FLOOR, ROOMS, ENTRANCE, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
 
 const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#f5a524', idle: '#8a94a6', off: '#8a94a6' };
 const WALK_SPEED = 2.8; // 타일/초
@@ -329,12 +329,19 @@ export function createScene(canvas, overlay) {
     scene.remove(entity.group);
   }
 
-  function setBubble(entity, text, status, done = false) {
+  // 같은 책상 구역에 모인 팀원·역할자의 말풍선·이름표가 겹치지 않도록 자리(slot)마다 높이를 어긋나게 둔다
+  function staggerLabels(entity, slot) {
+    entity.bubbleObj.position.y = 1.3 + slot * 0.42;
+    entity.tagObj.position.y = -0.05 - (slot % 2) * 0.3;
+  }
+
+  function setBubble(entity, text, status, done = false, color = null) {
     const el = entity.bubble;
     el.classList.toggle('done', done);
     el.querySelector('.txt').textContent = text;
-    el.querySelector('.dot').style.background = STATUS_COLOR[status] ?? STATUS_COLOR.idle;
-    el.querySelector('.dot').style.boxShadow = `0 0 0 4px ${(STATUS_COLOR[status] ?? STATUS_COLOR.idle)}33`;
+    const dot = color ?? STATUS_COLOR[status] ?? STATUS_COLOR.idle;
+    el.querySelector('.dot').style.background = dot;
+    el.querySelector('.dot').style.boxShadow = `0 0 0 4px ${dot}33`;
     const sleeping = entity.goal.pose === 'sleep' && !entity.member;
     // 자는 아바타는 z z만, 대기 중인 아바타는 "지시 대기 구역"에 앉아 있는 것으로 충분하니 말풍선을 숨긴다
     entity.bubbleObj.visible = !sleeping && status !== 'idle';
@@ -349,6 +356,23 @@ export function createScene(canvas, overlay) {
       try { updateTeam(team, i, now); } catch (err) { console.error(`team ${i} update failed`, err); } // 한 팀의 오류가 다른 팀을 멈추지 않게
     });
     firstSnapshot = false;
+  }
+
+  const BADGE = { ok: ['✓', '통과'], concern: ['⚠', '우려'], block: ['⛔', '중단 권고'] };
+  function updateBadge(leader, badge) {
+    if (!leader.badgeObj) {
+      const el = document.createElement('div');
+      leader.badgeObj = new CSS2DObject(el);
+      leader.badgeObj.position.set(-0.6, 1.15, 0);
+      leader.group.add(leader.badgeObj);
+    }
+    const el = leader.badgeObj.element;
+    leader.badgeObj.visible = Boolean(badge);
+    if (!badge) return;
+    const [icon, label] = BADGE[badge.verdict] ?? BADGE.concern;
+    el.className = `badge ${badge.verdict}`;
+    el.textContent = badge.verdict === 'concern' ? `${icon} ${badge.concerns}` : icon;
+    el.title = `${label}${badge.concerns ? ` (${badge.concerns}건)` : ''}`;
   }
 
   function updateTeam(team, i, now) {
@@ -383,18 +407,44 @@ export function createScene(canvas, overlay) {
         ent.leaving = false;
         ent.status = m.status;
         ent.slot = idx;
+        staggerLabels(ent, idx);
         ent.goal = memberTarget(m.status, i, idx);
         setBubble(ent, m.label, m.status);
       });
+      // (팀원 퇴근 처리는 역할자까지 본 뒤 아래에서 한 번에 한다)
+      // 역할자(PM·개발자·QA …): 검토 중에 팀원처럼 나타나 책상에서 일하고, 끝나면 퇴근한다
+      const roles = team.roles ?? [];
+      roles.forEach((r, idx) => {
+        const key = `${i}:role:${r.id}`;
+        seen.add(key);
+        let ent = members.get(key);
+        if (!ent) {
+          ent = makeEntity({ team: i, member: true, id: `role:${r.id}`, tile: ENTRANCE, scale: MEMBER_SCALE, name: r.name, color: r.color, bubbleHeight: 1.3 });
+          members.set(key, ent);
+        }
+        ent.leaving = false;
+        ent.status = r.status === 'running' ? 'write' : 'idle';
+        const slot = Math.min(3, team.members.length + idx);
+        staggerLabels(ent, slot);
+        const seat = memberSeat(i, slot);
+        ent.goal = { ...seat, pose: r.status === 'running' ? 'type' : 'stand' };
+        setBubble(ent, r.label, ent.status, false, r.status === 'failed' ? '#e5484d' : r.color);
+        ent.bubbleObj.visible = true; // 검토가 끝난 역할자도 한 줄 결과(요약)를 퇴근 전까지 보여 준다
+      });
       for (const [key, ent] of members) {
-        if (ent.team === i && !seen.has(key)) {
+        if (ent.team === i && !seen.has(key) && !ent.leaving) {
           ent.leaving = true;
           ent.goal = { ...ENTRANCE, pose: 'stand' };
           setBubble(ent, '퇴근!', 'idle');
         }
       }
+
+      // 판정 배지: 다음 검토 때까지 팀장 곁에 남는다 (✓ 통과 / ⚠ 우려 n / ⛔ 중단 권고)
+      updateBadge(leader, team.badge);
+
       // 넘친 팀원 수
-      if (team.overflow > 0) {
+      const extra = team.overflow + Math.max(0, team.members.length + roles.length - 4);
+      if (extra > 0) {
         if (!leader.more) {
           const el = document.createElement('div');
           el.className = 'more';
@@ -403,7 +453,7 @@ export function createScene(canvas, overlay) {
           leader.more.position.set(wx(z.x + z.w / 2), 0.1, wz(4.35));
           scene.add(leader.more);
         }
-        leader.more.element.textContent = `+${team.overflow}`;
+        leader.more.element.textContent = `+${extra}`;
         leader.more.visible = true;
       } else if (leader.more) leader.more.visible = false;
     }
