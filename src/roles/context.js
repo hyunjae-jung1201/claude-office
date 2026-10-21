@@ -1,7 +1,7 @@
 // 역할자에게 줄 문맥: 편집된 파일이 속한 git 저장소를 찾고, 서버가 직접 diff 를 만들어 프롬프트에 넣는다.
 // 역할자에게는 셸 도구를 주지 않으므로 git 정보는 모두 여기서 만든다.
 import { execFile } from 'node:child_process';
-import { existsSync, realpathSync, readFileSync, openSync, readSync, closeSync } from 'node:fs';
+import { existsSync, realpathSync, readFileSync, openSync, readSync, closeSync, lstatSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, isAbsolute, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
@@ -19,7 +19,7 @@ async function git(root, args) {
   const { stdout } = await run('git', ['-C', root, ...args], {
     encoding: 'utf8',
     maxBuffer: 20 * 1024 * 1024,
-    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C' },
+    env: { ...process.env, GIT_TERMINAL_PROMPT: '0', LC_ALL: 'C', GIT_LITERAL_PATHSPECS: '1' }, // 파일 이름의 * ? 등을 패턴으로 해석하지 않는다
   });
   return stdout;
 }
@@ -75,9 +75,14 @@ function readHead(path, bytes) {
 }
 
 function newFileDiff(root, rel) {
+  const header = `diff --git a/${rel} b/${rel}\nnew file\n--- /dev/null\n+++ b/${rel}\n`;
+  // 심볼릭 링크·특수 파일은 읽지 않는다(링크로 저장소 밖이나 민감 파일의 내용이 새는 것을 막는다)
+  try {
+    const st = lstatSync(`${root}/${rel}`);
+    if (!st.isFile()) return `${header}(링크 또는 특수 파일, 내용 생략)\n`;
+  } catch { return ''; }
   let buf;
   try { buf = readHead(`${root}/${rel}`, NEW_FILE_BYTES); } catch { return ''; }
-  const header = `diff --git a/${rel} b/${rel}\nnew file\n--- /dev/null\n+++ b/${rel}\n`;
   if (buf.includes(0)) return `${header}(바이너리 파일, 내용 생략)\n`;
   const text = buf.toString('utf8');
   const more = (() => { try { return readFileSync(`${root}/${rel}`).length > NEW_FILE_BYTES; } catch { return false; } })();

@@ -128,3 +128,7 @@ test('isSensitivePath: 비밀값이 들어 있을 만한 파일·폴더', () => 
   }
   for (const p of ['src/app.js', 'README.md', 'docs/env-setup.md', 'src/keyboard.js']) assert.equal(isSensitivePath(p), false, p);
 });
+
+test('isSensitivePath: 대소문자를 구분하지 않는다', () => {
+  for (const p of ['.ENV', 'a/.SSH/config', 'ID_RSA', 'a/Secrets.yml', 'K/SERVER.PEM', 'x/.AWS/credentials', 'Cert/Client.P12']) assert.equal(isSensitivePath(p), true, p);
+});

@@ -131,3 +131,35 @@ test('buildPrompt: diff가 잘렸으면 통계만 보여 주고 읽어서 확인
   assert.match(p, /big\.txt/);
   assert.match(p, /너무 커서|직접 읽/);
 });
+
+// ---- 보안 리뷰 반영: git 경로 패턴(글롭) 해석과 심볼릭 링크로 민감 파일이 새지 않게
+import { symlinkSync } from 'node:fs';
+
+test('이름에 글롭 문자가 든 파일을 편집해도 다른 파일(.env 등)의 diff가 따라오지 않는다', async () => {
+  const r = repo({ 'a.js': 'x\n', '.env': 'KEY=old\n', '*': 'star\n' });
+  writeFileSync(join(r, '.env'), 'KEY=GLOBLEAKVALUE777\n');
+  writeFileSync(join(r, 'a.js'), 'CHANGED_A\n');
+  writeFileSync(join(r, '*'), 'star2\n');
+  const d = await buildDiff(r, [join(r, '*')]);
+  assert.ok(!d.diff.includes('GLOBLEAKVALUE777'));
+  assert.ok(!d.diff.includes('CHANGED_A'));
+  assert.match(d.diff, /star2/);
+});
+
+test('추적 안 되는 심볼릭 링크는 가리키는 파일 내용을 읽지 않는다', async () => {
+  const outside = mkdtempSync(join(tmpdir(), 'ctx-outside-'));
+  writeFileSync(join(outside, 'secret.txt'), 'OUTSIDESECRET12345\n');
+  const r = repo();
+  symlinkSync(join(outside, 'secret.txt'), join(r, 'link.txt'));
+  const d = await buildDiff(r, [join(r, 'link.txt')]);
+  assert.ok(!d.diff.includes('OUTSIDESECRET12345'));
+  assert.match(d.diff, /링크|특수/);
+});
+
+test('민감 파일을 가리키는 새 심볼릭 링크도 내용을 읽지 않는다', async () => {
+  const r = repo();
+  writeFileSync(join(r, '.env'), 'ENVSECRET98765\n');
+  symlinkSync(join(r, '.env'), join(r, 'innocent.txt'));
+  const d = await buildDiff(r, [join(r, 'innocent.txt')]);
+  assert.ok(!d.diff.includes('ENVSECRET98765'));
+});

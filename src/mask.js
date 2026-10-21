@@ -23,13 +23,13 @@ const RULES = [
 ];
 
 const SENSITIVE_NAME =
-  /^(?:\.env(?:\.[\w-]+)?|\.netrc|\.npmrc|\.pypirc|[\w.-]*\.(?:pem|key|p12|pfx|jks)|id_(?:rsa|ed25519|ecdsa|dsa)(?:\.pub)?|[\w.-]*(?:credentials|secret)[\w.-]*|[\w.-]*_key)$/;
+  /^(?:\.env(?:\.[\w-]+)?|\.netrc|\.npmrc|\.pypirc|[\w.-]*\.(?:pem|key|p12|pfx|jks)|id_(?:rsa|ed25519|ecdsa|dsa)(?:\.pub)?|[\w.-]*(?:credentials|secret)[\w.-]*|[\w.-]*_key)$/i;
 const SENSITIVE_DIRS = new Set(['.ssh', '.aws', '.gnupg']);
 
 // 이 경로가 비밀값을 담을 만한 파일/폴더인가(.env, 키, .ssh/ 아래 등). 마지막 조각 또는 폴더 조각으로 판단한다.
 export function isSensitivePath(path) {
   const parts = String(path).split(/[\/=]/);
-  return SENSITIVE_NAME.test(parts.at(-1)) || parts.some((p) => SENSITIVE_DIRS.has(p));
+  return SENSITIVE_NAME.test(parts.at(-1)) || parts.some((p) => SENSITIVE_DIRS.has(p.toLowerCase()));
 }
 
 // 공백 단위 토큰마다 민감한 경로인지 본다. 선형 시간.
