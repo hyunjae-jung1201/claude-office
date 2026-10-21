@@ -71,3 +71,9 @@ test('원격 세션 이름(n)이 이벤트의 sessionName으로 전달된다', (
   const evs = projectionToEvents({ ...base, n: '사고 판별 모델', k: 'prompt', p: 'x' }, fresh(), NOW);
   assert.ok(evs.length === 2 && evs.every((e) => e.sessionName === '사고 판별 모델'));
 });
+
+test('live: 세션 등록 정보 상태가 live 이벤트로 바뀐다 (start 없이)', () => {
+  const evs = projectionToEvents({ s: 'S1', c: '/home/me', n: '사고 판별 모델', k: 'live', st: 'shell' }, fresh(), NOW);
+  assert.deepEqual(evs.map((e) => [e.type, e.liveStatus, e.sessionName, e.sessionId]), [['live', 'shell', '사고 판별 모델', 'S1']]);
+  assert.deepEqual(projectionToEvents({ s: 'S1', c: '/home/me', k: 'live' }, fresh(), NOW), []);
+});

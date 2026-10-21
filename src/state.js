@@ -12,6 +12,7 @@ export const DEFAULT_LABEL = {
   off: '자는 중',
 };
 const WAITING_FOR_AGENTS = '하위 에이전트 기다리는 중';
+const BACKGROUND_LABEL = '백그라운드 작업 중';
 
 export function createState(config) {
   return { config, sessions: new Map() };
@@ -50,6 +51,11 @@ function applyMemberEvent(s, ev) {
 }
 
 export function applyEvent(state, ev, now) {
+  // 세션이 사라졌다는 신호는 팀에 맞는지와 상관없이 그 세션을 지운다
+  if (ev.type === 'live' && ev.liveStatus === 'gone') {
+    state.sessions.delete(ev.sessionId);
+    return;
+  }
   const project = matchProject(state.config, ev.cwd, ev.host, ev.sessionName);
   if (!project) return;
   const ts = ev.ts ?? now;
@@ -60,6 +66,12 @@ export function applyEvent(state, ev, now) {
   }
   const s = sessionFor(state, { ...ev, ts }, project);
   s.lastEventAt = ts;
+
+  if (ev.type === 'live') {
+    // 세션 등록 정보: 살아 있음을 알리고(하트비트), 백그라운드 명령이 도는 중인지(shell)를 기록한다
+    s.live = ev.liveStatus;
+    return;
+  }
 
   if (ev.type === 'agentStart') {
     const m = { id: ev.agentId, type: ev.agentType ?? 'agent', startedAt: ts };
@@ -141,11 +153,13 @@ export function snapshot(state, now) {
       return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, members: [], overflow: 0, finishedAt: null };
     }
     const all = [...latest.members.values()].sort((a, b) => a.startedAt - b.startedAt);
+    // 응답은 끝났지만 백그라운드 명령이 도는 중이면 서버실에서 일하는 것으로 보여 준다
+    const background = latest.live === 'shell' && latest.status === 'idle';
     return {
       name: p.name,
       color: p.color,
-      status: latest.status,
-      label: latest.label,
+      status: background ? 'run' : latest.status,
+      label: background ? BACKGROUND_LABEL : latest.label,
       members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, startedAt: m.startedAt })),
       overflow: Math.max(0, all.length - maxMembers),
       finishedAt: latest.finishedAt,

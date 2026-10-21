@@ -51,3 +51,25 @@ test('아직 없는 세션이면 ttl 안이어도 한 번 더 읽어 본다 (막
   t = 100;
   assert.equal(reg.nameOf('S9'), 'new');
 });
+
+// ---- 살아 있는 세션 목록 (백그라운드 작업 표시용)
+import { spawnSync } from 'node:child_process';
+
+test('liveSessions: 살아 있는 프로세스의 세션만 이름·폴더·상태와 함께 돌려준다', () => {
+  const dead = spawnSync(process.execPath, ['-e', '0']).pid; // 이미 끝난 프로세스의 pid
+  const dir = dirWith({
+    'a.json': { pid: process.pid, sessionId: 'LIVE', name: '사고 판별 모델', cwd: '/home/x', status: 'shell' },
+    'b.json': { pid: dead, sessionId: 'DEAD', name: 'old', cwd: '/home/x', status: 'busy' },
+    'c.json': { pid: process.pid, sessionId: 'NONAME', cwd: '/home/y', status: 'idle' },
+    'd.json': { sessionId: 'NOPID', name: 'x' },
+    'e.abc.key': 'secret',
+  });
+  const live = createSessionRegistry({ dir }).liveSessions();
+  assert.deepEqual(live.map((s) => s.sessionId).sort(), ['LIVE', 'NONAME']);
+  assert.deepEqual(live.find((s) => s.sessionId === 'LIVE'), { sessionId: 'LIVE', name: '사고 판별 모델', cwd: '/home/x', status: 'shell' });
+  assert.equal(live.find((s) => s.sessionId === 'NONAME').name, undefined);
+});
+
+test('liveSessions: 폴더가 없으면 빈 목록', () => {
+  assert.deepEqual(createSessionRegistry({ dir: join(tmpdir(), 'no-dir-live-xyz') }).liveSessions(), []);
+});

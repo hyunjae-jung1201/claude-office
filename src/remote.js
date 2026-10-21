@@ -8,7 +8,7 @@ import { toolCategory, maskDetail, USER_WAIT_TOOLS } from './events.js';
 
 const TAIL_SCRIPT = readFileSync(new URL('./remote-tail.cjs', import.meta.url), 'utf8');
 const WORKING_AGE_S = 30; // init 때 이 시간 안에 움직인 세션은 일하는 중으로 본다
-const KINDS = new Set(['init', 'prompt', 'tool', 'result', 'stop']);
+const KINDS = new Set(['init', 'prompt', 'tool', 'result', 'stop', 'live']);
 const NOT_A_PROMPT = /^<(task-notification|system-reminder|command-)/;
 
 const expandHome = (p) => (p.startsWith('~/') ? join(homedir(), p.slice(2)) : p);
@@ -48,6 +48,8 @@ export function projectionToEvents(p, ctx, now) {
   if (p.k === 'result' && !Array.isArray(p.ids)) return [];
 
   const base = { sessionId, cwd, ts: now, ...(str(p.n) ? { sessionName: p.n } : {}) };
+  if (p.k === 'live') return str(p.st) ? [{ ...base, type: 'live', liveStatus: p.st }] : [];
+
   const out = [];
   if (!ctx.seen.has(sessionId)) {
     ctx.seen.add(sessionId);

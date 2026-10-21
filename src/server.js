@@ -14,6 +14,7 @@ import { createSessionRegistry } from './sessions.js';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = '127.0.0.1';
 const BODY_LIMIT = 1024 * 1024;
+const LIVE_HEARTBEAT_MS = 30_000;
 const BUBBLE_EVENTS = new Set(['start', 'end', 'prompt', 'tool', 'wait', 'stop', 'agentStart', 'agentStop']);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -35,6 +36,7 @@ export async function startServer({
   publicDir = join(ROOT, 'public'),
   remoteFactory = startRemote,
   sessionsDir,
+  liveMs = 3000,
 } = {}) {
   const registry = createSessionRegistry(sessionsDir ? { dir: sessionsDir } : {});
   const state = createState(config);
@@ -54,6 +56,11 @@ export async function startServer({
   };
 
   function handleEvent(ev) {
+    if (ev.type === 'live' && ev.liveStatus === 'gone') {
+      applyEvent(state, ev, ev.ts);
+      broadcast();
+      return;
+    }
     // 이 PC의 세션은 등록 정보에서 이름을 찾는다(원격 이벤트는 수집기가 이름을 실어 보낸다)
     ev.sessionName ??= ev.host ? undefined : registry.nameOf(ev.sessionId);
     if (!matchProject(config, ev.cwd, ev.host, ev.sessionName)) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
@@ -147,6 +154,27 @@ export async function startServer({
     ws.send(JSON.stringify(snapshot(state, now())));
   });
 
+  // 이 PC에서 실행 중인 세션: 등록 정보를 주기적으로 읽어 상태 변화·하트비트를 이벤트로 흘려 넣는다
+  const liveKnown = new Map(); // sessionId -> { status, at }
+  function pollLive() {
+    const t = now();
+    const seen = new Set();
+    for (const s of registry.liveSessions()) {
+      seen.add(s.sessionId);
+      const prev = liveKnown.get(s.sessionId);
+      if (prev && prev.status === s.status && t - prev.at < LIVE_HEARTBEAT_MS) continue;
+      liveKnown.set(s.sessionId, { status: s.status, at: t });
+      handleEvent({ sessionId: s.sessionId, cwd: s.cwd ?? '/', sessionName: s.name, type: 'live', liveStatus: s.status ?? 'idle', ts: t });
+    }
+    for (const id of [...liveKnown.keys()]) {
+      if (seen.has(id)) continue;
+      liveKnown.delete(id);
+      handleEvent({ sessionId: id, cwd: '/', type: 'live', liveStatus: 'gone', ts: t });
+    }
+  }
+  const liveTimer = setInterval(pollLive, liveMs);
+  liveTimer.unref();
+
   const timer = setInterval(() => {
     tick(state, now());
     for (const k of [...seqs.keys()]) if (!state.sessions.has(k.split('|')[0])) seqs.delete(k); // 사라진 세션의 추적 상태 정리
@@ -155,6 +183,7 @@ export async function startServer({
   timer.unref();
 
   await new Promise((r) => server.listen(port, HOST, r));
+  pollLive();
 
   // 원격 PC: 읽기 전용으로 세션 기록을 받아 같은 이벤트로 흘려 넣는다
   const remotes = (config.remotes ?? []).map((remote) => remoteFactory({ remote, onEvent: handleEvent }));
@@ -165,6 +194,7 @@ export async function startServer({
     stats: () => ({ seqs: seqs.size, sessions: state.sessions.size, remotes: remotes.map((r) => r.status()) }),
     close() {
       clearInterval(timer);
+      clearInterval(liveTimer);
       for (const r of remotes) r.stop();
       for (const ws of clients) ws.terminate();
       return new Promise((r) => {

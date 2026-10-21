@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../src/server.js';
@@ -303,6 +303,25 @@ test('원격 이벤트의 sessionName으로도 팀이 정해진다', () => {
     const c = await connect(port);
     push({ sessionId: 'r1', cwd: '/home/other', host: 'PC2', sessionName: '원격 이름', type: 'tool', category: 'read', detail: 'x', ts: Date.now() });
     await c.waitFor((s) => s.teams.find((t) => t.name === 'R').status === 'read');
+    c.close();
+  });
+});
+
+// ---- 세션 등록 정보 폴링 (백그라운드 작업 표시)
+test('등록 정보의 shell 상태는 "백그라운드 작업 중", idle이면 대기, 사라지면 꺼짐', () => {
+  const sessionsDir = mkdtempSync(join(tmpdir(), 'office-live-'));
+  const file = join(sessionsDir, `${process.pid}.json`);
+  const entry = (status) => JSON.stringify({ pid: process.pid, sessionId: 'live-1', name: '에이 팀', cwd: '/home/hyeanjae', status });
+  const nconfig = { ...config, projects: [{ name: 'A', path: '/w/a', color: '#e8637a', aliases: ['에이 팀'] }, config.projects[1]] };
+  writeFileSync(file, entry('shell'));
+  return withServer({ config: nconfig, sessionsDir, liveMs: 30 }, async ({ port }) => {
+    const c = await connect(port);
+    const s1 = await c.waitFor((s) => teamA(s).label === '백그라운드 작업 중');
+    assert.equal(teamA(s1).status, 'run');
+    writeFileSync(file, entry('idle'));
+    await c.waitFor((s) => teamA(s).status === 'idle');
+    rmSync(file);
+    await c.waitFor((s) => teamA(s).status === 'off');
     c.close();
   });
 });

@@ -28,6 +28,7 @@ function project(line, st) {
   if (!o || typeof o !== 'object') return null;
   if (typeof o.cwd === 'string') st.cwd = o.cwd;
   if (typeof o.sessionId === 'string') st.sid = o.sessionId;
+  if (st.sid && st.cwd) cwdBySid.set(st.sid, st.cwd);
   if (o.isSidechain || o.isMeta) return null;
   const m = o.message;
   if (!m) return null;
@@ -52,18 +53,50 @@ function project(line, st) {
 }
 
 let names = new Map(); // sessionId -> 세션 이름 (실행 중인 세션 등록 정보)
-function loadNames() {
-  const next = new Map();
+let registry = []; // 프로세스가 살아 있는 세션 [{ sid, name, cwd, st }]
+const cwdBySid = new Map(); // 기록에서 본 가장 최근 작업 폴더
+const liveSeen = new Map(); // sid -> { st, at, name, cwd } (이미 알린 상태)
+const HEARTBEAT_MS = 30000;
+
+function pidAlive(pid) {
+  try { process.kill(pid, 0); return true; } catch (e) { return e.code === 'EPERM'; }
+}
+
+function loadRegistry() {
+  const nextNames = new Map();
+  const next = [];
   let list = [];
-  try { list = fs.readdirSync(SESS_DIR); } catch { names = next; return; }
+  try { list = fs.readdirSync(SESS_DIR); } catch { names = nextNames; registry = next; return; }
   for (const f of list) {
     if (!f.endsWith('.json')) continue;
     try {
       const o = JSON.parse(fs.readFileSync(path.join(SESS_DIR, f), 'utf8'));
-      if (o && typeof o.sessionId === 'string' && typeof o.name === 'string' && o.name) next.set(o.sessionId, o.name);
+      if (!o || typeof o.sessionId !== 'string') continue;
+      if (typeof o.name === 'string' && o.name) nextNames.set(o.sessionId, o.name);
+      if (Number.isInteger(o.pid) && pidAlive(o.pid)) next.push({ sid: o.sessionId, name: o.name, cwd: o.cwd, st: typeof o.status === 'string' ? o.status : 'idle' });
     } catch { /* 무시 */ }
   }
-  names = next;
+  names = nextNames;
+  registry = next;
+}
+
+// 상태가 바뀌었거나 30초가 지나면 live 로 알리고, 사라진 세션은 gone 으로 알린다.
+function emitLive() {
+  const t = Date.now();
+  const present = new Set();
+  for (const e of registry) {
+    present.add(e.sid);
+    const prev = liveSeen.get(e.sid);
+    if (prev && prev.st === e.st && t - prev.at < HEARTBEAT_MS) continue;
+    const c = cwdBySid.get(e.sid) || e.cwd;
+    liveSeen.set(e.sid, { st: e.st, at: t, name: e.name, cwd: c });
+    if (c) emit({ k: 'live', s: e.sid, c, st: e.st, ...(e.name ? { n: e.name } : {}) });
+  }
+  for (const [sid, prev] of [...liveSeen]) {
+    if (present.has(sid)) continue;
+    liveSeen.delete(sid);
+    if (prev.cwd) emit({ k: 'live', s: sid, c: prev.cwd, st: 'gone', ...(prev.name ? { n: prev.name } : {}) });
+  }
 }
 
 function header(file, st) {
@@ -139,7 +172,7 @@ function listFiles() {
 
 let firstScan = true;
 function scan() {
-  loadNames();
+  loadRegistry();
   for (const file of listFiles()) {
     let stat;
     try { stat = fs.statSync(file); } catch { continue; }
@@ -152,6 +185,7 @@ function scan() {
     }
   }
   firstScan = false;
+  emitLive();
 }
 
 emit({ k: 'hello' });

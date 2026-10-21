@@ -149,3 +149,45 @@ test('setLabel은 팀장/팀원의 말풍선 문구를 바꾼다', () => {
   assert.equal(t.members[0].label, '모델 후보 조사 중');
   assert.doesNotThrow(() => setLabel(st, 'nope', null, 'x'));
 });
+
+// ---- 세션 등록 정보(live): 응답은 끝났지만 백그라운드 명령이 도는 중, 살아 있는 세션
+const aliasConfig = { ...config, projects: [{ name: 'A', path: '/w/a', color: '#e8637a', aliases: ['에이 세션'] }, config.projects[1]] };
+const live = (liveStatus, o = {}) => ({ sessionId: 's1', cwd: '/home/x', sessionName: '에이 세션', type: 'live', liveStatus, ts: 0, ...o });
+
+test('live: 세션 이름이 맞으면 세션을 만들고, idle이면 꺼짐이 아니라 대기', () => {
+  const st = createState(aliasConfig);
+  feed(st, live('idle', { ts: 1000 }));
+  const t = teamA(st, 1000);
+  assert.deepEqual([t.status, t.label], ['idle', '다음 지시 기다리는 중']);
+});
+
+test('live shell + 응답 끝남(idle) → 서버실에서 "백그라운드 작업 중", live idle이면 다시 대기', () => {
+  const st = createState(aliasConfig);
+  feed(st, live('idle', { ts: 0 }), ev('start', 1), ev('stop', 2));
+  feed(st, live('shell', { ts: 3000 }));
+  assert.deepEqual([teamA(st, 3000).status, teamA(st, 3000).label], ['run', '백그라운드 작업 중']);
+  feed(st, live('idle', { ts: 4000 }));
+  assert.equal(teamA(st, 4000).status, 'idle');
+});
+
+test('live shell이어도 팀장이 직접 도구를 쓰는 중이면 그 상태가 우선', () => {
+  const st = createState(aliasConfig);
+  feed(st, ev('tool', 1000, { category: 'read', detail: '/w/a/x' }), live('shell', { cwd: '/w/a', ts: 2000 }));
+  assert.equal(teamA(st, 2000).status, 'read');
+});
+
+test('live gone → 세션 삭제(꺼짐), 지정되지 않은 세션은 무시', () => {
+  const st = createState(aliasConfig);
+  feed(st, live('idle', { ts: 0 }));
+  feed(st, live('gone', { ts: 1000 }));
+  assert.equal(teamA(st, 1000).status, 'off');
+  feed(st, live('shell', { sessionId: 'x', sessionName: '모르는 이름', ts: 2000 }));
+  assert.ok(snapshot(st, 2000).teams.every((t) => t.status === 'off'));
+});
+
+test('live 신호가 계속 오면 10분 넘게 조용해도 꺼지지 않는다', () => {
+  const st = createState(aliasConfig);
+  feed(st, live('idle', { ts: 0 }));
+  for (let t = 30_000; t <= 20 * MIN; t += 30_000) { feed(st, live('idle', { ts: t })); tick(st, t); }
+  assert.equal(teamA(st, 20 * MIN).status, 'idle');
+});

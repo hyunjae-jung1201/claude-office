@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync, utimesSync } from 'node:fs';
+import { appendFileSync, mkdirSync, mkdtempSync, writeFileSync, utimesSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -11,7 +11,9 @@ const line = (o) => JSON.stringify(o) + '\n';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function startTail(root) {
-  const child = spawn(process.execPath, [SCRIPT], { env: { ...process.env, CLAUDE_PROJECTS_DIR: root, POLL_MS: '50' } });
+  // 이 PC의 실제 ~/.claude/sessions 가 섞이지 않도록 빈 임시 폴더를 쓴다
+  const sessions = mkdtempSync(join(tmpdir(), 'tail-nosess-'));
+  const child = spawn(process.execPath, [SCRIPT], { env: { ...process.env, CLAUDE_PROJECTS_DIR: root, CLAUDE_SESSIONS_DIR: sessions, POLL_MS: '50' } });
   const out = [];
   let buf = '';
   child.stdout.on('data', (d) => {
@@ -111,5 +113,27 @@ test('실행 중인 세션 등록 정보(sessions/<pid>.json)의 이름을 n으�
   try {
     const init = await waitFor(() => out.find((o) => o.k === 'init'));
     assert.equal(init.n, '사고 판별 모델');
+  } finally { child.kill(); }
+});
+
+test('살아 있는 세션의 상태를 live로 내보내고, 사라지면 gone', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'tail-'));
+  const sess = mkdtempSync(join(tmpdir(), 'tail-sess-'));
+  mkdirSync(join(root, '-home-me'));
+  const regFile = join(sess, `${process.pid}.json`);
+  const reg = (status) => JSON.stringify({ pid: process.pid, sessionId: 'S1', name: '사고 판별 모델', cwd: '/home/me', status });
+  writeFileSync(regFile, reg('shell'));
+  const child = spawn(process.execPath, [SCRIPT], { env: { ...process.env, CLAUDE_PROJECTS_DIR: root, CLAUDE_SESSIONS_DIR: sess, POLL_MS: '50' } });
+  const out = [];
+  let buf = '';
+  child.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { out.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); } });
+  try {
+    const first = await waitFor(() => out.find((o) => o.k === 'live'));
+    assert.deepEqual([first.s, first.n, first.st, first.c], ['S1', '사고 판별 모델', 'shell', '/home/me']);
+    writeFileSync(regFile, reg('idle'));
+    await waitFor(() => out.find((o) => o.k === 'live' && o.st === 'idle'));
+    unlinkSync(regFile);
+    await waitFor(() => out.find((o) => o.k === 'live' && o.st === 'gone'));
+    assert.equal(out.filter((o) => o.k === 'live' && o.st === 'shell').length, 1); // 변화가 없으면 반복하지 않는다(하트비트는 30초 간격)
   } finally { child.kill(); }
 });
