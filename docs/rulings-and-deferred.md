@@ -36,3 +36,27 @@
 - #13 post-approval toolDone label is generic ("명령 실행 중")
 - #14 missing/invalid config.json prints a raw stack trace
 - #15 leader/desk colours not refreshed on config change until reload
+
+# 역할자 기능 구현 중 내린 판단과 보류 항목 (2026-10-21)
+
+## 판단(Ruling)
+- Task 2: Ruling: hook timeout test threshold 1.5s→2.5s (flaky when the whole suite runs in parallel; hook's own limits unchanged: 1s timeout, 1.2s hard exit) — cost if wrong: a slower hook would pass the test up to 2.5s
+- Task 5: Ruling: tracker.onEvent returns Promise<void> (plan said void) so callers/tests can await the async repo grouping; server ignores the promise — cost if wrong: none
+- Task 6: Ruling: hook "no-hang" test threshold raised to 5s (was 2.5s) — full parallel suite with git-spawning tests made node startup slow; the hook's own limits are unchanged — cost if wrong: a hook that takes up to 5s would pass this test
+- Task 7: Verified with real claude -p (haiku): normal JSON review OK; .env / secrets.yml reads denied by permission settings; Edit/Write/Bash unavailable; Grep for secret values finds nothing; repo unchanged (docs/roles-verification.md). Ruling: runner env/allowlist extracted to src/env.js (minimalEnv) shared with summarizer — cost if wrong: none
+- Task 9: Ruling: startServer takes roles (Map) + reviewStore + reviewRun options and runs reviews only when both roles and config.roles.enabled are set (existing tests/configs without roles are unaffected); CLI loads roles/ and supports CLAUDE_OFFICE_FAKE_ROLES=1 (src/roles/fake.js) for demos
+- Task 11: Verified end-to-end with real claude -p sessions + real reviewers (see docs/roles-verification.md). Improvement during verification: reviewers flagged excluded .env as a problem → prompt notes (excluded files, review scope) → 0 .env findings. Known limitation recorded: git diff HEAD shows earlier uncommitted changes in the same file. Ruling: Task 11 Step 3 (deploy) — service restart for the real instance happens after the final review fixes; no global settings change needed (existing hooks already forward Stop/prompt payloads).
+- Final: fixed #18 maskPaths only touches path-like tokens (/, leading ., known file extensions, id_*), kv rule keeps function-call values (clientSecret = getSecretValue(x)) — Ruling: quoted/other literal values are still masked, dotted identifiers without a call (password=my.secret.pass) are still masked (safer) — cost if wrong: some code like `token = a.b` is shown as `***` in diffs
+
+## 최종 검토에서 보류한 Minor
+- #8 count edits at toolDone
+- #9 p.finally/process shadow
+- #10 close() doesn't kill reviewer children
+- #11 reserve daily limit at start
+- #12 skipped error/no-roles not surfaced + notice lingers past KST midnight
+- #14 report write not atomic/files unmasked
+- #15 deny **/.git/** + --strict-mcp-config
+- #16 prompt via argv (~85KB)
+- #17 roles.enabled type check
+- #19 second start replaces first's role map
+- #20 statSync for size check
