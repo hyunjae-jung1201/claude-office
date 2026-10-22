@@ -17,7 +17,7 @@ const RULES = [
   // curl -u user:password
   [/(\s-u\s+)[^\s:]+:\S+/g, '$1***'],
   // URL에 박힌 user:password@host(비밀번호에 / 포함 가능), :password@host, token@host
-  [/((?<![A-Za-z0-9+.-])[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:[^:\/\s@]*:[^@\s]+|[^\/\s@:]+)@/g, '$1***@'],
+  [/((?<![A-Za-z0-9+.-])[A-Za-z0-9+.-]*:\/\/)(?:[^:\/\s@]*:[^@\s]+|[^\/\s@:]+)@/g, '$1***@'],
   // KEY=값, KEY: 값, "key": "값" (GITHUB_TOKEN, my_password 같은 접두사 포함)
   // 값이 식별자만으로 된 함수 호출이면 코드이므로 가리지 않는다. 따옴표 값, 괄호가 섞인 그 밖의 값(줄 끝까지), 일반 값은 가린다.
   [new RegExp(`((?<![A-Za-z0-9_-])[A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(${SAFE_CALL}(?=\\s|$)|"[^"\\n]*"?|'[^'\\n]*'?|[^\\s"'(]*\\([^\\n]*|[^\\s"']+)`, 'gi'), (m, key, value) => (SAFE_CALL_ONLY.test(value) ? m : `${key}***`)],

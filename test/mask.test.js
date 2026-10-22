@@ -190,3 +190,7 @@ test('점·덧셈 기호가 섞인 긴 덩어리도 선형 시간에 처리하�
   assert.ok(Date.now() - t0 < 1000);
   assert.equal(maskSecrets('git clone https://user:pw1234@host/x.git'), 'git clone https://***@host/x.git');
 });
+
+test('스킴 앞에 +, -, . 가 붙어 있어도 URL 비밀번호를 가린다', () => {
+  for (const pre of ['', '-', '--', '+', '.', 'x-', 'curl -x ']) assert.equal(maskSecrets(`${pre}https://u:p@h/x`), `${pre}https://***@h/x`);
+});
