@@ -1,8 +1,9 @@
 // 왼쪽 목록: 아바타 모습 + 이름 + 지금 하는 일(예전 말풍선 내용). 모든 텍스트는 textContent 로만 넣는다.
-import { rosterRows, STATUS_COLOR } from './roster-model.js';
+import { rosterRows, STATUS_COLOR, parseRosterKey } from './roster-model.js';
+import { variantFor } from './looks.js';
+import { portrait } from './portrait.js';
 
 const CELEBRATE_MS = 4000;
-const NS = 'http://www.w3.org/2000/svg';
 const BADGE = { ok: ['✓', '통과'], concern: ['⚠', '우려'], block: ['⛔', '중단 권고'] };
 
 const el = (tag, cls, text) => {
@@ -12,26 +13,11 @@ const el = (tag, cls, text) => {
   return e;
 };
 
-function face() {
-  const svg = document.createElementNS(NS, 'svg');
-  svg.setAttribute('viewBox', '0 0 24 24');
-  svg.setAttribute('aria-hidden', 'true');
-  for (const [cx, cy] of [[8.5, 11], [15.5, 11]]) {
-    const c = document.createElementNS(NS, 'circle');
-    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 1.35);
-    svg.append(c);
-  }
-  const p = document.createElementNS(NS, 'path');
-  p.setAttribute('d', 'M8.6 15.2c1.9 1.7 4.9 1.7 6.8 0');
-  p.setAttribute('fill', 'none'); p.setAttribute('stroke-width', 1.5); p.setAttribute('stroke-linecap', 'round');
-  svg.append(p);
-  return svg;
-}
-
 function makeRow(row) {
   const li = el('li', `ro ${row.kind}`);
   const blob = el('span', 'blob');
-  blob.append(face(), el('i', 'st'));
+  const k = parseRosterKey(row.key) ?? { team: 0, kind: 'team' };
+  blob.append(portrait({ kind: row.kind, variant: variantFor({ team: k.team, kind: row.kind, id: k.id }), color: row.teamColor ?? row.color }), el('i', 'st'));
   const body = el('span', 'ro-body');
   const top = el('span', 'ro-top');
   top.append(el('b', 'ro-name'), el('span', 'ro-badge'));

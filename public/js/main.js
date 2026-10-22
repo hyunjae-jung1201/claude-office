@@ -8,7 +8,7 @@ const overlay = document.getElementById('overlay');
 const conn = document.getElementById('conn');
 const connText = conn.querySelector('span');
 const hourParam = Number.parseFloat(new URLSearchParams(location.search).get('hour')); // ?hour=21 로 시각을 고정해 볼 수 있다
-const scene = createScene(canvas, overlay, { hour: hourParam });
+const scene = createScene(canvas, overlay, { hour: hourParam, ao: new URLSearchParams(location.search).get('ao') !== '0' }); // ?ao=0 으로 환경광 차폐를 끌 수 있다
 const card = createCard(document.getElementById('card'));
 const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
 let toastTimer = null;

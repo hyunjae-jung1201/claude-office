@@ -27,8 +27,37 @@ function canvasTexture(w, h, draw) {
   return t;
 }
 
+
+// 실제 사무실 사진처럼: 채도를 낮추고 미세한 알갱이(그레인)와 얼룩을 얹는다. 같은 시드면 항상 같은 결과.
+function mute(tex, seed = 77, sat = 0.74, grain = 7) {
+  const c = tex.image;
+  const g = c.getContext('2d');
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  const r = rng(seed);
+  for (let i = 0; i < d.length; i += 4) {
+    const gray = d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11;
+    const n = (r() - 0.5) * grain;
+    d[i] = Math.min(255, Math.max(0, gray + (d[i] - gray) * sat + n));
+    d[i + 1] = Math.min(255, Math.max(0, gray + (d[i + 1] - gray) * sat + n));
+    d[i + 2] = Math.min(255, Math.max(0, gray + (d[i + 2] - gray) * sat + n));
+  }
+  g.putImageData(img, 0, 0);
+  // 아주 옅은 얼룩(걸레질 자국·사용감)
+  g.globalAlpha = 0.045;
+  for (let k = 0; k < 14; k++) {
+    g.fillStyle = r() > 0.5 ? '#000' : '#fff';
+    g.beginPath();
+    g.ellipse(r() * c.width, r() * c.height, 30 + r() * 90, 12 + r() * 40, r() * 3, 0, Math.PI * 2);
+    g.fill();
+  }
+  g.globalAlpha = 1;
+  tex.needsUpdate = true;
+  return tex;
+}
+
 // ---------------------------------------------------------------- 바닥
-export function planks(base = '#b88a55', seed = 1) {
+function planks_(base = '#b88a55', seed = 1) {
   return canvasTexture(512, 512, (g, w, h) => {
     const r = rng(seed);
     const rows = 8;
@@ -57,7 +86,7 @@ export function planks(base = '#b88a55', seed = 1) {
   });
 }
 
-export function carpet(base = '#5d6a86', seed = 2) {
+function carpet_(base = '#5d6a86', seed = 2) {
   return canvasTexture(256, 256, (g, w, h) => {
     const r = rng(seed);
     g.fillStyle = base;
@@ -76,7 +105,7 @@ export function carpet(base = '#5d6a86', seed = 2) {
   });
 }
 
-export function terrazzo(base = '#cdbfa8', seed = 3) {
+function terrazzo_(base = '#cdbfa8', seed = 3) {
   return canvasTexture(256, 256, (g, w, h) => {
     const r = rng(seed);
     g.fillStyle = base;
@@ -96,7 +125,7 @@ export function terrazzo(base = '#cdbfa8', seed = 3) {
   });
 }
 
-export function concrete(base = '#6b6f76', seed = 4) {
+function concrete_(base = '#6b6f76', seed = 4) {
   return canvasTexture(256, 256, (g, w, h) => {
     const r = rng(seed);
     g.fillStyle = base;
@@ -120,7 +149,7 @@ export function concrete(base = '#6b6f76', seed = 4) {
   });
 }
 
-export function tiles(base = '#d9dfdc', line = '#9aa5a1') {
+function tiles_(base = '#d9dfdc', line = '#9aa5a1') {
   return canvasTexture(256, 256, (g, w, h) => {
     g.fillStyle = base;
     g.fillRect(0, 0, w, h);
@@ -135,7 +164,7 @@ export function tiles(base = '#d9dfdc', line = '#9aa5a1') {
   });
 }
 
-export function raisedFloor(base = '#3a3d4d') {
+function raisedFloor_(base = '#3a3d4d') {
   return canvasTexture(256, 256, (g, w, h) => {
     g.fillStyle = base;
     g.fillRect(0, 0, w, h);
@@ -151,7 +180,7 @@ export function raisedFloor(base = '#3a3d4d') {
 }
 
 // ---------------------------------------------------------------- 벽·창문·보드
-export function plasterWall(base = '#cfc6b4', seed = 5) {
+function plasterWall_(base = '#cfc6b4', seed = 5) {
   return canvasTexture(256, 256, (g, w, h) => {
     const r = rng(seed);
     g.fillStyle = base;
@@ -380,6 +409,16 @@ export function mapBoard(seed = 12) {
     for (const [x, y] of [[20, 110], [120, 80], [230, 40]]) { g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); }
   });
 }
+
+
+// 바닥·벽(사진 같은 질감)
+export const planks = (...a) => mute(planks_(...a), 11 + 0);
+export const carpet = (...a) => mute(carpet_(...a), 11 + 1);
+export const terrazzo = (...a) => mute(terrazzo_(...a), 11 + 2);
+export const concrete = (...a) => mute(concrete_(...a), 11 + 3);
+export const tiles = (...a) => mute(tiles_(...a), 11 + 4);
+export const raisedFloor = (...a) => mute(raisedFloor_(...a), 11 + 5);
+export const plasterWall = (...a) => mute(plasterWall_(...a), 11 + 6);
 
 // 반복해서 쓰는 텍스처를 한 번만 만든다
 const cache = new Map();

@@ -27,7 +27,17 @@ export function buildOffice(scene) {
 
   // ---------------------------------------------------------------- 재료·도형 도우미
   const matCache = new Map();
+  // 실제 가구·마감재는 채도가 낮다: 발광·텍스처가 아닌 색은 채도를 줄이고 아주 조금 어둡게
+  const tone = (color) => {
+    if (typeof color !== 'string' || !color.startsWith('#') || color.toLowerCase() === '#ffffff') return color;
+    const c = new THREE.Color(color);
+    const hsl = {};
+    c.getHSL(hsl);
+    c.setHSL(hsl.h, hsl.s * 0.72, hsl.l * 0.96);
+    return `#${c.getHexString()}`;
+  };
   const std = (color, o = {}) => {
+    if (!o.emissive && !o.map) color = tone(color);
     const plain = !o.map && !o.emissive && !o.transparent;
     const key = plain ? `${color}|${o.rough ?? ''}|${o.metal ?? ''}` : null;
     if (key && matCache.has(key)) return matCache.get(key);
@@ -49,7 +59,7 @@ export function buildOffice(scene) {
     return mesh;
   };
   const geoBox = (w, h, d, r) => {
-    const rad = Math.min(r, w / 2.2, h / 2.2, d / 2.2);
+    const rad = Math.min(r * 0.55, w / 2.2, h / 2.2, d / 2.2); // 장난감 같은 둥근 모서리를 줄인다
     // 작은 소품은 그냥 상자(삼각형 수를 아끼고, 어차피 작아서 모서리가 안 보인다)
     return rad > 0.012 && Math.min(w, h, d) > 0.07 ? new RoundedBoxGeometry(w, h, d, 1, rad) : new THREE.BoxGeometry(w, h, d);
   };
@@ -622,5 +632,5 @@ export function buildOffice(scene) {
 
 // 방별 은은한 조명: 따뜻한 전구색을 기본으로, 기계가 있는 방만 차가운 빛
 export const LAMPS = [
-  ['#7f8dff', 1.6, 7.2, 12], ['#ffcf94', 9.5, 2.0, 12], ['#ffe1b8', 3.5, 2.0, 8], ['#d6f1ff', 9.5, 7.1, 9], ['#ffb870', 4.0, 11.3, 9], ['#ffb870', 14.0, 11.5, 12], ['#ffc49a', 17.8, 6.0, 9],
+  ['#aab4e8', 1.6, 7.2, 10], ['#ffcf94', 9.5, 2.0, 12], ['#ffe1b8', 3.5, 2.0, 8], ['#e6f2f8', 9.5, 7.1, 8], ['#ffd2a0', 4.0, 11.3, 8], ['#ffd2a0', 14.0, 11.5, 10], ['#ffc49a', 17.8, 6.0, 9],
 ];

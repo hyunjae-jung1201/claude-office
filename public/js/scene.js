@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route, meetingSpot } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
 import { parseRosterKey, mixHex, ROLE_TEAM_MIX } from './roster-model.js';
@@ -9,6 +13,7 @@ import { roomActivity } from './activity.js';
 import { dayState, hourKST } from './daylight.js';
 import { propsFor } from './roleprops.js';
 import * as T from './textures.js';
+import { HAIR, SKIN, variantFor } from './looks.js';
 
 const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#8a94a6' };
 const WALK_SPEED = 2.8; // 타일/초
@@ -20,18 +25,18 @@ const BUBBLE_LEVELS = [1.6, 2.05]; // 이웃 팀 말풍선이 겹치지 않도�
 function addRoleProps({ propNames, part, m, head, body, armL, armR }) {
   const basic = (c) => new THREE.MeshBasicMaterial({ color: c });
   const make = {
-    tie: () => { body.add(part(new THREE.BoxGeometry(0.05, 0.17, 0.02), m('#b83a3a'), 0, 0.02, 0.175)); body.add(part(new THREE.BoxGeometry(0.07, 0.04, 0.025), m('#9a2f2f'), 0, 0.12, 0.175)); },
+    tie: () => { body.add(part(new THREE.BoxGeometry(0.05, 0.17, 0.02), m('#b83a3a'), 0, 0.02, 0.125)); body.add(part(new THREE.BoxGeometry(0.07, 0.04, 0.025), m('#9a2f2f'), 0, 0.12, 0.125)); },
     clipboard: () => { const b = part(new THREE.BoxGeometry(0.12, 0.16, 0.012), m('#8a5f3a'), 0, -0.36, 0.07); b.rotation.x = -0.4; b.add(part(new THREE.BoxGeometry(0.095, 0.13, 0.004), m('#f4efe2'), 0, 0, 0.008)); armL.add(b); },
     headphones: () => { head.add(part(new THREE.TorusGeometry(0.19, 0.016, 8, 20, Math.PI), m('#2a2f3d'), 0, 0.01, 0)); for (const sx of [-0.19, 0.19]) { const c = part(new THREE.CylinderGeometry(0.05, 0.05, 0.045, 12), m('#e8637a'), sx, 0, 0); c.rotation.z = Math.PI / 2; head.add(c); } },
     magnifier: () => { const g = new THREE.Group(); g.position.set(0, -0.4, 0.08); g.rotation.x = -0.5; g.add(part(new THREE.CylinderGeometry(0.008, 0.008, 0.12, 6), m('#3a3f4d'), 0, -0.05, 0)); g.add(part(new THREE.TorusGeometry(0.05, 0.009, 8, 16), m('#c9a24a'), 0, 0.04, 0)); const lens = part(new THREE.CircleGeometry(0.045, 14), new THREE.MeshBasicMaterial({ color: '#bfe6ff', transparent: true, opacity: 0.5 }), 0, 0.04, 0); g.add(lens); armR.add(g); },
     helmet: () => { head.add(part(new THREE.SphereGeometry(0.205, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), m('#4a5160'), 0, 0.02, 0)); head.add(part(new THREE.BoxGeometry(0.1, 0.03, 0.05), m('#e5484d'), 0, 0.12, 0.17)); },
-    badge: () => { body.add(part(new THREE.BoxGeometry(0.06, 0.05, 0.012), m('#e5484d'), -0.08, 0.08, 0.172)); },
+    badge: () => { body.add(part(new THREE.BoxGeometry(0.06, 0.05, 0.012), m('#e5484d'), -0.08, 0.08, 0.124)); },
     book: () => { const b = part(new THREE.BoxGeometry(0.11, 0.015, 0.15), m('#3f5a7a'), 0, -0.36, 0.07); b.rotation.x = -0.5; armL.add(b); },
-    stopwatch: () => { const c = part(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 14), m('#e8b44a'), 0.09, 0.05, 0.172); c.rotation.x = Math.PI / 2; body.add(c); body.add(part(new THREE.BoxGeometry(0.012, 0.03, 0.01), m('#2a2f3d'), 0.09, 0.05, 0.185)); },
+    stopwatch: () => { const c = part(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 14), m('#e8b44a'), 0.09, 0.05, 0.124); c.rotation.x = Math.PI / 2; body.add(c); body.add(part(new THREE.BoxGeometry(0.012, 0.03, 0.01), m('#2a2f3d'), 0.09, 0.05, 0.138)); },
     scarf: () => { const t = part(new THREE.TorusGeometry(0.14, 0.035, 8, 16), m('#e8863a'), 0, 0.26, 0); t.rotation.x = Math.PI / 2; body.add(t); },
     roundGlasses: () => { for (const sx of [-0.065, 0.065]) head.add(part(new THREE.TorusGeometry(0.05, 0.012, 8, 14), m('#3a86ff'), sx, 0, 0.16)); },
     hardhat: () => { head.add(part(new THREE.SphereGeometry(0.205, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), m('#f2c230'), 0, 0.02, 0)); head.add(part(new THREE.BoxGeometry(0.3, 0.015, 0.1), m('#f2c230'), 0, 0.03, 0.15)); },
-    vest: () => { body.add(part(new THREE.BoxGeometry(0.34, 0.05, 0.01), basic('#e8863a'), 0, 0.02, 0.172)); body.add(part(new THREE.BoxGeometry(0.34, 0.015, 0.012), basic('#f4efe2'), 0, 0.02, 0.174)); },
+    vest: () => { body.add(part(new THREE.BoxGeometry(0.34, 0.05, 0.01), basic('#e8863a'), 0, 0.02, 0.124)); body.add(part(new THREE.BoxGeometry(0.34, 0.015, 0.012), basic('#f4efe2'), 0, 0.02, 0.126)); },
     pen: () => { const p = part(new THREE.CylinderGeometry(0.008, 0.008, 0.14, 6), m('#e8637a'), 0.17, 0.04, -0.01); p.rotation.z = -0.4; head.add(p); },
     notebook: () => { const b = part(new THREE.BoxGeometry(0.1, 0.14, 0.012), m('#f4efe2'), 0, -0.36, 0.07); b.rotation.x = -0.4; b.add(part(new THREE.BoxGeometry(0.012, 0.14, 0.014), m('#c4553f'), -0.045, 0, 0)); armL.add(b); },
     goggles: () => { head.add(part(new THREE.TorusGeometry(0.185, 0.012, 6, 20, Math.PI * 1.1), m('#2a2f3d'), 0, 0.03, 0)); for (const sx of [-0.06, 0.06]) head.add(part(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 12), new THREE.MeshBasicMaterial({ color: '#9fe6ff', transparent: true, opacity: 0.6 }), sx, 0.02, 0.17)); },
@@ -41,8 +46,6 @@ function addRoleProps({ propNames, part, m, head, body, armL, armR }) {
   for (const name of propNames) make[name]?.();
 }
 
-const HAIR = ['#2a2236', '#5a3b2a', '#c9a24a', '#1c1c1c', '#8a4b3a', '#4a4a55'];
-const SKIN = ['#f2c7a5', '#e0ac85', '#c68e67', '#f6d6bd', '#a8734f', '#edbf9a'];
 
 // 팀장·역할자는 사람 모양(머리색·피부색·안경이 조금씩 다름), 부하 직원(kind='bot')은 팀장과 같은 색의 작은 로봇 모양
 function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
@@ -55,21 +58,36 @@ function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
     mesh.castShadow = true;
     return mesh;
   };
-  const limb = (x, y, w, h, material) => {
+  const skin = SKIN[variant % SKIN.length];
+  const skinMat = m(skin);
+  const trouser = m(['#2b3350', '#3a3f4a', '#4a4036', '#26303a', '#454a55', '#33384a'][variant % 6]);
+  const shoeMat = m('#1d1f26');
+  // 다리: 바지 + 신발(앞으로 살짝 나온다). 피벗은 엉덩이.
+  const leg = (x) => {
     const pivot = new THREE.Group();
-    pivot.position.set(x, y, 0);
-    pivot.add(part(new THREE.BoxGeometry(w, h, w), material, 0, -h / 2, 0));
+    pivot.position.set(x, 0.34, 0);
+    pivot.add(part(new THREE.BoxGeometry(0.115, 0.3, 0.125), trouser, 0, -0.17, 0));
+    pivot.add(part(new THREE.BoxGeometry(0.12, 0.055, 0.21), shoeMat, 0, -0.318, 0.035));
     return pivot;
   };
-  const legMat = m('#2b3350');
-  const legL = limb(-0.08, 0.34, 0.12, 0.34, legMat);
-  const legR = limb(0.08, 0.34, 0.12, 0.34, legMat);
-  const armL = limb(-0.22, 0.8, 0.09, 0.32, shirtMat);
-  const armR = limb(0.22, 0.8, 0.09, 0.32, shirtMat);
+  // 팔: 소매(팀 색) + 맨손. 피벗은 어깨.
+  const arm = (x) => {
+    const pivot = new THREE.Group();
+    pivot.position.set(x, 0.8, 0);
+    pivot.add(part(new THREE.BoxGeometry(0.085, 0.24, 0.09), shirtMat, 0, -0.12, 0));
+    pivot.add(part(new THREE.BoxGeometry(0.07, 0.1, 0.075), skinMat, 0, -0.27, 0));
+    pivot.add(part(new THREE.SphereGeometry(0.04, 8, 6), skinMat, 0, -0.335, 0));
+    return pivot;
+  };
+  const legL = leg(-0.075);
+  const legR = leg(0.075);
+  const armL = arm(-0.215);
+  const armR = arm(0.215);
   const head = new THREE.Group();
-  head.position.set(0, 1.0, 0);
+  head.position.set(0, 1.02, 0);
   let body;
   if (kind === 'bot') {
+    head.position.set(0, 1.0, 0);
     body = part(new RoundedBoxGeometry(0.36, 0.38, 0.26, 1, 0.05), shirtMat, 0, 0.62, 0);
     const lighter = m(new THREE.Color(shirt).offsetHSL(0, 0, 0.08));
     head.add(part(new RoundedBoxGeometry(0.34, 0.26, 0.28, 1, 0.06), lighter, 0, 0.0, 0));
@@ -78,17 +96,31 @@ function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
     head.add(part(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 6), m('#3a4258'), 0, 0.19, 0)); // 안테나
     head.add(part(new THREE.SphereGeometry(0.04, 10, 8), new THREE.MeshBasicMaterial({ color: shirt }), 0, 0.27, 0));
   } else {
-    body = part(new THREE.CapsuleGeometry(0.17, 0.24, 4, 12), shirtMat, 0, 0.62, 0);
+    // 몸통: 어깨가 넓고 앞뒤로 얇은 셔츠, 허리띠, 목, 옷깃
+    body = part(new RoundedBoxGeometry(0.35, 0.46, 0.24, 2, 0.07), shirtMat, 0, 0.62, 0);
+    body.add(part(new THREE.BoxGeometry(0.352, 0.045, 0.244), m('#23262e'), 0, -0.2, 0)); // 허리띠
+    body.add(part(new THREE.CylinderGeometry(0.052, 0.058, 0.09, 10), skinMat, 0, 0.26, 0)); // 목
+    if (variant % 3 !== 2) body.add(part(new THREE.BoxGeometry(0.15, 0.03, 0.15), m('#eceae4'), 0, 0.225, 0.02)); // 옷깃
     const hair = HAIR[variant % HAIR.length];
-    head.add(part(new THREE.SphereGeometry(0.17, 18, 14), m(SKIN[variant % SKIN.length]), 0, 0, 0));
-    head.add(part(new THREE.SphereGeometry(0.18, 18, 12, 0, Math.PI * 2, 0, Math.PI / 1.85), m(hair), 0, 0.015, -0.005));
-    if (variant % 3 === 1) head.add(part(new THREE.BoxGeometry(0.3, 0.2, 0.08), m(hair), 0, -0.04, -0.14)); // 긴 머리
-    for (const sx of [-0.06, 0.06]) head.add(part(new THREE.SphereGeometry(0.02, 8, 8), m('#2a2236'), sx, 0.0, 0.155));
+    const hairMat = m(hair);
+    head.scale.setScalar(0.8); // 머리를 몸에 맞는 비율로
+    const skull = part(new THREE.SphereGeometry(0.165, 20, 16), skinMat, 0, 0, 0);
+    skull.scale.set(0.92, 1.06, 0.98);
+    head.add(skull);
+    head.add(part(new THREE.SphereGeometry(0.03, 8, 6), skinMat, 0, -0.01, 0.16)); // 코
+    for (const sx of [-0.15, 0.15]) head.add(part(new THREE.SphereGeometry(0.03, 8, 6), skinMat, sx, -0.01, 0)); // 귀
+    const cap = part(new THREE.SphereGeometry(0.175, 20, 12, 0, Math.PI * 2, 0, Math.PI / 1.9), hairMat, 0, 0.02, -0.012);
+    cap.scale.set(0.94, 1.04, 1.0);
+    head.add(cap);
+    head.add(part(new THREE.BoxGeometry(0.27, 0.06, 0.06), hairMat, 0, 0.1, 0.1)); // 앞머리
+    if (variant % 3 === 1) head.add(part(new THREE.BoxGeometry(0.31, 0.26, 0.08), hairMat, 0, -0.07, -0.13)); // 긴 머리
+    for (const sx of [-0.058, 0.058]) { // 눈 + 눈썹
+      head.add(part(new THREE.SphereGeometry(0.016, 8, 6), m('#1b1d24'), sx, 0.005, 0.158));
+      head.add(part(new THREE.BoxGeometry(0.055, 0.011, 0.014), hairMat, sx, 0.045, 0.158));
+    }
     if (variant % 2 === 0) { // 안경
-      for (const sx of [-0.065, 0.065]) {
-        const lens = part(new THREE.TorusGeometry(0.045, 0.008, 6, 14), m('#2a2f3d'), sx, 0.0, 0.16);
-        head.add(lens);
-      }
+      for (const sx of [-0.062, 0.062]) head.add(part(new THREE.TorusGeometry(0.04, 0.007, 6, 14), m('#2a2f3d'), sx, 0.005, 0.163));
+      head.add(part(new THREE.BoxGeometry(0.03, 0.007, 0.007), m('#2a2f3d'), 0, 0.012, 0.165));
     }
   }
   // 검토자(역할)별 소품: 한눈에 누가 누군지 보이게
@@ -159,6 +191,29 @@ export function createScene(canvas, overlay, opts = {}) {
 
   const office = buildOffice(scene);
 
+  // 실제 사진 같은 깊이감: 모서리·가구 아래·벽 구석이 자연스럽게 어두워지는 환경광 차폐(AO). 실패하거나 ?ao=0 이면 그냥 그린다.
+  let composer = null;
+  let aoPass = null;
+  if (opts.ao !== false) {
+    try {
+      const size = renderer.getSize(new THREE.Vector2());
+      const pr = renderer.getPixelRatio();
+      const target = new THREE.WebGLRenderTarget(Math.max(1, size.x * pr), Math.max(1, size.y * pr), { type: THREE.HalfFloatType, samples: 4 });
+      composer = new EffectComposer(renderer, target);
+      composer.addPass(new RenderPass(scene, camera));
+      aoPass = new GTAOPass(scene, camera, Math.max(1, size.x), Math.max(1, size.y));
+      aoPass.output = GTAOPass.OUTPUT.Default;
+      aoPass.updateGtaoMaterial({ radius: 0.55, distanceExponent: 1.4, thickness: 1.2, scale: 1.1, samples: 12, distanceFallOff: 1, screenSpaceRadius: false });
+      aoPass.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 12 });
+      aoPass.blendIntensity = 0.85;
+      composer.addPass(aoPass);
+      composer.addPass(new OutputPass());
+    } catch (e) {
+      console.warn('AO 를 쓸 수 없어 기본 렌더링으로 그립니다', e);
+      composer = null;
+    }
+  }
+
   // ---- 실제 시간(한국 시간)에 맞는 창밖 하늘·햇빛·실내 조명. ?hour=21 로 시각을 고정해 볼 수 있다.
   const fixedHour = Number.isFinite(opts.hour) ? opts.hour : null;
   let dayKey = null;
@@ -188,6 +243,8 @@ export function createScene(canvas, overlay, opts = {}) {
     const w = host.clientWidth || 1;
     const h = host.clientHeight || 1;
     renderer.setSize(w, h, false);
+    composer?.setPixelRatio?.(renderer.getPixelRatio());
+    composer?.setSize(w, h);
     labelRenderer.setSize(w, h);
     const aspect = w / h;
     const halfH = Math.max(9.4, 12.6 / aspect); // 20×14 바닥이 한 화면에 들어오게
@@ -250,7 +307,7 @@ export function createScene(canvas, overlay, opts = {}) {
     const group = new THREE.Group();
     // 하위 에이전트(부하 직원)는 팀장과 같은 색의 로봇, 팀장·역할자는 사람 모양
     const isBot = member && !String(id).startsWith('role:');
-    const variant = isBot ? 0 : member ? [...String(id)].reduce((a, ch) => a + ch.charCodeAt(0), 0) : team;
+    const variant = isBot ? 0 : variantFor({ team, kind: member ? 'member' : 'team', id });
     const roleId = member && String(id).startsWith('role:') ? String(id).slice(5) : null;
     const body = makeAvatar(color, variant, isBot ? 'bot' : 'human', roleId);
     body.scale.setScalar(scale);
@@ -656,7 +713,7 @@ export function createScene(canvas, overlay, opts = {}) {
 
     stepView(dt);
     controls.update();
-    renderer.render(scene, camera);
+    if (composer) composer.render(dt); else renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
   }
 
