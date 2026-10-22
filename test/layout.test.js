@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ROOMS, ROOM_NAMES, FLOOR, ENTRANCE, targetFor, memberSeat, memberTarget, deskZone, roomFor } from '../public/js/layout.js';
 
-const TEAMS = [0, 1, 2, 3, 4];
+const TEAMS = [0, 1, 2, 3, 4, 5];
 const ROOM_IDS = ['library', 'research', 'work', 'docs', 'planning', 'server', 'data', 'lab', 'build', 'git', 'briefing', 'response', 'lounge'];
 const inside = (p, r, m = 0) => p.x >= r.x + m && p.x <= r.x + r.w - m && p.y >= r.y + m && p.y <= r.y + r.d - m;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -42,11 +42,11 @@ test('관련 있는 방은 서로 붙어 있다 (동선)', () => {
   for (const id of ['server', 'data', 'lab', 'build', 'git', 'briefing']) assert.ok(ROOMS[id].y >= 4 && ROOMS[id].y <= 5.4, id);
 });
 
-test('팀장의 목표: 방마다 5팀 모두 방 안(가장자리에서 0.3 이상)이고 서로 다른 자리', () => {
+test('팀장의 목표: 방마다 6팀 모두 방 안(가장자리에서 0.3 이상)이고 서로 다른 자리', () => {
   for (const room of ROOM_IDS) {
     const spots = TEAMS.map((t) => targetFor('read', t, room));
     spots.forEach((p, t) => assert.ok(inside(p, ROOMS[room], 0.3), `${room}/${t} ${JSON.stringify(p)}`));
-    for (let a = 0; a < 5; a++) for (let b = a + 1; b < 5; b++) assert.ok(dist(spots[a], spots[b]) >= 0.55, `${room} ${a}/${b}`);
+    for (let a = 0; a < 6; a++) for (let b = a + 1; b < 6; b++) assert.ok(dist(spots[a], spots[b]) >= 0.45, `${room} ${a}/${b}`);
   }
 });
 
@@ -61,7 +61,7 @@ test('꺼짐은 휴게실 침대에서 자고, 쉬는 중은 휴게실 소파에
   assert.ok(sleep.every((p) => p.pose === 'sleep' && inside(p, ROOMS.lounge, 0.3)));
   assert.ok(sit.every((p) => p.pose === 'sit' && inside(p, ROOMS.lounge, 0.3)));
   for (const a of sleep) for (const b of sit) assert.ok(dist(a, b) >= 0.8);
-  for (let i = 0; i < 5; i++) for (let j = i + 1; j < 5; j++) assert.ok(dist(sleep[i], sleep[j]) >= 0.9);
+  for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) assert.ok(dist(sleep[i], sleep[j]) >= 0.9 - 1e-9);
 });
 
 test('방을 주지 않으면 상태별 기본 방', () => {
@@ -123,7 +123,7 @@ test('입구는 바닥 오른쪽 가장자리 복도에 있고, 어느 방 안�
 test('잘못된 입력은 오류', () => {
   assert.throws(() => targetFor('dancing', 0));
   assert.throws(() => targetFor('run', 0, 'moon'));
-  assert.throws(() => targetFor('run', 5), RangeError);
+  assert.throws(() => targetFor('run', 6), RangeError);
   assert.throws(() => memberSeat(0, 4), RangeError);
   assert.throws(() => memberTarget('read', 0, 4, 'lab'), RangeError);
 });

@@ -13,7 +13,7 @@ Claude Code hook → `src/hook.js`(1초 타임아웃, 항상 종료 코드 0) �
 ```bash
 cd /home/hyeanjae/projects/claude-office
 npm install
-cp config.example.json config.json      # 프로젝트 폴더 최대 5개를 적는다
+cp config.example.json config.json      # 프로젝트 폴더 최대 6개를 적는다
 
 node scripts/install-hooks.js            # 추가될 hook만 보여 줌 (아무것도 바꾸지 않음)
 node scripts/install-hooks.js --apply    # ~/.claude/settings.json 에 추가만 함 (백업 생성)
@@ -48,7 +48,7 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 하위 에이전트(팀원)와 역할자는 맡은 일의 방으로 가서 일하고(역할자는 팀 책상), 끝나면 입구로 퇴근한다. 초록색은 "응답 필요"의 표시색이다.
 
 ## 사용
-- `/office` 화면 열기, `/office add <폴더> [이름]` 프로젝트 추가(최대 5개), `/office list`
+- `/office` 화면 열기, `/office add <폴더> [이름]` 프로젝트 추가(최대 6개), `/office list`
 - 자동 작업 아바타: 테스터(테스트 랩, `testCommand` 실행 중)·기록원(문서실, 작업 로그 초안 갱신 중)도 역할자처럼 잠깐 나타났다 사라진다.
 - **왼쪽 목록**: 아바타 모습·이름·지금 하는 일(예전 말풍선 내용)을 팀별로 나열하고, 그 아래에 팀원·역할자를 들여써서 보여 준다. 위 검색창으로 찾고 `목록` 버튼으로 접는다. 아바타 위에는 이름표만 둔다.
 - 상태 색(목록의 점): 파랑 읽는 중 / 청록 코드 작성 / 보라 명령 실행 / 주황 승인 대기(느낌표 깜빡임) / 회색 쉬는 중

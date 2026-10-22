@@ -21,9 +21,10 @@ test('기본값을 채운다', () => {
   assert.equal(c.celebrateAfterSeconds, 30);
 });
 
-test('6번째 프로젝트는 Error', () => {
-  const projects = Array.from({ length: 6 }, (_, i) => P(`P${i}`, `/work/p${i}`));
-  assert.throws(() => loadConfig(cfgFile({ projects })), /5/);
+test('7번째 프로젝트는 Error', () => {
+  const projects = Array.from({ length: 7 }, (_, i) => P(`P${i}`, `/work/p${i}`));
+  assert.throws(() => loadConfig(cfgFile({ projects })), /6/);
+  assert.equal(loadConfig(cfgFile({ projects: projects.slice(0, 6) })).projects.length, 6);
 });
 
 test('이름이나 경로가 중복이면 Error', () => {
@@ -86,11 +87,11 @@ test('addProject: 이름을 직접 줄 수 있고, 다른 설정은 유지된다
   assert.equal(saved.projects[0].name, '내 프로젝트');
 });
 
-test('addProject: 6번째와 중복은 거절하고 파일을 바꾸지 않는다', () => {
-  const projects = Array.from({ length: 5 }, (_, i) => P(`P${i}`, `/work/p${i}`));
+test('addProject: 7번째와 중복은 거절하고 파일을 바꾸지 않는다', () => {
+  const projects = Array.from({ length: 6 }, (_, i) => P(`P${i}`, `/work/p${i}`));
   const file = cfgFile({ projects });
   const before = readJson(file, 'utf8');
-  assert.throws(() => addProject(file, '/work/sixth'), /5/);
+  assert.throws(() => addProject(file, '/work/seventh'), /6/);
   assert.equal(readJson(file, 'utf8'), before);
   const file2 = cfgFile({ projects: [P('A', '/work/a')] });
   assert.throws(() => addProject(file2, '/work/a/'), /중복/);

@@ -1,7 +1,6 @@
 // 왼쪽 목록(아바타 이름·하는 일)에 쓸 줄을 스냅샷에서 만든다. 순수 함수(Node 테스트 가능).
-import { ROOM_NAMES } from './layout.js';
+import { ROOM_NAMES, TEAM_COUNT as TEAM_MAX } from './layout.js';
 
-const TEAM_MAX = 5;
 const IDLE_TEXT = { idle: '쉬는 중', off: '꺼져 있음', wait: '응답을 기다리는 중' };
 const str = (v) => (typeof v === 'string' ? v : '');
 

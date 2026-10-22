@@ -32,9 +32,9 @@ export const ROOM_NAMES = {
   response: '응답 대기실', lounge: '휴게실',
 };
 
-const TEAM_COUNT = 5;
+export const TEAM_COUNT = 6;
 const MEMBER_MAX = 4;
-const DESK_W = 1.4;
+const DESK_W = ROOMS.work.w / TEAM_COUNT; // 작업실을 팀 수로 나눈 책상 폭
 
 // 상태만 알 때의 기본 방. 꺼짐은 휴게실에서 자고(침대), 쉬는 중은 휴게실에서 쉰다(소파).
 const STATUS_ROOM = { read: 'library', write: 'work', run: 'server', wait: 'response', idle: 'lounge', off: 'lounge' };
@@ -57,31 +57,31 @@ export function memberSeat(teamIndex, memberIndex) {
   checkTeam(teamIndex);
   if (!Number.isInteger(memberIndex) || memberIndex < 0 || memberIndex >= MEMBER_MAX) throw new RangeError(`memberIndex ${memberIndex}`);
   const z = deskZone(teamIndex);
-  return { x: z.x + 0.35 + 0.7 * (memberIndex % 2), y: 3.1 + 0.55 * Math.floor(memberIndex / 2) };
+  return { x: z.x + 0.3 + 0.55 * (memberIndex % 2), y: 3.1 + 0.55 * Math.floor(memberIndex / 2) };
 }
 
 // 방마다 팀 번호(0~4)별 서 있는/앉는 자리. 가장자리에서 충분히 떨어져 있고 팀끼리 겹치지 않는다.
 const row = (x0, dx, y) => (i) => ({ x: x0 + dx * i, y });
 const grid = (x0, y0) => (i) => ({ x: x0 + 0.9 * (i % 3), y: y0 + 1.0 * Math.floor(i / 3) });
 const SPOTS = {
-  library: row(0.5, 0.6, 2.5),
-  research: row(3.9, 0.6, 2.2),
+  library: row(0.5, 0.5, 2.5),
+  research: row(3.75, 0.46, 2.2),
   work: (i) => {
     const z = deskZone(i);
     return { x: z.x + z.w / 2, y: 2.0 };
   },
-  docs: row(14.0, 0.6, 2.4),
-  planning: row(17.2, 0.6, 2.4),
-  server: (i) => ({ x: 1.9, y: 5.9 + 0.7 * i }),
+  docs: row(14.0, 0.5, 2.4),
+  planning: row(17.2, 0.5, 2.4),
+  server: (i) => ({ x: 1.9, y: 5.9 + 0.55 * i }),
   data: grid(3.9, 6.6),
   lab: grid(7.1, 6.6),
   build: grid(10.3, 6.6),
   git: grid(13.5, 6.6),
-  briefing: row(16.8, 0.7, 7.4),
+  briefing: row(16.5, 0.55, 7.4),
   response: row(1.2, 1.3, 11.5), // 벤치에 앉아 사용자의 응답을 기다린다
-  lounge: row(9.4, 1.2, 12.2), // 소파에 앉아 쉰다
+  lounge: row(9.5, 0.95, 12.2), // 소파에 앉아 쉰다
 };
-const BEDS = row(15.2, 1.0, 12.0); // 휴게실 침대(꺼진 세션)
+const BEDS = row(15.1, 0.9, 12.0); // 휴게실 침대(꺼진 세션)
 const POSE = { work: 'type', docs: 'type', research: 'type', response: 'sit', lounge: 'sit' };
 
 export function targetFor(status, teamIndex, room = roomFor(status)) {

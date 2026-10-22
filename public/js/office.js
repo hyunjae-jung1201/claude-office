@@ -1,7 +1,7 @@
 // 사무실 건물: 바닥, 벽, 방 13개의 가구와 이름표. 좌표는 layout.js 의 타일 좌표(왼쪽 위 모서리 + 크기)를 쓴다.
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { FLOOR, ROOMS, ROOM_NAMES, deskZone } from './layout.js';
+import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, deskZone } from './layout.js';
 
 export const wx = (x) => x - FLOOR.w / 2;
 export const wz = (y) => y - FLOOR.d / 2;
@@ -119,7 +119,7 @@ export function buildOffice(scene) {
 
   // ---- 작업실: 팀마다 책상·모니터·팀 색 표시·의자
   const deskAccents = [];
-  for (let i = 0; i < 5; i++) {
+  for (let i = 0; i < TEAM_COUNT; i++) {
     const z = deskZone(i);
     box(z.x + 0.2, 0.5, 1.0, 0.7, 0.75, '#e1c597');
     box(z.x + 0.5, 0.62, 0.4, 0.05, 0.34, '#26304d', 0.85);
@@ -221,11 +221,11 @@ export function buildOffice(scene) {
   box(9.4, 9.6, 0.5, 0.4, 0.45, '#26304d', 0.9);
   ball(9.65, 9.85, 0.05, '#ff6b6f', 1.4, glow('#ff6b6f', 1.2));
   for (const x of [10.5, 10.8, 11.1]) cyl(x, 9.85, 0.06, 0.12, '#ffffff', 0.9);
-  for (let i = 0; i < 5; i++) {
-    const bx = 15.2 + 1.0 * i;
-    box(bx - 0.47, 11.3, 0.94, 1.5, 0.18, '#3a3f66');
-    box(bx - 0.44, 11.33, 0.88, 1.44, 0.14, '#8aa0d8', 0.18);
-    box(bx - 0.36, 11.38, 0.72, 0.3, 0.12, '#e8ecf8', 0.32);
+  for (let i = 0; i < TEAM_COUNT; i++) {
+    const bx = 15.1 + 0.9 * i;
+    box(bx - 0.4, 11.3, 0.8, 1.5, 0.18, '#3a3f66');
+    box(bx - 0.37, 11.33, 0.74, 1.44, 0.14, '#8aa0d8', 0.18);
+    box(bx - 0.3, 11.38, 0.6, 0.3, 0.12, '#e8ecf8', 0.32);
   }
   ball(19.6, 10.0, 0.12, '#ffd28a', 0.8, glow('#ffd28a', 1.3));
   box(19.5, 9.9, 0.2, 0.2, 0.6, '#5a4a3a');

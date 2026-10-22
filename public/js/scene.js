@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { FLOOR, ROOMS, ENTRANCE, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
+import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
 import { parseRosterKey } from './roster-model.js';
 
@@ -215,7 +215,7 @@ export function createScene(canvas, overlay) {
   function update(snapshot) {
     const now = performance.now();
     snapshot.teams.forEach((team, i) => {
-      if (i >= 5) return;
+      if (i >= TEAM_COUNT) return;
       try { updateTeam(team, i, now); } catch (err) { console.error(`team ${i} update failed`, err); } // 한 팀의 오류가 다른 팀을 멈추지 않게
     });
     firstSnapshot = false;
