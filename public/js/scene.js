@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
@@ -11,7 +12,11 @@ const CELEBRATE_MS = 4000;
 const MEMBER_SCALE = 0.82;
 const BUBBLE_LEVELS = [1.6, 2.05]; // 이웃 팀 말풍선이 겹치지 않도록 2단계로 번갈아 둔다(머리 바로 위가 1단계) 
 
-function makeAvatar(shirt, hair = '#2a2236') {
+const HAIR = ['#2a2236', '#5a3b2a', '#c9a24a', '#1c1c1c', '#8a4b3a', '#4a4a55'];
+const SKIN = ['#f2c7a5', '#e0ac85', '#c68e67', '#f6d6bd', '#a8734f', '#edbf9a'];
+
+// 팀장·역할자는 사람 모양(머리색·피부색·안경이 조금씩 다름), 부하 직원(kind='bot')은 팀장과 같은 색의 작은 로봇 모양
+function makeAvatar(shirt, variant = 0, kind = 'human') {
   const g = new THREE.Group();
   const m = (c) => new THREE.MeshLambertMaterial({ color: c });
   const shirtMat = m(shirt);
@@ -32,12 +37,31 @@ function makeAvatar(shirt, hair = '#2a2236') {
   const legR = limb(0.08, 0.34, 0.12, 0.34, legMat);
   const armL = limb(-0.22, 0.8, 0.09, 0.32, shirtMat);
   const armR = limb(0.22, 0.8, 0.09, 0.32, shirtMat);
-  const body = part(new THREE.CapsuleGeometry(0.17, 0.24, 4, 12), shirtMat, 0, 0.62, 0);
   const head = new THREE.Group();
   head.position.set(0, 1.0, 0);
-  head.add(part(new THREE.SphereGeometry(0.17, 18, 14), m('#f2c7a5'), 0, 0, 0));
-  head.add(part(new THREE.SphereGeometry(0.18, 18, 12, 0, Math.PI * 2, 0, Math.PI / 1.85), m(hair), 0, 0.015, -0.005));
-  for (const sx of [-0.06, 0.06]) head.add(part(new THREE.SphereGeometry(0.02, 8, 8), m('#2a2236'), sx, 0.0, 0.155));
+  let body;
+  if (kind === 'bot') {
+    body = part(new RoundedBoxGeometry(0.36, 0.38, 0.26, 1, 0.05), shirtMat, 0, 0.62, 0);
+    const lighter = m(new THREE.Color(shirt).offsetHSL(0, 0, 0.08));
+    head.add(part(new RoundedBoxGeometry(0.34, 0.26, 0.28, 1, 0.06), lighter, 0, 0.0, 0));
+    head.add(part(new THREE.BoxGeometry(0.26, 0.1, 0.02), m('#1b2036'), 0, 0.01, 0.145)); // 얼굴 화면
+    for (const sx of [-0.06, 0.06]) head.add(part(new THREE.SphereGeometry(0.022, 8, 8), new THREE.MeshBasicMaterial({ color: '#cfffee' }), sx, 0.012, 0.158));
+    head.add(part(new THREE.CylinderGeometry(0.01, 0.01, 0.12, 6), m('#3a4258'), 0, 0.19, 0)); // 안테나
+    head.add(part(new THREE.SphereGeometry(0.04, 10, 8), new THREE.MeshBasicMaterial({ color: shirt }), 0, 0.27, 0));
+  } else {
+    body = part(new THREE.CapsuleGeometry(0.17, 0.24, 4, 12), shirtMat, 0, 0.62, 0);
+    const hair = HAIR[variant % HAIR.length];
+    head.add(part(new THREE.SphereGeometry(0.17, 18, 14), m(SKIN[variant % SKIN.length]), 0, 0, 0));
+    head.add(part(new THREE.SphereGeometry(0.18, 18, 12, 0, Math.PI * 2, 0, Math.PI / 1.85), m(hair), 0, 0.015, -0.005));
+    if (variant % 3 === 1) head.add(part(new THREE.BoxGeometry(0.3, 0.2, 0.08), m(hair), 0, -0.04, -0.14)); // 긴 머리
+    for (const sx of [-0.06, 0.06]) head.add(part(new THREE.SphereGeometry(0.02, 8, 8), m('#2a2236'), sx, 0.0, 0.155));
+    if (variant % 2 === 0) { // 안경
+      for (const sx of [-0.065, 0.065]) {
+        const lens = part(new THREE.TorusGeometry(0.045, 0.008, 6, 14), m('#2a2f3d'), sx, 0.0, 0.16);
+        head.add(lens);
+      }
+    }
+  }
   g.add(legL, legR, armL, armR, body, head);
   g.userData = { legL, legR, armL, armR, body, head, shirtMat };
   return g;
@@ -52,15 +76,17 @@ export function createScene(canvas, overlay) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; // 하이라이트가 뭉개지지 않는 영화 톤
+  renderer.toneMappingExposure = 1.15;
 
   const labelRenderer = new CSS2DRenderer({ element: overlay });
   const scene = new THREE.Scene();
 
-  scene.add(new THREE.HemisphereLight('#9fb2e6', '#1b2036', 0.95));
-  const sun = new THREE.DirectionalLight('#ffe6c4', 0.95);
+  scene.add(new THREE.HemisphereLight('#d7dcef', '#4a3a2e', 0.85));
+  const sun = new THREE.DirectionalLight('#ffd9a8', 1.25);
   sun.position.set(-7, 14, 9);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(2048, 2048);
+  sun.shadow.mapSize.set(1024, 1024);
   Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 60 });
   sun.shadow.bias = -0.0006;
   scene.add(sun);
@@ -161,7 +187,10 @@ export function createScene(canvas, overlay) {
 
   function makeEntity({ team, member, id, tile, scale = 1, name, color, bubbleHeight }) {
     const group = new THREE.Group();
-    const body = makeAvatar(color);
+    // 하위 에이전트(부하 직원)는 팀장과 같은 색의 로봇, 팀장·역할자는 사람 모양
+    const isBot = member && !String(id).startsWith('role:');
+    const variant = isBot ? 0 : member ? [...String(id)].reduce((a, ch) => a + ch.charCodeAt(0), 0) : team;
+    const body = makeAvatar(color, variant, isBot ? 'bot' : 'human');
     body.scale.setScalar(scale);
     group.add(body);
     group.position.set(wx(tile.x), 0, wz(tile.y));
@@ -511,6 +540,7 @@ export function createScene(canvas, overlay) {
     },
     onViewChange(fn) { viewListener = fn; },
     resetView() { focusAnim = { to: homeTarget.clone(), zoom: homeZoom }; },
+    stats: () => ({ calls: renderer.info.render.calls, triangles: renderer.info.render.triangles, geometries: renderer.info.memory.geometries, textures: renderer.info.memory.textures }),
     // 검증용: 현재 카메라 확대·중심
     view: () => ({ zoom: Math.round(camera.zoom * 100) / 100, x: Math.round(controls.target.x * 100) / 100, z: Math.round(controls.target.z * 100) / 100, animating: Boolean(focusAnim) }),
     update(snapshot) {
