@@ -291,3 +291,31 @@ test('원격 job·팀 폴더 밖 저장소·testCommand 없는 팀은 테스트�
     assert.equal(called, 0);
   }
 });
+
+test('원격 팀(host)에 testCommand 가 있으면 ssh 로 원격에서 실행하고, 이 PC 의 테스트는 돌리지 않는다', async () => {
+  const remoteCalls = [];
+  let localCalls = 0;
+  const events = [];
+  const store = fakeStore();
+  const config = { ...cfg(), remotes: [{ name: 'PC2', ssh: 'me@h', review: true }], projects: [{ name: 'R', path: '/home/u/acc', host: 'PC2', testCommand: ['pytest', '-q'], testTimeoutSeconds: 90 }] };
+  const sched = createScheduler({ config, roles: ROLES, store, run: async () => OK, resolveTeam: () => 'R', emit: (e) => events.push(e),
+    runTests: async () => { localCalls++; return TESTS_OK; }, runRemoteTests: async (o) => { remoteCalls.push(o); return { ...TESTS_OK, command: 'PC2: pytest -q' }; } });
+  sched.submit({ repoRoot: '/home/u/acc', host: 'PC2', sessionId: 's1', files: ['/home/u/acc/a.py'], requests: [], lastResponse: '', reason: 'stop', edits: [{ kind: 'edit', file: '/home/u/acc/a.py', old: 'a', new: 'b' }] });
+  await sched.idle();
+  assert.equal(localCalls, 0);
+  assert.equal(remoteCalls.length, 1);
+  assert.deepEqual([remoteCalls[0].remote.name, remoteCalls[0].cwd, remoteCalls[0].command, remoteCalls[0].timeoutMs], ['PC2', '/home/u/acc', ['pytest', '-q'], 90_000]);
+  assert.equal(store.saved[0].tests.command, 'PC2: pytest -q');
+  assert.deepEqual(events.filter((e) => e.type === 'job').map((e) => e.status), ['running', 'done']);
+});
+
+test('원격 팀이라도 host 가 다른 팀 설정·팀 폴더 밖 변경·testCommand 없음은 실행하지 않는다', async () => {
+  const mkCfg = (p) => ({ ...cfg(), remotes: [{ name: 'PC2', ssh: 'me@h', review: true }, { name: 'PC3', ssh: 'me@h3', review: true }], projects: [p] });
+  for (const [p, host, repoRoot] of [[{ name: 'R', path: '/home/u/acc', host: 'PC3', testCommand: ['x'] }, 'PC2', '/home/u/acc'], [{ name: 'R', path: '/home/u/acc', host: 'PC2', testCommand: ['x'] }, 'PC2', '/home/u/other'], [{ name: 'R', path: '/home/u/acc', host: 'PC2' }, 'PC2', '/home/u/acc']]) {
+    let n = 0;
+    const sched = createScheduler({ config: mkCfg(p), roles: ROLES, store: fakeStore(), run: async () => OK, resolveTeam: () => 'R', emit: () => {}, runTests: async () => { n++; return TESTS_OK; }, runRemoteTests: async () => { n++; return TESTS_OK; } });
+    sched.submit({ repoRoot, host, sessionId: 's1', files: [`${repoRoot}/a.py`], requests: [], lastResponse: '', reason: 'stop', edits: [{ kind: 'edit', file: `${repoRoot}/a.py`, old: 'a', new: 'b' }] });
+    await sched.idle();
+    assert.equal(n, 0);
+  }
+});

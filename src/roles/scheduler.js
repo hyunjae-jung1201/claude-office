@@ -6,7 +6,7 @@ import { basename, extname, join } from 'node:path';
 import { aggregateVerdict, countConcerns, parseRoleOutput } from './parse.js';
 import { buildDiff, buildEditsBundle, buildPrompt } from './context.js';
 import { rolesFor } from './loader.js';
-import { runTests as defaultRunTests } from './testrun.js';
+import { runTests as defaultRunTests, runRemoteTests as defaultRunRemoteTests } from './testrun.js';
 
 const CODE_EXT = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.java', '.kt', '.kts', '.c', '.cc', '.cpp', '.h', '.hpp', '.go', '.rs', '.sh', '.rb', '.php', '.cs', '.swift', '.m', '.sql', '.html', '.css', '.vue', '.svelte']);
 const DOC_EXT = new Set(['.md', '.txt', '.rst', '.adoc']);
@@ -22,7 +22,7 @@ export async function defaultBuildBundle(job) {
   return { repoRoot: job.repoRoot, repoName: basename(job.repoRoot), requests: job.requests, lastResponse: job.lastResponse, files: job.files, diff, truncated, stats, excluded };
 }
 
-export function createScheduler({ config, roles, store, run, buildBundle = defaultBuildBundle, runTests = defaultRunTests, resolveTeam, emit, now = Date.now, concurrency = 3 }) {
+export function createScheduler({ config, roles, store, run, buildBundle = defaultBuildBundle, runTests = defaultRunTests, runRemoteTests = defaultRunRemoteTests, resolveTeam, emit, now = Date.now, concurrency = 3 }) {
   const running = new Set(); // 실행 중인 저장소
   const dirty = new Map(); // 실행 중에 새로 들어온 요청(저장소 -> 합쳐진 job)
   const inflight = new Set(); // idle() 용
@@ -56,11 +56,14 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     if (store.counter.used() + selected.length > config.roles.dailyLimit) { safeEmit({ type: 'skipped', ...base, reason: 'limit' }); return; }
 
     // 팀에 testCommand 가 있으면(이 PC 의 팀 폴더 안 변경만) 역할자 전에 테스트를 한 번 실행해 결과를 모두에게 준다
-    const project = job.host ? null : config.projects?.find((p) => p.name === team && p.testCommand);
-    if (project && (job.repoRoot === project.path || job.repoRoot.startsWith(`${project.path}/`))) {
+    // 원격 팀은 그 PC 에서 ssh 로 실행한다(원격 설정이 없으면 건너뜀)
+    const project = config.projects?.find((p) => p.name === team && p.testCommand && (p.host ?? null) === (job.host ?? null));
+    const remote = job.host ? config.remotes?.find((r) => r.name === job.host) : null;
+    if (project && (!job.host || remote) && (job.repoRoot === project.path || job.repoRoot.startsWith(`${project.path}/`))) {
       safeEmit({ type: 'job', ...base, id: 'tests', name: '테스터', color: '#d98324', room: 'lab', status: 'running', label: '테스트 실행 중' });
       let tests;
-      try { tests = await runTests({ command: project.testCommand, cwd: job.repoRoot, timeoutMs: (project.testTimeoutSeconds ?? 120) * 1000, signal: abort.signal }); } catch { tests = null; }
+      const spec = { command: project.testCommand, cwd: job.repoRoot, timeoutMs: (project.testTimeoutSeconds ?? 120) * 1000, signal: abort.signal };
+      try { tests = job.host ? await runRemoteTests({ ...spec, remote }) : await runTests(spec); } catch { tests = null; }
       if (tests) {
         bundle.tests = tests;
         safeEmit({ type: 'job', ...base, id: 'tests', status: tests.ok ? 'done' : 'failed', label: tests.ok ? '테스트 통과' : tests.timedOut ? '테스트 시간 초과' : `테스트 실패(${tests.exitCode ?? '-'})` });

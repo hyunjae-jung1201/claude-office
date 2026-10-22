@@ -18,7 +18,8 @@ const NOT_A_PROMPT = /^<(task-notification|system-reminder|command-)/;
 const expandHome = (p) => (p.startsWith('~/') ? join(homedir(), p.slice(2)) : p);
 const str = (v) => (typeof v === 'string' && v ? v : undefined);
 
-export function buildSshArgs(remote) {
+// ssh 공통 옵션 + 대상(user@host). 원격 명령은 호출하는 쪽이 뒤에 붙인다.
+export function sshBaseArgs(remote) {
   return [
     '-i', expandHome(remote.key ?? '~/.ssh/claude_office_ed25519'),
     '-o', 'IdentitiesOnly=yes',
@@ -28,6 +29,12 @@ export function buildSshArgs(remote) {
     '-o', 'ServerAliveCountMax=3',
     '-o', 'ConnectTimeout=10',
     remote.ssh,
+  ];
+}
+
+export function buildSshArgs(remote) {
+  return [
+    ...sshBaseArgs(remote),
     // review: 이 원격의 수정 기록·요청 문장도 받아 이 PC 에서 역할자 검토에 쓴다(켠 원격만)
     ...(remote.review === true ? ['env', 'INCLUDE_TEXT=1'] : []),
     'node', '-',
