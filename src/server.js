@@ -8,7 +8,7 @@ import { normalizeEvent } from './events.js';
 import { createState, applyEvent, tick, snapshot, setLabel, applyReviewEvent, setReviewHistory, teamOfSession } from './state.js';
 import { ruleLabel } from './labels.js';
 import { createSummarizer } from './summarizer.js';
-import { startRemote } from './remote.js';
+import { startRemote, startLocalTail } from './remote.js';
 import { createSessionRegistry } from './sessions.js';
 import { createLiveMonitor } from './live.js';
 import { validateRoleIds } from './roles/loader.js';
@@ -21,6 +21,7 @@ import { runRole } from './roles/runner.js';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = '127.0.0.1';
 const BODY_LIMIT = 1024 * 1024;
+const HOOK_SESSION_MS = 10 * 60 * 1000;
 const BUBBLE_EVENTS = new Set(['start', 'end', 'prompt', 'tool', 'wait', 'stop', 'agentStart', 'agentStop']);
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -46,6 +47,7 @@ export async function startServer({
   roles = null, // 역할 정의(Map). 없거나 config.roles.enabled 가 거짓이면 역할자 검토를 하지 않는다
   reviewStore = null,
   reviewRun = runRole,
+  localTail = null, // hook 이 없는 세션을 세션 기록으로 읽는 수집기(없으면 사용 안 함)
 } = {}) {
   const registry = createSessionRegistry(sessionsDir ? { dir: sessionsDir } : {});
   const state = createState(config);
@@ -72,8 +74,14 @@ export async function startServer({
 
   let scheduler = null;
   let tracker = null;
+  const hookSeen = new Map(); // hook 신호를 보내는 세션 -> 마지막 신호 시각 (같은 세션을 세션 기록으로 또 세지 않기 위해)
 
   function handleEvent(ev) {
+    // hook 이 이미 알려 주는 세션의 세션 기록 이벤트는 버린다(이중 집계 방지). 10분 동안 hook 신호가 없으면 다시 받는다.
+    if (ev.source === 'transcript' && !ev.host) {
+      const last = hookSeen.get(ev.sessionId);
+      if (last !== undefined && now() - last < HOOK_SESSION_MS) return;
+    }
     // 역할자 검토는 화면 팀에 안 맞는 세션(홈 폴더 등)도 보므로 가장 먼저 넘긴다
     tracker?.onEvent(ev).catch(() => {});
     if (ev.type === 'live' && ev.liveStatus === 'gone') {
@@ -124,6 +132,7 @@ export async function startServer({
       }
       const ev = normalizeEvent(payload, now());
       if (!ev) return res.writeHead(400).end();
+      hookSeen.set(ev.sessionId, now());
       handleEvent(ev);
       res.writeHead(204).end();
     });
@@ -193,6 +202,7 @@ export async function startServer({
   const timer = setInterval(() => {
     tick(state, now());
     tracker?.tick().catch(() => {});
+    for (const [id, at] of hookSeen) if (now() - at >= HOOK_SESSION_MS) hookSeen.delete(id);
     for (const k of [...seqs.keys()]) if (!state.sessions.has(k.split('|')[0])) seqs.delete(k); // 사라진 세션의 추적 상태 정리
     broadcast();
   }, tickMs);
@@ -213,16 +223,18 @@ export async function startServer({
 
   // 원격 PC: 읽기 전용으로 세션 기록을 받아 같은 이벤트로 흘려 넣는다
   const remotes = (config.remotes ?? []).map((remote) => remoteFactory({ remote, onEvent: handleEvent }));
+  const localCollector = localTail ? localTail({ onEvent: handleEvent }) : null;
 
   return {
     port: server.address().port,
     host: HOST,
-    stats: () => ({ seqs: seqs.size, sessions: state.sessions.size, remotes: remotes.map((r) => r.status()), reviews: scheduler?.stats() }),
+    stats: () => ({ seqs: seqs.size, sessions: state.sessions.size, remotes: remotes.map((r) => r.status()), transcripts: localCollector?.status(), reviews: scheduler?.stats() }),
     close() {
       clearInterval(timer);
       clearInterval(liveTimer);
       scheduler?.close();
       for (const r of remotes) r.stop();
+      localCollector?.stop();
       for (const ws of clients) ws.terminate();
       return new Promise((r) => {
         wss.close(() => server.close(() => r()));
@@ -239,7 +251,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const roles = config.roles?.enabled ? loadRoles(join(ROOT, 'roles')) : null;
   const reviewRun = process.env.CLAUDE_OFFICE_FAKE_ROLES ? (await import('./roles/fake.js')).fakeRun : runRole;
   const reviewStore = process.env.CLAUDE_OFFICE_REVIEW_DIR ? createReviewStore({ dir: process.env.CLAUDE_OFFICE_REVIEW_DIR }) : undefined;
-  const srv = await startServer({ config, summarizer: createSummarizer(), roles, reviewRun, reviewStore });
+  const localTail = config.localTranscripts === false ? null : startLocalTail;
+  const srv = await startServer({ config, summarizer: createSummarizer(), roles, reviewRun, reviewStore, localTail });
   console.log(`Claude Office: http://localhost:${srv.port}  (프로젝트 ${config.projects.length}개)`);
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => srv.close().then(() => process.exit(0)));
 }

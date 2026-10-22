@@ -77,3 +77,30 @@ test('live: 세션 등록 정보 상태가 live 이벤트로 바뀐다 (start �
   assert.deepEqual(evs.map((e) => [e.type, e.liveStatus, e.sessionName, e.sessionId]), [['live', 'shell', '사고 판별 모델', 'S1']]);
   assert.deepEqual(projectionToEvents({ s: 'S1', c: '/home/me', k: 'live' }, fresh(), NOW), []);
 });
+
+// ---- 하위 에이전트·텍스트 필드 → 이벤트
+test('astart/atool/astop → agentStart/tool(agentId)/agentStop', () => {
+  const ctx = fresh();
+  const s = projectionToEvents({ s: 'S1', c: '/home/me', k: 'astart', a: 'A1', t: 'Explore' }, ctx, NOW);
+  assert.deepEqual(s.map((e) => [e.type, e.agentId, e.agentType]), [['start', undefined, undefined], ['agentStart', 'A1', 'Explore']]);
+  const t = projectionToEvents({ s: 'S1', c: '/home/me', k: 'atool', a: 'A1', t: 'Explore', tools: [{ i: 'x', n: 'Edit', d: '/home/me/a.js' }, { i: 'y', n: 'Bash', d: 'ls' }] }, ctx, NOW);
+  assert.deepEqual(t.map((e) => [e.type, e.category, e.agentId, e.agentType, e.toolName, e.filePath]), [['tool', 'write', 'A1', 'Explore', 'Edit', '/home/me/a.js'], ['tool', 'run', 'A1', 'Explore', 'Bash', undefined]]);
+  assert.deepEqual(projectionToEvents({ s: 'S1', c: '/home/me', k: 'astop', a: 'A1' }, ctx, NOW).map((e) => [e.type, e.agentId]), [['agentStop', 'A1']]);
+  assert.deepEqual(projectionToEvents({ s: 'S1', c: '/home/me', k: 'astart' }, fresh(), NOW).filter((e) => e.type === 'agentStart'), []); // agentId 없으면 무시
+});
+
+test('편집 도구는 toolName·filePath, 요청·응답 텍스트는 마스킹된 promptText·assistantText로 전달된다', () => {
+  const ctx = fresh();
+  const evs = projectionToEvents({ s: 'S1', c: '/home/me', k: 'tool', tools: [{ i: 't', n: 'Write', d: '/home/me/new.md' }, { i: 'u', n: 'Read', d: '/home/me/r.md' }] }, ctx, NOW);
+  assert.deepEqual(evs.filter((e) => e.type === 'tool').map((e) => [e.toolName, e.filePath]), [['Write', '/home/me/new.md'], ['Read', undefined]]);
+  const p = projectionToEvents({ s: 'S1', c: '/home/me', k: 'prompt', p: '로그인 고쳐줘 token=abcd1234efgh' }, ctx, NOW).find((e) => e.type === 'prompt');
+  assert.ok(p.promptText.startsWith('로그인 고쳐줘') && !p.promptText.includes('abcd1234efgh'));
+  const st = projectionToEvents({ s: 'S1', c: '/home/me', k: 'stop', a: '끝. sk-abcdefghijklmnopqrstuvwx1234' }, ctx, NOW).find((e) => e.type === 'stop');
+  assert.ok(st.assistantText.startsWith('끝.') && !st.assistantText.includes('sk-abcdefghijklmnopqrstuvwx1234'));
+  assert.equal(projectionToEvents({ s: 'S1', c: '/home/me', k: 'prompt', p: '<task-notification>x' }, ctx, NOW).length, 0);
+});
+
+test('편집 도구의 상대 경로나 비정상 값은 filePath로 쓰지 않는다', () => {
+  const ev = projectionToEvents({ s: 'S1', c: '/c', k: 'tool', tools: [{ i: 'a', n: 'Edit', d: 'relative/path.js' }, { i: 'b', n: 'Edit', d: '' }] }, fresh(), NOW).filter((e) => e.type === 'tool');
+  assert.deepEqual(ev.map((e) => e.filePath), [undefined, undefined]);
+});

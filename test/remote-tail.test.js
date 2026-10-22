@@ -137,3 +137,83 @@ test('살아 있는 세션의 상태를 live로 내보내고, 사라지면 gone'
     assert.equal(out.filter((o) => o.k === 'live' && o.st === 'shell').length, 1); // 변화가 없으면 반복하지 않는다(하트비트는 30초 간격)
   } finally { child.kill(); }
 });
+
+// ---- 하위 에이전트 기록(<세션>/subagents/agent-*.jsonl)과 텍스트 포함 옵션
+function tailEnv(root, extra = {}) {
+  const sess = mkdtempSync(join(tmpdir(), 'tail-nosess-'));
+  const child = spawn(process.execPath, [SCRIPT], { env: { ...process.env, CLAUDE_PROJECTS_DIR: root, CLAUDE_SESSIONS_DIR: sess, POLL_MS: '50', ...extra } });
+  const out = [];
+  let buf = '';
+  child.stdout.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\n')) >= 0) { out.push(JSON.parse(buf.slice(0, i))); buf = buf.slice(i + 1); } });
+  return { out, stop: () => child.kill() };
+}
+function agentSetup(root, { sid = 'S1', id = 'A1', meta = { agentType: 'Explore', description: '조사', finished: false }, lines = [], mtimeAgo = 0 } = {}) {
+  mkdirSync(join(root, '-home-me', sid, 'subagents'), { recursive: true });
+  const main = join(root, '-home-me', `${sid}.jsonl`);
+  writeFileSync(main, line({ type: 'user', sessionId: sid, cwd: '/home/me/accident', message: { content: '시작' } }));
+  const f = join(root, '-home-me', sid, 'subagents', `agent-${id}.jsonl`);
+  const metaFile = join(root, '-home-me', sid, 'subagents', `agent-${id}.meta.json`);
+  writeFileSync(f, lines.map(line).join(''));
+  writeFileSync(metaFile, JSON.stringify(meta));
+  if (mtimeAgo) { const t = new Date(Date.now() - mtimeAgo); utimesSync(f, t, t); utimesSync(metaFile, t, t); }
+  return { f, metaFile };
+}
+const agentTool = (name, input, id = 'A1', tuid = 'tu9') => ({ type: 'assistant', isSidechain: true, agentId: id, sessionId: 'S1', cwd: '/home/me/accident', message: { stop_reason: 'tool_use', content: [{ type: 'tool_use', id: tuid, name, input }] } });
+
+test('실행 중에 새로 생긴 하위 에이전트: astart → atool → (meta finished) astop 한 번', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'tail-'));
+  mkdirSync(join(root, '-home-me'));
+  writeFileSync(join(root, '-home-me', 'S1.jsonl'), line({ type: 'user', sessionId: 'S1', cwd: '/home/me/accident', message: { content: '시작' } }));
+  const t = tailEnv(root);
+  try {
+    await waitFor(() => t.out.find((o) => o.k === 'init'));
+    const { metaFile } = agentSetup(root, { lines: [agentTool('Read', { file_path: '/home/me/accident/a.py' }), agentTool('Bash', { command: 'ls -la' }, 'A1', 'tu10')] });
+    const start = await waitFor(() => t.out.find((o) => o.k === 'astart'));
+    assert.deepEqual([start.s, start.a, start.t, start.c], ['S1', 'A1', 'Explore', '/home/me/accident']);
+    await waitFor(() => t.out.filter((o) => o.k === 'atool').length >= 2);
+    const tools = t.out.filter((o) => o.k === 'atool').flatMap((o) => o.tools.map((x) => [o.a, x.n, x.d]));
+    assert.deepEqual(tools, [['A1', 'Read', '/home/me/accident/a.py'], ['A1', 'Bash', 'ls -la']]);
+    writeFileSync(metaFile, JSON.stringify({ agentType: 'Explore', description: '조사', finished: true }));
+    await waitFor(() => t.out.find((o) => o.k === 'astop'));
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(t.out.filter((o) => o.k === 'astop').length, 1);
+    assert.equal(t.out.filter((o) => o.k === 'tool' || o.k === 'prompt').length, 0); // 하위 에이전트 줄은 팀장의 도구 사용이 아니다
+  } finally { t.stop(); }
+});
+
+test('이미 있던 하위 에이전트: 방금까지 일하던 것만 astart, 끝났거나 오래된 것은 알리지 않는다', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'tail-'));
+  agentSetup(root, { id: 'LIVE', lines: [agentTool('Read', { file_path: '/x' }, 'LIVE')] });
+  agentSetup(root, { sid: 'S2', id: 'DONE', meta: { agentType: 'x', finished: true }, lines: [agentTool('Read', { file_path: '/x' }, 'DONE')] });
+  agentSetup(root, { sid: 'S3', id: 'OLD', lines: [agentTool('Read', { file_path: '/x' }, 'OLD')], mtimeAgo: 3600_000 });
+  const t = tailEnv(root);
+  try {
+    await waitFor(() => t.out.find((o) => o.k === 'astart'));
+    await new Promise((r) => setTimeout(r, 300));
+    assert.deepEqual(t.out.filter((o) => o.k === 'astart').map((o) => o.a), ['LIVE']);
+    assert.equal(t.out.filter((o) => o.k === 'atool').length, 0); // 과거 내용은 되풀이하지 않는다
+  } finally { t.stop(); }
+});
+
+test('INCLUDE_TEXT=1이면 요청(300자)과 마지막 응답(2000자)을 담고, 기본은 40자·응답 없음', async () => {
+  const mk = (env) => {
+    const root = mkdtempSync(join(tmpdir(), 'tail-'));
+    mkdirSync(join(root, '-home-me'));
+    const f = join(root, '-home-me', 'S1.jsonl');
+    writeFileSync(f, line({ type: 'user', sessionId: 'S1', cwd: '/home/me', message: { content: '시작' } }));
+    return { f, t: tailEnv(root, env) };
+  };
+  const long = '가'.repeat(500);
+  for (const [env, wantP, wantA] of [[{ INCLUDE_TEXT: '1' }, 300, 2000], [{}, 40, 0]]) {
+    const { f, t } = mk(env);
+    try {
+      await waitFor(() => t.out.find((o) => o.k === 'init'));
+      appendFileSync(f, line({ type: 'user', sessionId: 'S1', cwd: '/home/me', message: { content: long } }));
+      appendFileSync(f, line({ type: 'assistant', sessionId: 'S1', cwd: '/home/me', message: { stop_reason: 'end_turn', content: [{ type: 'text', text: '나'.repeat(3000) }] } }));
+      const stop = await waitFor(() => t.out.find((o) => o.k === 'stop'));
+      const prompt = t.out.find((o) => o.k === 'prompt');
+      assert.equal(prompt.p.length, wantP);
+      assert.equal((stop.a ?? '').length, wantA);
+    } finally { t.stop(); }
+  }
+});

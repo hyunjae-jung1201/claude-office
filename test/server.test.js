@@ -467,3 +467,62 @@ test('서버를 다시 띄우면 저장된 검토에서 목록과 팀 배지가 
     c.close();
   });
 });
+
+// ---- hook이 없는 세션: 세션 기록(transcript) 수집기
+function fakeLocalTail() {
+  const h = { push: null, stopped: 0 };
+  h.factory = ({ onEvent }) => { h.push = onEvent; return { stop() { h.stopped++; }, status: () => 'connected' }; };
+  return h;
+}
+const tx = (o) => ({ sessionId: 'tx1', cwd: '/w/a', ts: Date.now(), source: 'transcript', ...o });
+
+test('hook이 없는 세션도 세션 기록 이벤트로 팀 상태가 바뀐다', () => {
+  const lt = fakeLocalTail();
+  return withServer({ localTail: lt.factory }, async ({ port }) => {
+    const c = await connect(port);
+    lt.push(tx({ type: 'tool', category: 'run', detail: 'make' }));
+    await c.waitFor((s) => teamA(s).status === 'run');
+    lt.push(tx({ type: 'agentStart', agentId: 'ag1', agentType: 'Explore' }));
+    const s = await c.waitFor((x) => teamA(x).members.length === 1);
+    assert.equal(teamA(s).members[0].type, 'Explore');
+    c.close();
+  });
+});
+
+test('hook 신호가 오는 세션의 세션 기록 이벤트는 무시한다(이중 집계 방지), 10분 뒤에는 다시 받는다', () => {
+  const lt = fakeLocalTail();
+  let t = 1_000_000;
+  return withServer({ localTail: lt.factory, now: () => t }, async ({ port }) => {
+    const c = await connect(port);
+    await post(port, hookPayload({ session_id: 'tx1', cwd: '/w/a' })); // hook: Bash → run
+    await c.waitFor((s) => teamA(s).status === 'run');
+    lt.push(tx({ type: 'tool', category: 'read', detail: '/w/a/x' }));
+    await new Promise((r) => setTimeout(r, 80));
+    assert.ok(c.seen.every((s) => teamA(s).status !== 'read'));
+    t += 11 * 60 * 1000;
+    lt.push(tx({ type: 'tool', category: 'read', detail: '/w/a/x', ts: t }));
+    await c.waitFor((s) => teamA(s).status === 'read');
+    c.close();
+  });
+});
+
+test('세션 기록으로만 알려진 세션이 파일을 수정하고 응답을 끝내도 역할자 검토가 시작된다', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'const a = 9;\n');
+  const lt = fakeLocalTail();
+  await withServer({ ...roleServer(repo), localTail: lt.factory }, async ({ port }) => {
+    const c = await connect(port);
+    lt.push(tx({ cwd: repo, type: 'prompt', promptText: '값을 9로 바꿔줘' }));
+    lt.push(tx({ cwd: repo, type: 'tool', category: 'write', toolName: 'Edit', filePath: join(repo, 'a.js'), detail: join(repo, 'a.js') }));
+    lt.push(tx({ cwd: repo, type: 'stop', assistantText: '바꿨습니다' }));
+    const s = await c.waitFor((x) => teamA(x).badge && x.reviews.length === 1);
+    assert.equal(teamA(s).badge.verdict, 'ok');
+    c.close();
+  });
+});
+
+test('서버를 닫으면 세션 기록 수집기도 멈춘다', async () => {
+  const lt = fakeLocalTail();
+  await withServer({ localTail: lt.factory }, async () => {});
+  assert.equal(lt.stopped, 1);
+});

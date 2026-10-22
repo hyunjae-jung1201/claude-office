@@ -10,6 +10,9 @@ const POLL_MS = Number(process.env.POLL_MS) || 1000;
 const RECENT_MS = 10 * 60 * 1000; // 이 시간 안에 수정된 세션만 "실행 중"으로 본다
 const TAIL_BYTES = 256 * 1024;
 const MAX_READ = 4 * 1024 * 1024;
+const INCLUDE_TEXT = process.env.INCLUDE_TEXT === '1'; // 이 PC(로컬)에서만: 요청 300자·마지막 응답 2000자를 함께 보낸다(원격 전송에는 쓰지 않는다)
+const AGENT_RECENT_MS = 30 * 1000; // 처음 볼 때 이 시간 안에 움직인 하위 에이전트만 "일하는 중"으로 본다
+const AGENT_IDLE_MS = 90 * 1000; // meta 에 finished 표시가 없어도 이 시간 동안 줄이 안 늘면 끝난 것으로 본다
 const SESS_DIR = process.env.CLAUDE_SESSIONS_DIR || path.join(os.homedir(), '.claude', 'sessions');
 
 const files = new Map(); // 파일 경로 -> { off, rest: Buffer, cwd, sid }
@@ -21,25 +24,25 @@ function detail(input) {
   return typeof v === 'string' ? v.slice(0, 400) : '';
 }
 
-// 한 줄을 { k, ... } 로 줄인다. 하위 에이전트(sidechain)·메타·관심 없는 줄은 null.
-function project(line, st) {
+// 한 줄을 { k, ... } 로 줄인다. 하위 에이전트(sidechain)·메타·관심 없는 줄은 null (agent=true 이면 하위 에이전트 파일의 줄).
+function project(line, st, agent) {
   let o;
   try { o = JSON.parse(line); } catch { return null; }
   if (!o || typeof o !== 'object') return null;
   if (typeof o.cwd === 'string') st.cwd = o.cwd;
   if (typeof o.sessionId === 'string') st.sid = o.sessionId;
   if (st.sid && st.cwd) cwdBySid.set(st.sid, st.cwd);
-  if (o.isSidechain || o.isMeta) return null;
+  if ((o.isSidechain && !agent) || o.isMeta) return null;
   const m = o.message;
   if (!m) return null;
   if (o.type === 'user') {
     const c = m.content;
-    if (typeof c === 'string') return { k: 'prompt', p: c.slice(0, 40) };
+    if (typeof c === 'string') return { k: 'prompt', p: c.slice(0, INCLUDE_TEXT ? 300 : 40) };
     if (Array.isArray(c)) {
       const ids = c.filter((b) => b && b.type === 'tool_result').map((b) => b.tool_use_id);
       if (ids.length) return { k: 'result', ids };
       const t = c.find((b) => b && b.type === 'text');
-      if (t) return { k: 'prompt', p: String(t.text || '').slice(0, 40) };
+      if (t) return { k: 'prompt', p: String(t.text || '').slice(0, INCLUDE_TEXT ? 300 : 40) };
     }
     return null;
   }
@@ -47,7 +50,11 @@ function project(line, st) {
     const tools = m.content.filter((b) => b && b.type === 'tool_use').map((b) => ({ i: b.id, n: b.name, d: detail(b.input) }));
     if (tools.length) return { k: 'tool', tools };
     // 생각만 있는 end_turn 줄은 제외: 턴 종료는 텍스트가 있는 줄 하나로만 센다
-    if (m.stop_reason === 'end_turn' && m.content.some((b) => b && b.type === 'text')) return { k: 'stop' };
+    if (m.stop_reason === 'end_turn' && m.content.some((b) => b && b.type === 'text')) {
+      if (!INCLUDE_TEXT) return { k: 'stop' };
+      const texts = m.content.filter((b) => b && b.type === 'text').map((b) => String(b.text || ''));
+      return { k: 'stop', a: texts.join('\n').slice(0, 2000) };
+    }
   }
   return null;
 }
@@ -182,12 +189,72 @@ function listFiles() {
   return out;
 }
 
+// ---- 하위 에이전트: <프로젝트>/<세션>/subagents/agent-<id>.jsonl (+ .meta.json 의 agentType, finished)
+const agents = new Map(); // 파일 -> { off, rest, id, sid, cwd, type, stopped, lastLineAt }
+
+function readMeta(file) {
+  try { return JSON.parse(fs.readFileSync(file.replace(/\.jsonl$/, '.meta.json'), 'utf8')); } catch { return {}; }
+}
+
+function agentFilesOf(activeSids) {
+  const out = [];
+  let dirs = [];
+  try { dirs = fs.readdirSync(ROOT, { withFileTypes: true }); } catch { return out; }
+  for (const d of dirs) {
+    if (!d.isDirectory()) continue;
+    for (const sid of activeSids) {
+      const dir = path.join(ROOT, d.name, sid, 'subagents');
+      let list;
+      try { list = fs.readdirSync(dir); } catch { continue; }
+      for (const f of list) if (/^agent-.+\.jsonl$/.test(f)) out.push({ file: path.join(dir, f), sid, id: f.slice(6, -6) });
+    }
+  }
+  return out;
+}
+
+const agentHeader = (a) => ({ s: a.sid, c: a.cwd || cwdBySid.get(a.sid) || '/', a: a.id, ...(a.type ? { t: a.type } : {}), ...(names.get(a.sid) ? { n: names.get(a.sid) } : {}) });
+
+function scanAgents(activeSids, first) {
+  const t = Date.now();
+  for (const [, a] of agents) if (!a.stopped) activeSids.add(a.sid); // 일하는 중인 하위 에이전트의 세션은 계속 본다
+  for (const { file, sid, id } of agentFilesOf(activeSids)) {
+    let stat;
+    try { stat = fs.statSync(file); } catch { continue; }
+    const meta = readMeta(file);
+    let a = agents.get(file);
+    if (!a) {
+      a = { off: 0, rest: Buffer.alloc(0), id, sid, cwd: cwdBySid.get(sid), type: typeof meta.agentType === 'string' ? meta.agentType : undefined, stopped: false, lastLineAt: stat.mtimeMs };
+      agents.set(file, a);
+      if (first) a.off = stat.size; // 과거 내용은 되풀이하지 않는다
+      if (meta.finished === true || (first && t - stat.mtimeMs > AGENT_RECENT_MS)) { a.stopped = true; a.off = stat.size; continue; }
+      emit({ k: 'astart', ...agentHeader(a) });
+    }
+    if (a.stopped) continue;
+    if (stat.size > a.off) {
+      const { lines, rest } = splitLines(Buffer.concat([a.rest, readRange(file, a.off, stat.size)]));
+      a.off = stat.size;
+      a.rest = rest;
+      a.lastLineAt = t;
+      for (const l of lines) {
+        const p = project(l, a, true);
+        if (p && p.k === 'tool') emit({ k: 'atool', ...agentHeader(a), tools: p.tools });
+      }
+    }
+    if (meta.finished === true || t - a.lastLineAt > AGENT_IDLE_MS) {
+      a.stopped = true;
+      emit({ k: 'astop', ...agentHeader(a) });
+    }
+  }
+}
+
 let firstScan = true;
 function scan() {
   loadRegistry();
+  const activeSids = new Set();
   for (const file of listFiles()) {
     let stat;
     try { stat = fs.statSync(file); } catch { continue; }
+    if (Date.now() - stat.mtimeMs < RECENT_MS) activeSids.add(path.basename(file, '.jsonl'));
     const st = files.get(file);
     if (!st) {
       if (firstScan) initFile(file, stat);
@@ -196,6 +263,7 @@ function scan() {
       readNew(file, stat, st);
     }
   }
+  scanAgents(activeSids, firstScan);
   firstScan = false;
   emitLive();
 }

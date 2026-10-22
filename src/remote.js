@@ -1,14 +1,18 @@
 // 원격 PC의 Claude Code 세션 기록을 SSH로 읽어(읽기 전용) 사무실 이벤트로 바꾼다.
 import { spawn } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { toolCategory, maskDetail, USER_WAIT_TOOLS } from './events.js';
+import { toolCategory, maskDetail, USER_WAIT_TOOLS, EDIT_TOOLS } from './events.js';
+import { maskSecrets } from './mask.js';
+import { minimalEnv } from './env.js';
 
 const TAIL_SCRIPT = readFileSync(new URL('./remote-tail.cjs', import.meta.url), 'utf8');
+const TAIL_PATH = fileURLToPath(new URL('./remote-tail.cjs', import.meta.url));
 const WORKING_AGE_S = 30; // init 때 이 시간 안에 움직인 세션은 일하는 중으로 본다
-const KINDS = new Set(['init', 'prompt', 'tool', 'result', 'stop', 'live']);
+const KINDS = new Set(['init', 'prompt', 'tool', 'result', 'stop', 'live', 'astart', 'atool', 'astop']);
 const NOT_A_PROMPT = /^<(task-notification|system-reminder|command-)/;
 
 const expandHome = (p) => (p.startsWith('~/') ? join(homedir(), p.slice(2)) : p);
@@ -28,13 +32,15 @@ export function buildSshArgs(remote) {
   ];
 }
 
-function toolEvents(tools, base, ctx) {
+function toolEvents(tools, base, ctx, agent = {}) {
   if (ctx.tools.size > 1000) ctx.tools.clear();
   return tools.map((t) => {
     const category = toolCategory(t.n);
     if (t.i) ctx.tools.set(t.i, category);
-    if (USER_WAIT_TOOLS[t.n]) return { ...base, type: 'wait', waitKind: USER_WAIT_TOOLS[t.n] };
-    return { ...base, type: 'tool', category, detail: maskDetail(t.d) };
+    if (USER_WAIT_TOOLS[t.n]) return { ...base, type: 'wait', waitKind: USER_WAIT_TOOLS[t.n], ...agent };
+    // 편집 도구의 경로 원문(서버 안에서 git 저장소를 찾는 데만 쓰인다)
+    const filePath = EDIT_TOOLS.has(t.n) && typeof t.d === 'string' && t.d.startsWith('/') && t.d.length <= 1000 ? t.d : undefined;
+    return { ...base, type: 'tool', category, toolName: t.n, filePath, detail: maskDetail(t.d), ...agent };
   });
 }
 
@@ -46,6 +52,7 @@ export function projectionToEvents(p, ctx, now) {
   if (!sessionId || !cwd || !KINDS.has(p.k)) return [];
   if (p.k === 'tool' && !Array.isArray(p.tools)) return [];
   if (p.k === 'result' && !Array.isArray(p.ids)) return [];
+  if (p.k === 'atool' && !Array.isArray(p.tools)) return [];
 
   const base = { sessionId, cwd, ts: now, ...(str(p.n) ? { sessionName: p.n } : {}) };
   if (p.k === 'live') return str(p.st) ? [{ ...base, type: 'live', liveStatus: p.st }] : [];
@@ -65,7 +72,7 @@ export function projectionToEvents(p, ctx, now) {
       break;
     case 'prompt':
       if (NOT_A_PROMPT.test(p.p ?? '')) return out;
-      out.push({ ...base, type: 'prompt' });
+      out.push({ ...base, type: 'prompt', promptText: str(p.p) ? maskSecrets(p.p).slice(0, 300) : undefined });
       break;
     case 'tool':
       out.push(...toolEvents(p.tools, base, ctx));
@@ -77,15 +84,24 @@ export function projectionToEvents(p, ctx, now) {
       }
       break;
     case 'stop':
-      out.push({ ...base, type: 'stop' });
+      out.push({ ...base, type: 'stop', assistantText: str(p.a) ? maskSecrets(p.a).slice(0, 2000) : undefined });
+      break;
+    case 'astart':
+      if (str(p.a)) out.push({ ...base, type: 'agentStart', agentId: p.a, agentType: str(p.t) });
+      break;
+    case 'atool':
+      if (str(p.a)) out.push(...toolEvents(p.tools, base, ctx, { agentId: p.a, agentType: str(p.t) }));
+      break;
+    case 'astop':
+      if (str(p.a)) out.push({ ...base, type: 'agentStop', agentId: p.a });
       break;
     default:
   }
   return out;
 }
 
-// SSH로 원격 스크립트를 띄우고, 끊기면 점점 늦춰 가며 다시 연결한다.
-export function startRemote({ remote, onEvent, spawnFn = spawn, now = Date.now, retryMs = [3000, 30000], log = console }) {
+// 수집기 공통: 자식 프로세스(원격 ssh 또는 이 PC의 node)가 내보내는 한 줄 JSON을 이벤트로 바꿔 넘기고, 끊기면 점점 늦춰 가며 다시 연결한다.
+function runCollector({ label, launch, feed, decorate, onEvent, now, retryMs, log }) {
   const ctx = { tools: new Map(), seen: new Set() };
   let child = null;
   let timer = null;
@@ -97,26 +113,26 @@ export function startRemote({ remote, onEvent, spawnFn = spawn, now = Date.now, 
   function connect() {
     if (stopped) return;
     status = 'connecting';
-    child = spawnFn('ssh', buildSshArgs(remote), { stdio: ['pipe', 'pipe', 'pipe'] });
-    child.stdin.on('error', () => {});
-    child.stdin.end(TAIL_SCRIPT);
-    child.stderr.on('data', (d) => { lastError = String(d).trim().slice(0, 200); });
+    child = launch();
+    child.stdin?.on?.('error', () => {});
+    if (feed !== null) child.stdin?.end?.(feed);
+    child.stderr?.on('data', (d) => { lastError = String(d).trim().slice(0, 200); });
     createInterface({ input: child.stdout }).on('line', (line) => {
       let p;
       try { p = JSON.parse(line); } catch { return; }
       if (p?.k === 'hello' && status !== 'connected') {
         status = 'connected';
         delay = retryMs[0];
-        log.log?.(`Claude Office: 원격 ${remote.name} 연결됨`);
+        log.log?.(`Claude Office: ${label} 연결됨`);
       }
-      for (const ev of projectionToEvents(p, ctx, now())) onEvent({ ...ev, host: remote.name });
+      for (const ev of projectionToEvents(p, ctx, now())) onEvent(decorate(ev));
     });
     const onEnd = () => {
       if (child === null) return;
       child = null;
       status = 'down';
       if (stopped) return;
-      log.error?.(`Claude Office: 원격 ${remote.name} 연결 끊김${lastError ? ` (${lastError})` : ''}, ${Math.round(delay / 1000)}초 뒤 재시도`);
+      log.error?.(`Claude Office: ${label} 연결 끊김${lastError ? ` (${lastError})` : ''}, ${Math.round(delay / 1000)}초 뒤 재시도`);
       timer = setTimeout(connect, delay);
       timer.unref?.();
       delay = Math.min(delay * 2, retryMs[1]);
@@ -134,4 +150,26 @@ export function startRemote({ remote, onEvent, spawnFn = spawn, now = Date.now, 
       child?.kill();
     },
   };
+}
+
+// 다른 PC: SSH로 원격 스크립트를 띄운다(읽기 전용).
+export function startRemote({ remote, onEvent, spawnFn = spawn, now = Date.now, retryMs = [3000, 30000], log = console }) {
+  return runCollector({
+    label: `원격 ${remote.name}`,
+    launch: () => spawnFn('ssh', buildSshArgs(remote), { stdio: ['pipe', 'pipe', 'pipe'] }),
+    feed: TAIL_SCRIPT,
+    decorate: (ev) => ({ ...ev, host: remote.name, source: 'transcript' }),
+    onEvent, now, retryMs, log,
+  });
+}
+
+// 이 PC: hook이 없는 세션(hook 설치 전에 시작된 세션)과 하위 에이전트를 세션 기록(~/.claude/projects)으로 읽는다.
+export function startLocalTail({ onEvent, spawnFn = spawn, now = Date.now, retryMs = [3000, 30000], log = console, env = {} } = {}) {
+  return runCollector({
+    label: '이 PC 세션 기록',
+    launch: () => spawnFn(process.execPath, [TAIL_PATH], { stdio: ['ignore', 'pipe', 'pipe'], env: minimalEnv({ INCLUDE_TEXT: '1', ...env }) }),
+    feed: null,
+    decorate: (ev) => ({ ...ev, source: 'transcript' }),
+    onEvent, now, retryMs, log,
+  });
 }
