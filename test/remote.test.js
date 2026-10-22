@@ -109,3 +109,15 @@ test('세션 기록 경로의 도구에도 activity가 붙는다', () => {
   const ev = projectionToEvents({ s: 'S', c: '/c', k: 'tool', tools: [{ i: 'a', n: 'Bash', d: 'pytest -q' }, { i: 'b', n: 'WebSearch', d: 'x' }, { i: 'c', n: 'AskUserQuestion', d: '' }] }, fresh(), NOW).filter((e) => e.type !== 'start');
   assert.deepEqual(ev.map((e) => e.activity), ['lab', 'research', 'response']);
 });
+
+test('세션 기록의 편집 도구 e → 이벤트의 edit (마스킹·검증)', () => {
+  const ev = projectionToEvents({ s: 'S', c: '/c', k: 'tool', tools: [
+    { i: 'a', n: 'Edit', d: '/p/a.js', e: { file_path: '/p/a.js', old_string: 'x', new_string: 'y token=abcd1234efgh' } },
+    { i: 'b', n: 'Write', d: '/p/b.md', e: { file_path: '/p/b.md', content: '내용' } },
+    { i: 'c', n: 'Edit', d: 'rel.js', e: { file_path: 'rel.js', old_string: 'x', new_string: 'y' } },
+  ] }, fresh(), NOW).filter((x) => x.type === 'tool');
+  assert.deepEqual([ev[0].edit.kind, ev[0].edit.old], ['edit', 'x']);
+  assert.ok(!ev[0].edit.new.includes('abcd1234efgh'));
+  assert.deepEqual([ev[1].edit.kind, ev[1].edit.new], ['write', '내용']);
+  assert.equal(ev[2].edit, undefined);
+});

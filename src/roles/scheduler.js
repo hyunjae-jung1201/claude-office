@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { basename, extname } from 'node:path';
 import { aggregateVerdict, countConcerns, parseRoleOutput } from './parse.js';
-import { buildDiff, buildPrompt } from './context.js';
+import { buildDiff, buildEditsBundle, buildPrompt } from './context.js';
 import { rolesFor } from './loader.js';
 
 const CODE_EXT = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.java', '.kt', '.kts', '.c', '.cc', '.cpp', '.h', '.hpp', '.go', '.rs', '.sh', '.rb', '.php', '.cs', '.swift', '.m', '.sql', '.html', '.css', '.vue', '.svelte']);
@@ -13,6 +13,7 @@ const hasKind = (files, set) => files.some((f) => set.has(extname(f).toLowerCase
 const matchesWhen = (role, files) => role.when === 'always' || (role.when === 'code' && hasKind(files, CODE_EXT)) || (role.when === 'docs' && hasKind(files, DOC_EXT));
 
 export async function defaultBuildBundle(job) {
+  if (job.edits) return buildEditsBundle(job);
   const { diff, truncated, stats, excluded } = await buildDiff(job.repoRoot, job.files, { base: job.baseSha });
   return { repoRoot: job.repoRoot, repoName: basename(job.repoRoot), requests: job.requests, lastResponse: job.lastResponse, files: job.files, diff, truncated, stats, excluded };
 }
@@ -83,7 +84,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     if (closed) return;
     if (running.has(job.repoRoot)) {
       const prev = dirty.get(job.repoRoot);
-      dirty.set(job.repoRoot, prev ? { ...job, files: [...new Set([...prev.files, ...job.files])], baseSha: prev.baseSha ?? job.baseSha } : job);
+      dirty.set(job.repoRoot, prev ? { ...job, files: [...new Set([...prev.files, ...job.files])], baseSha: prev.baseSha ?? job.baseSha, ...(prev.edits || job.edits ? { edits: [...(prev.edits ?? []), ...(job.edits ?? [])].slice(-100) } : {}) } : job);
       return;
     }
     running.add(job.repoRoot);

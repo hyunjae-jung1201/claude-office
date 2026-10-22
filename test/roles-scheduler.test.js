@@ -170,3 +170,16 @@ test('변경 내용이 전혀 없으면(diff·통계·제외 모두 비어 있�
   assert.deepEqual(events.map((e) => [e.type, e.reason]), [['skipped', 'no-changes']]);
   assert.equal(calls, 0);
 });
+
+test('job에 edits가 있으면 git 없이 수정 기록으로 만든 변경 내용이 역할자 프롬프트에 들어간다', async () => {
+  const prompts = [];
+  const events = [];
+  const sched = createScheduler({ config: cfg(), roles: ROLES, store: fakeStore(), run: async ({ prompt }) => { prompts.push(prompt); return OK; }, emit: (e) => events.push(e) });
+  sched.submit({ repoRoot: '/nonexistent/plain/proj', sessionId: 's1', files: ['/nonexistent/plain/proj/a.js'], requests: ['바꿔줘'], lastResponse: '완료', reason: 'stop',
+    edits: [{ kind: 'edit', file: '/nonexistent/plain/proj/a.js', old: 'const a = 1;', new: 'const a = 2;' }] });
+  await sched.idle();
+  assert.deepEqual(events.filter((e) => e.type !== 'role').map((e) => e.type), ['start', 'done']);
+  assert.equal(prompts.length, 3);
+  assert.match(prompts[0], /-const a = 1;/);
+  assert.match(prompts[0], /\+const a = 2;/);
+});

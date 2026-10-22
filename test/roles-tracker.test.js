@@ -226,3 +226,73 @@ test('첫 편집 시점의 HEAD를 baseSha로 job에 담고, 검토 뒤 다음 �
   await tracker.onEvent(ev('stop'));
   assert.equal(due[1].baseSha, 'bbb222');
 });
+
+// ---- git 없는 검토: 화면에 올린 팀 폴더 안의 수정은 수정 전·후 내용으로 검토한다
+const teamCfg = (extra = {}) => ({ roles: { enabled: true, default: ['pm'], cooldownMinutes: 5, minWrites: 1, projects: {}, ...extra }, projects: [{ name: 'T', path: '/plain/proj' }, { name: 'R', path: '/remote/p', host: 'PC2' }] });
+const edited = (path, o = 'a', n = 'b') => ({ category: 'write', toolName: 'Edit', filePath: path, edit: { kind: 'edit', file: path, old: o, new: n } });
+
+test('git이 아닌 팀 폴더의 수정: 팀 폴더가 검토 단위이고 수정 내용(edits)이 job에 담긴다', async () => {
+  const { tracker, due, ev } = setup(teamCfg());
+  await tracker.onEvent(ev('prompt', { promptText: '값 바꿔줘' }));
+  await tracker.onEvent(ev('tool', edited('/plain/proj/src/a.js', '1', '2')));
+  await tracker.onEvent(ev('tool', edited('/plain/proj/b.md', 'x', 'y')));
+  await tracker.onEvent(ev('stop', { assistantText: '바꿨습니다' }));
+  assert.equal(due.length, 1);
+  assert.equal(due[0].repoRoot, '/plain/proj');
+  assert.deepEqual(due[0].files.sort(), ['/plain/proj/b.md', '/plain/proj/src/a.js']);
+  assert.deepEqual(due[0].edits.map((e) => [e.file, e.old, e.new]), [['/plain/proj/src/a.js', '1', '2'], ['/plain/proj/b.md', 'x', 'y']]);
+  assert.deepEqual([due[0].requests, due[0].lastResponse], [['값 바꿔줘'], '바꿨습니다']);
+});
+
+test('팀 폴더도 저장소도 아닌 파일, 원격 팀의 폴더는 검토하지 않는다', async () => {
+  const { tracker, due, ev } = setup(teamCfg());
+  await tracker.onEvent(ev('tool', edited('/elsewhere/x.js')));
+  await tracker.onEvent(ev('tool', edited('/remote/p/y.js')));
+  await tracker.onEvent(ev('stop'));
+  assert.equal(due.length, 0);
+  assert.deepEqual([tracker.stats().sessions, tracker.stats().files], [1, 0]); // 쌓이지 않고 버려진다
+});
+
+test('같은 턴에 git 저장소와 git 아닌 팀 폴더를 모두 고치면 각각 따로 검토한다', async () => {
+  const { tracker, due, ev } = setup(teamCfg());
+  await tracker.onEvent(ev('tool', edited('/r1/a.js')));
+  await tracker.onEvent(ev('tool', edited('/plain/proj/p.py')));
+  await tracker.onEvent(ev('stop'));
+  const byRoot = Object.fromEntries(due.map((j) => [j.repoRoot, j]));
+  assert.deepEqual(Object.keys(byRoot).sort(), ['/plain/proj', '/r1']);
+  assert.equal(byRoot['/r1'].edits, undefined);
+  assert.equal(byRoot['/plain/proj'].edits.length, 1);
+});
+
+test('git 아닌 폴더도 쿨다운·minWrites·excludePaths·검토 후 초기화가 똑같이 적용된다', async () => {
+  const a = setup(teamCfg({ minWrites: 2 }));
+  await a.tracker.onEvent(a.ev('tool', edited('/plain/proj/a.js')));
+  await a.tracker.onEvent(a.ev('stop'));
+  assert.equal(a.due.length, 0);
+  await a.tracker.onEvent(a.ev('tool', edited('/plain/proj/b.js')));
+  await a.tracker.onEvent(a.ev('stop'));
+  assert.equal(a.due.length, 1);
+  assert.equal(a.due[0].edits.length, 2);
+  a.advance(MIN);
+  await a.tracker.onEvent(a.ev('tool', edited('/plain/proj/c.js')));
+  await a.tracker.onEvent(a.ev('tool', edited('/plain/proj/d.js')));
+  await a.tracker.onEvent(a.ev('stop'));
+  assert.equal(a.due.length, 1); // 쿨다운 중
+  a.advance(6 * MIN);
+  await a.tracker.tick();
+  assert.equal(a.due.length, 2);
+  assert.deepEqual(a.due[1].edits.map((e) => e.file).sort(), ['/plain/proj/c.js', '/plain/proj/d.js']); // 이전 검토의 수정은 다시 담기지 않는다
+
+  const x = setup(teamCfg({ excludePaths: ['/plain/proj'] }));
+  await x.tracker.onEvent(x.ev('tool', edited('/plain/proj/a.js')));
+  await x.tracker.onEvent(x.ev('stop'));
+  assert.equal(x.due.length, 0);
+});
+
+test('수정 내용이 세션당 100개를 넘으면 오래된 것부터 버린다', async () => {
+  const { tracker, due, ev } = setup(teamCfg());
+  for (let i = 0; i < 130; i++) await tracker.onEvent(ev('tool', edited(`/plain/proj/f${i % 5}.js`, `o${i}`, `n${i}`)));
+  await tracker.onEvent(ev('stop'));
+  assert.equal(due[0].edits.length, 100);
+  assert.equal(due[0].edits.at(-1).new, 'n129');
+});

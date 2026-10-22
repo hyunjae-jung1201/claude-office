@@ -91,6 +91,23 @@ function editedPath(tool, input) {
   return p && p.length <= PATH_LIMIT ? p : undefined;
 }
 
+// 수정 전·후 내용(git 없이 역할자가 검토하는 근거). 마스킹·크기 제한을 거친다. 상대 경로·편집 도구가 아닌 것은 없음.
+const EDIT_TEXT_LIMIT = 4000;
+const MULTI_EDITS_MAX = 20;
+export function editRecord(tool, input) {
+  if (!input || typeof input !== 'object') return undefined;
+  const file = str(input.file_path);
+  if (!file || !file.startsWith('/') || file.length > PATH_LIMIT) return undefined;
+  const t = (v) => maskedText(v, EDIT_TEXT_LIMIT);
+  if (tool === 'Edit') return { kind: 'edit', file, old: t(input.old_string), new: t(input.new_string) };
+  if (tool === 'Write') return { kind: 'write', file, new: t(input.content) };
+  if (tool === 'MultiEdit' && Array.isArray(input.edits)) {
+    const edits = input.edits.slice(0, MULTI_EDITS_MAX).filter((e) => e && typeof e === 'object').map((e) => ({ old: t(e.old_string), new: t(e.new_string) }));
+    return { kind: 'multi', file, edits };
+  }
+  return undefined;
+}
+
 const maskedText = (v, limit) => (str(v) ? maskSecrets(v.slice(0, limit * 2)).slice(0, limit) : undefined);
 
 export function normalizeEvent(payload, now) {
@@ -127,6 +144,7 @@ export function normalizeEvent(payload, now) {
         toolName: tool,
         activity: activityOf(tool, rawDetailOf(payload.tool_input)),
         filePath: editedPath(tool, payload.tool_input),
+        edit: name === 'PreToolUse' ? editRecord(tool, payload.tool_input) : undefined,
         detail: detailOf(payload.tool_input),
         ...agent(),
       };

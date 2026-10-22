@@ -3,7 +3,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync, realpathSync, readFileSync, openSync, readSync, closeSync, lstatSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { dirname, isAbsolute, relative, sep } from 'node:path';
+import { basename, dirname, isAbsolute, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 import { isSensitivePath, maskSecrets } from '../mask.js';
 
@@ -139,6 +139,41 @@ export async function buildDiff(repoRoot, files, { limit = DIFF_LIMIT, base } = 
   return { diff: truncated ? '' : diff, truncated, stats: maskSecrets(stats), excluded };
 }
 
+// git 이 없는 팀 폴더용: Claude 가 파일을 고칠 때 남긴 "이전 → 이후" 기록으로 변경 내용을 만든다(폴더에는 아무것도 만들지 않는다).
+const prefixed = (mark, text) => (typeof text === 'string' && text ? text.split('\n').map((l) => mark + l).join('\n') + '\n' : '');
+export function buildEditsBundle(job, { limit = DIFF_LIMIT } = {}) {
+  const root = job.repoRoot;
+  const rel = (f) => relative(root, f) || f;
+  const hidden = new Set();
+  const counts = new Map();
+  let diff = '';
+  for (const e of job.edits ?? []) {
+    const r = rel(e.file);
+    if (isSensitivePath(r)) { hidden.add(r); continue; }
+    const parts = e.kind === 'multi' ? (e.edits ?? []) : [e];
+    counts.set(r, (counts.get(r) ?? 0) + (e.kind === 'multi' ? parts.length : 1));
+    if (e.kind === 'write') {
+      diff += `--- /dev/null\n+++ new file: ${r} (Write: 파일 전체 내용)\n${prefixed('+', e.new)}`;
+    } else {
+      for (const p of parts) diff += `--- a/${r}\n+++ b/${r}\n${prefixed('-', p.old)}${prefixed('+', p.new)}`;
+    }
+  }
+  // 수정 기록이 없는 파일(예: 노트북 편집)과 기록이 버려진 파일도 목록에는 남긴다
+  for (const f of job.files) {
+    const r = rel(f);
+    if (isSensitivePath(r)) hidden.add(r);
+    else if (!counts.has(r)) counts.set(r, 0);
+  }
+  if (hidden.size) diff += `\n# 설정 파일 변경(내용 제외): ${hidden.size}개\n`;
+  diff = maskSecrets(diff);
+  const stats = maskSecrets([...counts].map(([r, n]) => ` ${r} | ${n ? `${n}회 수정` : '(수정 기록 없음, 직접 읽어 확인)'}\n`).join(''));
+  const truncated = Buffer.byteLength(diff) > limit;
+  return {
+    repoRoot: root, repoName: basename(root), requests: job.requests, lastResponse: job.lastResponse, files: job.files,
+    diff: truncated ? '' : diff, truncated, stats, excluded: [...hidden].map((r) => maskSecrets(r)), mode: 'edits',
+  };
+}
+
 const clip = (s, n) => maskSecrets(String(s ?? '')).slice(0, n);
 
 const READ_ONLY_RULES = `## 읽기 전용 규칙
@@ -160,9 +195,12 @@ export function buildPrompt(role, bundle) {
   const excludedNote = bundle.excluded?.length
     ? `\n(보안상 비밀값이 들어 있을 수 있는 설정 파일 ${bundle.excluded.length}개의 변경 내용은 일부러 제외했다. 내용을 볼 수 없다는 것은 문제로 지적하지 마라.)`
     : '';
-  const change = bundle.truncated
+  const editsNote = bundle.mode === 'edits'
+    ? '이 폴더는 git 저장소가 아니라서, 아래는 git diff 가 아니라 Claude 가 파일을 고칠 때 남긴 수정 기록(이전 → 이후)이다. 현재 파일과 다를 수 있으니 필요하면 직접 읽어서 확인하라.\n'
+    : '';
+  const change = editsNote + (bundle.truncated
     ? `변경이 너무 커서 diff 는 생략했다. 통계는 다음과 같고, 필요한 파일은 직접 읽어서 확인하라.\n${bundle.stats}`
-    : `${bundle.stats ? bundle.stats + '\n' : ''}${bundle.diff || '(변경 내용 없음)'}`;
+    : `${bundle.stats ? bundle.stats + '\n' : ''}${bundle.diff || '(변경 내용 없음)'}`);
   return [
     role.prompt,
     READ_ONLY_RULES,

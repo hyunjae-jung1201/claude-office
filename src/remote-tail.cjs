@@ -18,6 +18,18 @@ const SESS_DIR = process.env.CLAUDE_SESSIONS_DIR || path.join(os.homedir(), '.cl
 const files = new Map(); // 파일 경로 -> { off, rest: Buffer, cwd, sid }
 const emit = (o) => process.stdout.write(JSON.stringify(o) + '\n');
 
+// 이 PC(로컬, INCLUDE_TEXT)에서만: 편집 도구의 수정 전·후 내용을 실어 보낸다(git 없는 폴더의 역할자 검토용). 원격 전송에는 쓰지 않는다.
+function editPayload(name, input) {
+  if (!INCLUDE_TEXT || !input || typeof input !== 'object') return undefined;
+  const s = (v) => (typeof v === 'string' ? v.slice(0, 4000) : undefined);
+  if (name === 'Edit') return { file_path: s(input.file_path), old_string: s(input.old_string), new_string: s(input.new_string) };
+  if (name === 'Write') return { file_path: s(input.file_path), content: s(input.content) };
+  if (name === 'MultiEdit' && Array.isArray(input.edits)) {
+    return { file_path: s(input.file_path), edits: input.edits.slice(0, 20).filter((e) => e && typeof e === 'object').map((e) => ({ old_string: s(e.old_string), new_string: s(e.new_string) })) };
+  }
+  return undefined;
+}
+
 function detail(input) {
   if (!input || typeof input !== 'object') return '';
   const v = input.command || input.file_path || input.notebook_path || input.path || input.pattern || input.url || input.query || input.description;
@@ -47,7 +59,7 @@ function project(line, st, agent) {
     return null;
   }
   if (o.type === 'assistant' && Array.isArray(m.content)) {
-    const tools = m.content.filter((b) => b && b.type === 'tool_use').map((b) => ({ i: b.id, n: b.name, d: detail(b.input) }));
+    const tools = m.content.filter((b) => b && b.type === 'tool_use').map((b) => { const e = editPayload(b.name, b.input); return { i: b.id, n: b.name, d: detail(b.input), ...(e ? { e } : {}) }; });
     if (tools.length) return { k: 'tool', tools };
     // 생각만 있는 end_turn 줄은 제외: 턴 종료는 텍스트가 있는 줄 하나로만 센다
     if (m.stop_reason === 'end_turn' && m.content.some((b) => b && b.type === 'text')) {

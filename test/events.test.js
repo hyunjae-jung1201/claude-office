@@ -185,3 +185,18 @@ test('이벤트에 activity가 붙는다 (tool, wait, 하위 에이전트 호출
   assert.equal(normalizeEvent({ ...base, tool_name: 'AskUserQuestion', tool_input: {} }, NOW).activity, 'response');
   assert.equal(normalizeEvent({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'git push' } }, NOW).activity, 'response');
 });
+
+// ---- git 없는 검토: 수정 전·후 내용(edit)
+test('Edit/Write/MultiEdit 신호에 수정 전·후 내용(edit)이 담긴다 (마스킹·크기 제한)', () => {
+  const base = { session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse' };
+  const e1 = normalizeEvent({ ...base, tool_name: 'Edit', tool_input: { file_path: '/p/a.js', old_string: 'const a = 1;', new_string: 'const a = 2; // token=abcd1234efgh' } }, NOW);
+  assert.deepEqual([e1.edit.kind, e1.edit.file, e1.edit.old], ['edit', '/p/a.js', 'const a = 1;']);
+  assert.ok(e1.edit.new.startsWith('const a = 2;') && !e1.edit.new.includes('abcd1234efgh'));
+  const e2 = normalizeEvent({ ...base, tool_name: 'Write', tool_input: { file_path: '/p/new.md', content: '# 제목\n' + 'x'.repeat(9000) } }, NOW);
+  assert.deepEqual([e2.edit.kind, e2.edit.file], ['write', '/p/new.md']);
+  assert.ok(e2.edit.new.length <= 4000 && e2.edit.old === undefined);
+  const e3 = normalizeEvent({ ...base, tool_name: 'MultiEdit', tool_input: { file_path: '/p/b.js', edits: [{ old_string: 'a', new_string: 'b' }, { old_string: 'c', new_string: 'd' }] } }, NOW);
+  assert.deepEqual([e3.edit.kind, e3.edit.edits.map((x) => [x.old, x.new])], ['multi', [['a', 'b'], ['c', 'd']]]);
+  assert.equal(normalizeEvent({ ...base, tool_name: 'Read', tool_input: { file_path: '/p/a.js' } }, NOW).edit, undefined);
+  assert.equal(normalizeEvent({ ...base, tool_name: 'Edit', tool_input: { file_path: 'relative.js', old_string: 'a', new_string: 'b' } }, NOW).edit, undefined);
+});

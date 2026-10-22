@@ -526,3 +526,23 @@ test('서버를 닫으면 세션 기록 수집기도 멈춘다', async () => {
   await withServer({ localTail: lt.factory }, async () => {});
   assert.equal(lt.stopped, 1);
 });
+
+// ---- git 없는 팀 폴더
+test('git이 아닌 팀 폴더에서 파일을 수정하고 응답을 끝내면 수정 기록으로 역할자 검토가 시작된다', async () => {
+  const plain = realpathSync(mkdtempSync(join(tmpdir(), 'office-plain-')));
+  writeFileSync(join(plain, 'a.js'), 'const a = 2;\n');
+  const prompts = [];
+  const opts = roleServer(plain, { run: async ({ prompt }) => { prompts.push(prompt); return OK_JSON; } });
+  await withServer(opts, async ({ port }) => {
+    const c = await connect(port);
+    await post(port, { session_id: 'pg1', cwd: plain, hook_event_name: 'UserPromptSubmit', prompt: '값을 2로 바꿔줘' });
+    await post(port, { session_id: 'pg1', cwd: plain, hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: join(plain, 'a.js'), old_string: 'const a = 1;', new_string: 'const a = 2;' } });
+    await post(port, { session_id: 'pg1', cwd: plain, hook_event_name: 'Stop', last_assistant_message: '바꿨습니다' });
+    const s = await c.waitFor((x) => teamA(x).badge && x.reviews.length === 1);
+    assert.equal(teamA(s).badge.verdict, 'ok');
+    await until(() => prompts.length >= 3);
+    assert.match(prompts[0], /-const a = 1;/);
+    assert.match(prompts[0], /\+const a = 2;/);
+    c.close();
+  });
+});

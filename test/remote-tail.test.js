@@ -10,10 +10,10 @@ const SCRIPT = fileURLToPath(new URL('../src/remote-tail.cjs', import.meta.url))
 const line = (o) => JSON.stringify(o) + '\n';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-function startTail(root) {
+function startTail(root, extraEnv = {}) {
   // 이 PC의 실제 ~/.claude/sessions 가 섞이지 않도록 빈 임시 폴더를 쓴다
   const sessions = mkdtempSync(join(tmpdir(), 'tail-nosess-'));
-  const child = spawn(process.execPath, [SCRIPT], { env: { ...process.env, CLAUDE_PROJECTS_DIR: root, CLAUDE_SESSIONS_DIR: sessions, POLL_MS: '50' } });
+  const child = spawn(process.execPath, [SCRIPT], { env: { ...process.env, CLAUDE_PROJECTS_DIR: root, CLAUDE_SESSIONS_DIR: sessions, POLL_MS: '50', ...extraEnv } });
   const out = [];
   let buf = '';
   child.stdout.on('data', (d) => {
@@ -201,7 +201,7 @@ test('INCLUDE_TEXT=1이면 요청(300자)과 마지막 응답(2000자)을 담고
     mkdirSync(join(root, '-home-me'));
     const f = join(root, '-home-me', 'S1.jsonl');
     writeFileSync(f, line({ type: 'user', sessionId: 'S1', cwd: '/home/me', message: { content: '시작' } }));
-    return { f, t: tailEnv(root, env) };
+    return { f, t: startTail(root, env) };
   };
   const long = '가'.repeat(500);
   for (const [env, wantP, wantA] of [[{ INCLUDE_TEXT: '1' }, 300, 2000], [{}, 40, 0]]) {
@@ -214,6 +214,32 @@ test('INCLUDE_TEXT=1이면 요청(300자)과 마지막 응답(2000자)을 담고
       const prompt = t.out.find((o) => o.k === 'prompt');
       assert.equal(prompt.p.length, wantP);
       assert.equal((stop.a ?? '').length, wantA);
+    } finally { t.stop(); }
+  }
+});
+
+test('INCLUDE_TEXT=1이면 편집 도구의 수정 전·후 내용(e)을 담고, 기본은 담지 않는다', async () => {
+  for (const [env, want] of [[{ INCLUDE_TEXT: '1' }, true], [{}, false]]) {
+    const root = mkdtempSync(join(tmpdir(), 'tail-'));
+    mkdirSync(join(root, '-home-me'));
+    const f = join(root, '-home-me', 'S1.jsonl');
+    writeFileSync(f, line({ type: 'user', sessionId: 'S1', cwd: '/home/me', message: { content: '시작' } }));
+    const t = startTail(root, env);
+    try {
+      await waitFor(() => t.out.find((o) => o.k === 'init'));
+      appendFileSync(f, line(assistantTool('Edit', { file_path: '/home/me/a.js', old_string: 'one', new_string: 'two' }, 'tuE')));
+      appendFileSync(f, line(assistantTool('Write', { file_path: '/home/me/n.md', content: 'x'.repeat(9000) }, 'tuW')));
+      appendFileSync(f, line(assistantTool('Read', { file_path: '/home/me/a.js' }, 'tuR')));
+      await waitFor(() => t.out.filter((o) => o.k === 'tool').length >= 3);
+      const tools = t.out.filter((o) => o.k === 'tool').flatMap((o) => o.tools);
+      const byName = Object.fromEntries(tools.map((x) => [x.n, x]));
+      if (want) {
+        assert.deepEqual([byName.Edit.e.file_path, byName.Edit.e.old_string, byName.Edit.e.new_string], ['/home/me/a.js', 'one', 'two']);
+        assert.ok(byName.Write.e.content.length <= 4000);
+      } else {
+        assert.equal(byName.Edit.e, undefined);
+      }
+      assert.equal(byName.Read.e, undefined);
     } finally { t.stop(); }
   }
 });

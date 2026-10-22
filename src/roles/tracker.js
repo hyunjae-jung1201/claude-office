@@ -4,6 +4,7 @@ import { gitHead } from './context.js';
 
 const REQUESTS_MAX = 5;
 const MIN = 60_000;
+const EDITS_MAX = 100; // 세션당 보관하는 수정 기록 수(오래된 것부터 버림)
 const SESSION_TTL_MS = 6 * 60 * MIN; // 이보다 오래 조용하고 보류 중인 검토가 없는 세션 상태는 버린다
 
 export function createReviewTracker({ config, now = Date.now, groupFiles, onDue, quietMs = 30_000, headOf = gitHead }) {
@@ -28,10 +29,21 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
     return last === undefined || now() - last >= settingsFor(repoRoot).cooldownMs;
   };
 
+  // git 저장소가 아닌 파일이 화면에 올린(이 PC의) 팀 폴더 안이면 그 폴더를 검토 단위로 삼는다. 가장 긴 경로가 우선.
+  const teamFolderOf = (file) => {
+    let best = null;
+    for (const p of config.projects ?? []) {
+      if (p.host || typeof p.path !== 'string') continue;
+      const root = p.path.replace(/\/+$/, '');
+      if (root && file.startsWith(root + '/') && (!best || root.length > best.length)) best = root;
+    }
+    return best;
+  };
+
   function sessionOf(ev) {
     let s = sessions.get(ev.sessionId);
     if (!s) {
-      s = { files: new Set(), requests: [], lastResponse: '', lastActivity: now(), agents: new Set(), pending: new Set(), bases: new Map() };
+      s = { files: new Set(), edits: [], requests: [], lastResponse: '', lastActivity: now(), agents: new Set(), pending: new Set(), bases: new Map() };
       sessions.set(ev.sessionId, s);
     }
     return s;
@@ -40,12 +52,20 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
   // 모인 파일을 저장소별로 나눠, 조건이 맞는 저장소마다 due 를 낸다. onlyPending 이면 보류 중인 저장소만.
   async function evaluate(sessionId, s, reason, { onlyPending = false, ignoreCooldown = false } = {}) {
     const groups = await groupFiles([...s.files]);
-    // 저장소 밖(또는 검토 대상이 아닌) 파일은 계속 쌓이지 않게 버린다
+    // git 저장소가 아니어도 팀 폴더 안이면 Claude 의 수정 기록으로 검토한다(editGroups). 둘 다 아니면 계속 쌓이지 않게 버린다
     const inRepo = new Set([...groups.values()].flat());
-    for (const f of [...s.files]) if (!inRepo.has(f)) s.files.delete(f);
+    const editRoots = new Set();
+    for (const f of [...s.files]) {
+      if (inRepo.has(f)) continue;
+      const root = teamFolderOf(f);
+      if (!root) { s.files.delete(f); continue; }
+      if (!groups.has(root)) groups.set(root, []);
+      groups.get(root).push(f);
+      editRoots.add(root);
+    }
     let fired = false;
     for (const [repoRoot, files] of groups) {
-      if (isExcluded(repoRoot)) { for (const f of files) s.files.delete(f); continue; }
+      if (isExcluded(repoRoot)) { for (const f of files) s.files.delete(f); if (editRoots.has(repoRoot)) s.edits = s.edits.filter((e) => !files.includes(e.file)); continue; }
       if (onlyPending && !s.pending.has(repoRoot)) continue;
       if (files.length < settingsFor(repoRoot).minWrites) continue;
       if (!ignoreCooldown && !cooledDown(repoRoot)) { s.pending.add(repoRoot); continue; }
@@ -55,9 +75,16 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
       fired = true;
       const baseSha = s.bases.get(repoRoot) ?? undefined;
       s.bases.delete(repoRoot);
-      onDue({ repoRoot, sessionId, files, requests: [...s.requests], lastResponse: s.lastResponse, reason, baseSha });
+      const job = { repoRoot, sessionId, files, requests: [...s.requests], lastResponse: s.lastResponse, reason, baseSha };
+      if (editRoots.has(repoRoot)) {
+        const mine = new Set(files);
+        job.edits = s.edits.filter((e) => mine.has(e.file));
+        s.edits = s.edits.filter((e) => !mine.has(e.file));
+      }
+      onDue(job);
     }
     if (fired) s.requests = [];
+    s.edits = s.edits.filter((e) => s.files.has(e.file)); // 검토가 끝났거나 버려진 파일의 수정 기록은 지운다
   }
 
   // 첫 편집 직전의 HEAD 를 저장소별로 기록해 둔다(같은 턴에 커밋해도 변경을 볼 수 있게)
@@ -83,6 +110,7 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
         case 'tool':
           if (ev.filePath && EDIT_TOOLS.has(ev.toolName)) {
             s.files.add(ev.filePath);
+            if (ev.edit) s.edits = [...s.edits, ev.edit].slice(-EDITS_MAX);
             await recordBase(s, ev.filePath);
           }
           break;

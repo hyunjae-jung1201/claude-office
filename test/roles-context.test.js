@@ -207,3 +207,52 @@ test('buildDiff: .gitignore된 추적 안 되는 파일(로컬 설정 등)은 �
   assert.equal(d.excluded.length, 1);
   assert.match(d.diff, /visible/);
 });
+
+// ---- git 없는 검토: 수정 전·후 내용으로 만든 변경 기록
+import { buildEditsBundle } from '../src/roles/context.js';
+
+test('buildEditsBundle: Edit·Write·MultiEdit를 파일별 변경 기록으로 만든다', () => {
+  const b = buildEditsBundle({
+    repoRoot: '/plain/proj', requests: ['바꿔줘'], lastResponse: '완료', files: ['/plain/proj/a.js', '/plain/proj/new.md'],
+    edits: [
+      { kind: 'edit', file: '/plain/proj/a.js', old: 'const a = 1;', new: 'const a = 2;' },
+      { kind: 'write', file: '/plain/proj/new.md', new: '# 제목\n본문' },
+      { kind: 'multi', file: '/plain/proj/a.js', edits: [{ old: 'x', new: 'y' }, { old: 'p', new: 'q' }] },
+    ],
+  });
+  assert.equal(b.repoName, 'proj');
+  assert.match(b.diff, /--- a\/a\.js/);
+  assert.match(b.diff, /-const a = 1;/);
+  assert.match(b.diff, /\+const a = 2;/);
+  assert.match(b.diff, /\+\+\+ new file: new\.md/);
+  assert.match(b.diff, /\+# 제목/);
+  assert.match(b.diff, /-x[\s\S]*\+y/);
+  assert.match(b.diff, /-p[\s\S]*\+q/);
+  assert.match(b.stats, /a\.js.*3/);
+  assert.match(b.stats, /new\.md/);
+  assert.equal(b.truncated, false);
+  assert.deepEqual(b.excluded, []);
+  assert.equal(b.mode, 'edits');
+});
+
+test('buildEditsBundle: 민감 파일은 내용을 제외하고, 비밀값은 마스킹하며, 60KB를 넘으면 통계만', () => {
+  const b = buildEditsBundle({
+    repoRoot: '/p', requests: [], lastResponse: '', files: ['/p/.env', '/p/a.js'],
+    edits: [{ kind: 'edit', file: '/p/.env', old: 'K=old', new: 'K=NEWSECRETVALUE777' }, { kind: 'edit', file: '/p/a.js', old: 'x', new: 'const t = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";' }],
+  });
+  assert.ok(!b.diff.includes('NEWSECRETVALUE777'));
+  assert.ok(!b.diff.includes('ghp_abcdefghijklmnopqrstuvwxyz0123456789'));
+  assert.equal(b.excluded.length, 1);
+  assert.match(b.diff, /설정 파일 변경.*내용 제외/);
+  const big = buildEditsBundle({ repoRoot: '/p', requests: [], lastResponse: '', files: ['/p/a.js'], edits: Array.from({ length: 30 }, (_, i) => ({ kind: 'edit', file: '/p/a.js', old: 'o'.repeat(3000), new: `n${i}`.repeat(1000) })) });
+  assert.equal(big.truncated, true);
+  assert.equal(big.diff, '');
+  assert.match(big.stats, /a\.js/);
+});
+
+test('buildPrompt: edits 모드는 git이 아니라 Claude가 한 수정 기록이라고 안내한다', () => {
+  const p = buildPrompt(ROLE, { ...bundle(), mode: 'edits' });
+  assert.match(p, /수정 기록|이전.*이후/);
+  assert.match(p, /직접 읽어/);
+  assert.ok(!/수정 기록/.test(buildPrompt(ROLE, bundle())));
+});
