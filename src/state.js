@@ -16,8 +16,9 @@ const BACKGROUND_LABEL = '백그라운드 작업 중';
 
 export const ROLE_LINGER_MS = 8000; // 검토가 끝난 역할자가 화면에 남아 있는 시간
 const HISTORY_LIMIT = 20;
-export const BREAK_AFTER_MS = 5 * 60 * 1000; // 이보다 오래 쉬면 지시 대기 구역에서 휴게실로 간다
-const DEFAULT_ROOM = { read: 'library', write: 'work', run: 'server', wait: 'meeting', idle: 'hall', off: 'sleep' };
+export const RESPONSE_WAIT_MS = 5 * 60 * 1000; // 턴이 끝난 뒤 이 시간 동안은 응답 대기실에서 사용자의 응답을 기다리고, 지나면 휴게실로 간다
+const DEFAULT_ROOM = { read: 'library', write: 'work', run: 'server', wait: 'response', idle: 'lounge', off: 'lounge' };
+const RESPONSE_LABEL = '응답 기다리는 중';
 const LIMIT_NOTICE = '오늘 검토 한도에 도달했습니다';
 
 export function createState(config) {
@@ -86,6 +87,7 @@ function sessionFor(state, ev, project) {
       busySince: null,
       openTools: 0,
       activity: null,
+      awaiting: false, // 턴이 끝나 사용자의 응답(다음 지시)을 기다리는 중
       idleAt: ev.ts,
       finishedAt: null,
       members: new Map(),
@@ -135,6 +137,7 @@ export function applyEvent(state, ev, now) {
     const m = { id: ev.agentId, type: ev.agentType ?? 'agent', startedAt: ts };
     setStatus(m, 'write', '작업 시작 중');
     s.members.set(ev.agentId, m);
+    s.awaiting = false;
     return;
   }
   if (ev.type === 'agentStop') {
@@ -155,6 +158,7 @@ export function applyEvent(state, ev, now) {
       s.finishedAt = null;
       s.busySince ??= ts;
       s.activity = 'library';
+      s.awaiting = false;
       setStatus(s, 'read', '요청 파악 중');
       break;
     case 'tool':
@@ -162,6 +166,7 @@ export function applyEvent(state, ev, now) {
       s.busySince ??= ts;
       s.openTools += 1;
       s.activity = ev.activity ?? null;
+      s.awaiting = false;
       setStatus(s, ev.category);
       break;
     case 'toolDone':
@@ -170,14 +175,17 @@ export function applyEvent(state, ev, now) {
       break;
     case 'wait':
       s.activity = ev.activity ?? null;
+      s.awaiting = false;
       setStatus(s, 'wait');
       break;
     case 'stop': {
       s.openTools = 0;
       if (s.members.size > 0) {
         setStatus(s, 'idle', WAITING_FOR_AGENTS);
+        s.awaiting = false;
         break;
       }
+      s.awaiting = true;
       const worked = s.busySince != null && ts - s.busySince >= state.config.celebrateAfterSeconds * 1000;
       s.finishedAt = worked ? ts : null;
       s.busySince = null;
@@ -206,9 +214,9 @@ export function setLabel(state, sessionId, agentId, label) {
 }
 
 // 팀장이 지금 있을 방: 백그라운드 작업은 서버실, 쉬는 중은 지시 대기 구역(오래 쉬면 휴게실), 그 밖에는 하는 일의 종류
-function leaderRoom(s, background, now, breakMs) {
+function leaderRoom(s, background, now, waitMs) {
   if (background) return 'server';
-  if (s.status === 'idle') return now - (s.idleAt ?? now) > breakMs ? 'lounge' : 'hall';
+  if (s.status === 'idle') return s.awaiting && now - (s.idleAt ?? now) <= waitMs ? 'response' : 'lounge';
   return s.activity ?? DEFAULT_ROOM[s.status];
 }
 const memberRoom = (m) => m.activity ?? DEFAULT_ROOM[m.status];
@@ -226,17 +234,18 @@ export function snapshot(state, now) {
       : [];
     const badge = state.badges.get(p.name) ?? null;
     if (!latest) {
-      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'sleep', members: [], overflow: 0, finishedAt: null, roles, badge };
+      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'lounge', members: [], overflow: 0, finishedAt: null, roles, badge };
     }
     const all = [...latest.members.values()].sort((a, b) => a.startedAt - b.startedAt);
     // 응답은 끝났지만 백그라운드 명령이 도는 중이면 서버실에서 일하는 것으로 보여 준다
     const background = latest.live === 'shell' && latest.status === 'idle';
+    const room = leaderRoom(latest, background, now, (state.config.responseWaitMinutes ?? 5) * 60 * 1000);
     return {
       name: p.name,
       color: p.color,
       status: background ? 'run' : latest.status,
-      label: background ? BACKGROUND_LABEL : latest.label,
-      room: leaderRoom(latest, background, now, (state.config.breakAfterMinutes ?? 5) * 60 * 1000),
+      label: background ? BACKGROUND_LABEL : room === 'response' && latest.status === 'idle' ? RESPONSE_LABEL : latest.label,
+      room,
       members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, room: memberRoom(m), startedAt: m.startedAt })),
       overflow: Math.max(0, all.length - maxMembers),
       finishedAt: latest.finishedAt,

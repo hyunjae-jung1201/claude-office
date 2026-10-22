@@ -33,7 +33,7 @@ function detailOf(input) {
 
 const str = (v) => (typeof v === 'string' && v ? v : undefined);
 
-// ---- 작업 종류(어느 방에서 하는 일인지): library research work docs planning lab build git data server meeting consult briefing
+// ---- 작업 종류(어느 방에서 하는 일인지): library research work docs planning lab build git data server briefing response
 const DOC_FILE = /\.(?:md|markdown|txt|rst|adoc)$|(?:^|\/)README[^/]*$/i;
 const LAB = /\b(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?(?:test|lint|check|e2e)\b|\bpytest\b|\bjest\b|\bvitest\b|\bmocha\b|\bcargo\s+test\b|\bgo\s+test\b|\bmake\s+(?:test|check)\b|\beslint\b|\bruff\b|\bmypy\b|\btsc\s+--noEmit|\bnode\s+--test\b|\bunittest\b|\bphpunit\b|\brspec\b|\bplaywright\s+test\b|\bflake8\b|\bpylint\b/;
 const BUILD = /\b(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?(?:build|install|ci|i|add)\b|\bnpm\s+i\b|\b(?:pip3?|pipenv|poetry|conda)\s+install\b|\bmake\b|\bcmake\b|\bgradle\w*\b|\bmvn\b|\bdocker\s+(?:compose\s+)?build\b|\bcargo\s+build\b|\bgo\s+build\b|\bwebpack\b|\bvite\s+build\b|\bbundle\s+install\b|\b(?:apt(?:-get)?|brew|yum|dnf)\s+install\b|\btsc\b|\bbabel\b|\brollup\b/;
@@ -71,8 +71,7 @@ export function activityOf(tool, detail) {
     case 'Edit': case 'Write': case 'NotebookEdit': case 'MultiEdit': return DOC_FILE.test(d) ? 'docs' : 'work';
     case 'TodoWrite': case 'EnterPlanMode': return 'planning';
     case 'Agent': case 'Task': return 'briefing';
-    case 'AskUserQuestion': return 'consult';
-    case 'ExitPlanMode': return 'meeting';
+    case 'AskUserQuestion': case 'ExitPlanMode': return 'response'; // 사용자의 응답을 기다린다
     case 'Bash': return bashActivity(d);
     default: return 'work';
   }
@@ -133,9 +132,9 @@ export function normalizeEvent(payload, now) {
       };
     }
     case 'PermissionRequest':
-      return { ...base, type: 'wait', waitKind: 'approval', activity: 'meeting', detail: detailOf(payload.tool_input), ...agent() };
+      return { ...base, type: 'wait', waitKind: 'approval', activity: 'response', detail: detailOf(payload.tool_input), ...agent() };
     case 'Notification':
-      return payload.notification_type === 'permission_prompt' ? { ...base, type: 'wait', waitKind: 'approval', activity: 'meeting' } : null;
+      return payload.notification_type === 'permission_prompt' ? { ...base, type: 'wait', waitKind: 'approval', activity: 'response' } : null;
     case 'SubagentStart':
     case 'SubagentStop': {
       const a = agent();

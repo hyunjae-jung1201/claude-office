@@ -153,7 +153,7 @@ test('activityOf: 도구와 입력으로 어느 방에서 하는 일인지 정�
     ['Edit', '/r/README.md', 'docs'], ['Write', '/r/docs/notes.txt', 'docs'], ['Edit', '/r/guide.rst', 'docs'],
     ['TodoWrite', '', 'planning'], ['EnterPlanMode', '', 'planning'],
     ['Agent', '조사', 'briefing'], ['Task', '조사', 'briefing'],
-    ['AskUserQuestion', '', 'consult'], ['ExitPlanMode', '', 'meeting'],
+    ['AskUserQuestion', '', 'response'], ['ExitPlanMode', '', 'response'],
     ['Bash', 'npm test', 'lab'], ['Bash', 'pytest -q tests/', 'lab'], ['Bash', 'node --test test/', 'lab'], ['Bash', 'eslint src', 'lab'], ['Bash', 'cargo test', 'lab'],
     ['Bash', 'npm run build', 'build'], ['Bash', 'npm install', 'build'], ['Bash', 'pip install -r req.txt', 'build'], ['Bash', 'make -j8', 'build'], ['Bash', 'docker build .', 'build'],
     ['Bash', 'git status', 'git'], ['Bash', 'git commit -m x', 'git'], ['Bash', 'gh pr create', 'git'],
@@ -182,6 +182,6 @@ test('이벤트에 activity가 붙는다 (tool, wait, 하위 에이전트 호출
   assert.equal(normalizeEvent({ ...base, tool_name: 'Bash', tool_input: { command: 'npm test' } }, NOW).activity, 'lab');
   assert.equal(normalizeEvent({ ...base, tool_name: 'Edit', tool_input: { file_path: '/r/README.md' } }, NOW).activity, 'docs');
   assert.equal(normalizeEvent({ ...base, tool_name: 'Agent', tool_input: { description: '조사' } }, NOW).activity, 'briefing');
-  assert.equal(normalizeEvent({ ...base, tool_name: 'AskUserQuestion', tool_input: {} }, NOW).activity, 'consult');
-  assert.equal(normalizeEvent({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'git push' } }, NOW).activity, 'meeting');
+  assert.equal(normalizeEvent({ ...base, tool_name: 'AskUserQuestion', tool_input: {} }, NOW).activity, 'response');
+  assert.equal(normalizeEvent({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'git push' } }, NOW).activity, 'response');
 });

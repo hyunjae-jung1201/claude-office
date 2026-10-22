@@ -176,9 +176,9 @@ test('roles.excludePaths: 기본은 빈 목록, 문자열 목록이어야 한다
   assert.throws(() => loadConfig(cfgFile({ roles: { excludePaths: '/x' }, projects: [] })), /excludePaths/);
 });
 
-test('breakAfterMinutes: 기본 5, 0 이상의 숫자여야 한다', () => {
-  assert.equal(loadConfig(cfgFile({ projects: [] })).breakAfterMinutes, 5);
-  assert.equal(loadConfig(cfgFile({ breakAfterMinutes: 0.5, projects: [] })).breakAfterMinutes, 0.5);
-  assert.throws(() => loadConfig(cfgFile({ breakAfterMinutes: -1, projects: [] })), /breakAfterMinutes/);
-  assert.throws(() => loadConfig(cfgFile({ breakAfterMinutes: 'x', projects: [] })), /breakAfterMinutes/);
+test('responseWaitMinutes: 기본 5, 0 이상의 숫자여야 한다', () => {
+  assert.equal(loadConfig(cfgFile({ projects: [] })).responseWaitMinutes, 5);
+  assert.equal(loadConfig(cfgFile({ responseWaitMinutes: 0.5, projects: [] })).responseWaitMinutes, 0.5);
+  assert.throws(() => loadConfig(cfgFile({ responseWaitMinutes: -1, projects: [] })), /responseWaitMinutes/);
+  assert.throws(() => loadConfig(cfgFile({ responseWaitMinutes: 'x', projects: [] })), /responseWaitMinutes/);
 });

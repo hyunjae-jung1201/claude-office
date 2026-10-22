@@ -107,5 +107,5 @@ test('편집 도구의 상대 경로나 비정상 값은 filePath로 쓰지 않�
 
 test('세션 기록 경로의 도구에도 activity가 붙는다', () => {
   const ev = projectionToEvents({ s: 'S', c: '/c', k: 'tool', tools: [{ i: 'a', n: 'Bash', d: 'pytest -q' }, { i: 'b', n: 'WebSearch', d: 'x' }, { i: 'c', n: 'AskUserQuestion', d: '' }] }, fresh(), NOW).filter((e) => e.type !== 'start');
-  assert.deepEqual(ev.map((e) => e.activity), ['lab', 'research', 'consult']);
+  assert.deepEqual(ev.map((e) => e.activity), ['lab', 'research', 'response']);
 });

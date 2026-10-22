@@ -4,7 +4,7 @@ import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer
 import { FLOOR, ROOMS, ENTRANCE, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
 
-const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#f5a524', idle: '#8a94a6', off: '#8a94a6' };
+const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#8a94a6' };
 const WALK_SPEED = 2.8; // 타일/초
 const CELEBRATE_MS = 4000;
 const MEMBER_SCALE = 0.82;
@@ -254,7 +254,11 @@ export function createScene(canvas, overlay) {
 
       const celebrating = now < leader.celebrateUntil;
       if (!celebrating) leader.goal = { ...targetFor(team.status, i, team.room), room: team.room };
-      setBubble(leader, celebrating ? '완료!' : team.label, team.status, celebrating);
+      // 사용자의 응답이 필요하면(승인·질문 대기, 턴이 끝난 직후) 초록 표시: 응답 대기실에서 기다리며 말풍선·느낌표·초록 링이 보인다
+      leader.responseNeeded = team.room === 'response';
+      // 응답 대기실에 여럿이 모이면 말풍선이 겹치지 않도록 팀마다 높이를 어긋나게 둔다
+      leader.bubbleObj.position.y = leader.responseNeeded ? 1.6 + 0.5 * (i % 3) : leader.bubbleHeight;
+      setBubble(leader, celebrating ? '완료!' : team.label, leader.responseNeeded ? 'wait' : team.status, celebrating);
 
       // 팀원
       const seen = new Set();
@@ -359,7 +363,7 @@ export function createScene(canvas, overlay) {
       legL.rotation.x = legR.rotation.x = -1.45;
       armL.rotation.x = armR.rotation.x = -0.25;
       head.rotation.x = 0.55 + Math.sin(t * 1.6) * 0.04;
-      entity.body.position.y = entity.goal.room === 'sleep' ? 0.3 : 0.17; // 침대 매트리스 높이
+      entity.body.position.y = 0.3; // 침대 매트리스 높이
     } else {
       armL.rotation.x = Math.sin(t * 2) * 0.05;
       armR.rotation.x = -Math.sin(t * 2) * 0.05;
@@ -399,12 +403,16 @@ export function createScene(canvas, overlay) {
       if (!l) continue;
       step(l, dt);
       const celebrating = now < l.celebrateUntil;
-      l.ring.visible = celebrating;
+      l.ring.visible = celebrating || Boolean(l.responseNeeded);
       if (celebrating) {
         const k = (l.celebrateUntil - now) / CELEBRATE_MS;
         l.ring.scale.setScalar(1 + (1 - k) * 0.9 + Math.sin(clock * 9) * 0.06);
         l.ring.material.opacity = Math.min(0.9, k * 1.6);
-      } else if (l.celebrateUntil && now >= l.celebrateUntil) {
+      } else if (l.responseNeeded) {
+        l.ring.scale.setScalar(1 + Math.sin(clock * 4) * 0.08); // 응답을 기다리는 동안 초록 링이 천천히 숨 쉰다
+        l.ring.material.opacity = 0.55 + Math.sin(clock * 4) * 0.2;
+      }
+      if (!celebrating && l.celebrateUntil && now >= l.celebrateUntil) {
         l.celebrateUntil = 0;
         // 연출이 끝나면 현재 상태의 자리로 돌아가고 문구도 되돌린다
         const snap = lastSnapshot;

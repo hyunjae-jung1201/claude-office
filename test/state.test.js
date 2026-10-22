@@ -42,7 +42,7 @@ test('prompt → read(요청 파악 중), tool → category, toolDone은 상태 
   feed(st, ev('toolDone', 3000, { category: 'run' }));
   assert.equal(teamA(st, 3000).status, 'run');
   feed(st, ev('stop', 4000));
-  assert.deepEqual([teamA(st, 4000).status, teamA(st, 4000).label], ['idle', '다음 지시 기다리는 중']);
+  assert.deepEqual([teamA(st, 4000).status, teamA(st, 4000).label], ['idle', '응답 기다리는 중']); // 턴이 끝나면 사용자의 응답을 기다린다
 });
 
 test('wait → wait, 승인 후 toolDone이 오면 그 도구 상태로 돌아간다', () => {
@@ -136,7 +136,7 @@ test('팀원이 남아 있는 동안의 stop은 완료가 아니다. 모두 퇴�
   feed(st, ev('agentStop', 50 * SEC, { agentId: 'x' }), ev('stop', 55 * SEC));
   t = teamA(st, 55 * SEC);
   assert.equal(t.finishedAt, 55 * SEC);
-  assert.equal(t.label, '다음 지시 기다리는 중');
+  assert.equal(t.label, '응답 기다리는 중');
 });
 
 test('setLabel은 팀장/팀원의 말풍선 문구를 바꾼다', () => {
@@ -274,13 +274,13 @@ test('setReviewHistory: results가 없거나 이상한 검토가 섞여 있어�
 });
 
 // ---- 방(room): 상태 + 작업 종류로 아바타가 갈 곳
-import { BREAK_AFTER_MS } from '../src/state.js';
+import { RESPONSE_WAIT_MS } from '../src/state.js';
 const roomA = (st, now) => teamA(st, now).room;
 
 test('room: 도구의 activity가 팀장의 방이 되고, 없으면 상태별 기본 방', () => {
   const st = createState(aliasConfig);
   feed(st, ev('start', 0));
-  assert.equal(roomA(st, 0), 'hall');
+  assert.equal(roomA(st, 0), 'lounge'); // 막 시작한 세션은 휴게실
   feed(st, ev('prompt', 1000));
   assert.equal(roomA(st, 1000), 'library');
   feed(st, ev('tool', 2000, { category: 'run', activity: 'lab', detail: 'npm test' }));
@@ -295,32 +295,49 @@ test('room: 도구의 activity가 팀장의 방이 되고, 없으면 상태별 �
   assert.equal(roomA(st, 6000), 'library');
 });
 
-test('room: 하위 에이전트를 맡기는 중은 브리핑룸, 승인은 회의실, 질문은 상담실', () => {
+test('room: 하위 에이전트를 맡기는 중은 브리핑룸, 승인·질문·계획 승인 대기는 모두 응답 대기실', () => {
   const st = createState(aliasConfig);
   feed(st, ev('tool', 1000, { category: 'write', activity: 'briefing' }));
   assert.equal(roomA(st, 1000), 'briefing');
-  feed(st, ev('wait', 2000, { waitKind: 'approval', activity: 'meeting' }));
-  assert.equal(roomA(st, 2000), 'meeting');
-  feed(st, ev('wait', 3000, { waitKind: 'answer', activity: 'consult' }));
-  assert.equal(roomA(st, 3000), 'consult');
+  feed(st, ev('wait', 2000, { waitKind: 'approval', activity: 'response' }));
+  assert.equal(roomA(st, 2000), 'response');
+  feed(st, ev('wait', 3000, { waitKind: 'answer', activity: 'response' }));
+  assert.equal(roomA(st, 3000), 'response');
   feed(st, ev('wait', 4000, { waitKind: 'approval' }));
-  assert.equal(roomA(st, 4000), 'meeting'); // activity 없어도 승인 대기는 회의실
+  assert.equal(roomA(st, 4000), 'response'); // activity 없어도 대기 상태는 응답 대기실
 });
 
-test('room: 쉬는 중은 지시 대기 구역, 5분이 넘으면 휴게실, 꺼짐은 수면실, 백그라운드 작업은 서버실', () => {
+test('room: 응답이 필요한 동안(턴이 끝난 뒤)은 응답 대기실, 5분이 지나면 휴게실, 다시 일하면 처음부터', () => {
   const st = createState(aliasConfig);
   feed(st, ev('tool', 0, { category: 'run', activity: 'build' }), ev('stop', 1000));
-  assert.equal(roomA(st, 1000 + BREAK_AFTER_MS - 1), 'hall');
-  assert.equal(roomA(st, 1000 + BREAK_AFTER_MS + 1), 'lounge');
+  const t = teamA(st, 1000);
+  assert.deepEqual([t.room, t.status, t.label], ['response', 'idle', '응답 기다리는 중']);
+  assert.equal(roomA(st, 1000 + RESPONSE_WAIT_MS - 1), 'response');
+  const later = teamA(st, 1000 + RESPONSE_WAIT_MS + 1);
+  assert.deepEqual([later.room, later.label], ['lounge', '다음 지시 기다리는 중']);
   feed(st, ev('prompt', 2_000_000));
-  assert.equal(roomA(st, 2_000_000), 'library'); // 다시 일하면 쉬는 시간은 초기화
+  assert.equal(roomA(st, 2_000_000), 'library');
   feed(st, ev('stop', 2_001_000));
-  assert.equal(roomA(st, 2_001_000), 'hall');
-  assert.equal(snapshot(createState(aliasConfig), 0).teams[0].room, 'sleep');
+  assert.equal(roomA(st, 2_001_000), 'response');
+});
+
+test('room: 지시를 기다리기만 하는 세션(시작 직후·등록 정보만 있는 세션)은 휴게실, 꺼짐도 휴게실(침대), 백그라운드 작업은 서버실', () => {
+  const st = createState(aliasConfig);
+  feed(st, live('idle', { ts: 0 }));
+  assert.equal(roomA(st, 10), 'lounge');
+  assert.equal(snapshot(createState(aliasConfig), 0).teams[0].room, 'lounge'); // off → 휴게실에서 수면
   const bg = createState(aliasConfig);
   feed(bg, ev('start', 0), ev('stop', 1));
   feed(bg, { sessionId: 's1', cwd: '/w/a', type: 'live', liveStatus: 'shell', ts: 5 });
   assert.equal(roomA(bg, 10), 'server');
+});
+
+test('room: 하위 에이전트가 남아 있는 동안의 stop은 응답을 기다리는 것이 아니다', () => {
+  const st = createState(aliasConfig);
+  feed(st, ev('prompt', 0), ev('agentStart', 100, { agentId: 'x', agentType: 'Explore' }), ev('stop', 1000));
+  assert.equal(roomA(st, 1000), 'lounge');
+  feed(st, ev('agentStop', 2000, { agentId: 'x' }), ev('stop', 2500));
+  assert.equal(roomA(st, 2500), 'response');
 });
 
 test('room: 팀원은 자기 도구의 activity, 없으면 책상(작업실)', () => {
@@ -333,9 +350,9 @@ test('room: 팀원은 자기 도구의 activity, 없으면 책상(작업실)', (
   assert.equal(teamA(st, 2000).members[0].room, 'lab');
 });
 
-test('breakAfterMinutes 설정으로 휴게실로 가는 시간을 바꾼다(기본 5분)', () => {
-  const st = createState({ ...aliasConfig, breakAfterMinutes: 0.5 });
-  feed(st, ev('start', 0), ev('stop', 1000));
-  assert.equal(roomA(st, 1000 + 29_000), 'hall');
+test('responseWaitMinutes 설정으로 응답 대기실에 머무는 시간을 바꾼다(기본 5분)', () => {
+  const st = createState({ ...aliasConfig, responseWaitMinutes: 0.5 });
+  feed(st, ev('prompt', 0), ev('stop', 1000));
+  assert.equal(roomA(st, 1000 + 29_000), 'response');
   assert.equal(roomA(st, 1000 + 31_000), 'lounge');
 });

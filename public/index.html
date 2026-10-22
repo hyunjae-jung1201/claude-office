@@ -11,7 +11,7 @@
     --ink: #e8ecf8;
     --paper: #1e2640;
     --line: rgba(160,176,230,.18);
-    --read: #4c8dff; --write: #13a58a; --run: #8b5cf6; --wait: #f5a524; --idle: #8a94a6; --off: #8a94a6;
+    --read: #4c8dff; --write: #13a58a; --run: #8b5cf6; --wait: #2fbf71; --idle: #8a94a6; --off: #8a94a6;
     --done: #2fbf71;
   }
   * { box-sizing: border-box; }
@@ -112,10 +112,11 @@
   .room {
     background: rgba(30,38,64,.82); box-shadow: 0 0 0 1px var(--line); border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 800; white-space: nowrap; color: #c9d3f5;
   }
+  .room-response { background: rgba(31,74,55,.9); color: #9af0bf; box-shadow: 0 0 0 1px rgba(47,191,113,.5); }
   .more { background: #c9d3f5; color: #11162a; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 800; }
   .alert {
     width: 22px; height: 22px; border-radius: 50%; background: var(--wait); color: #fff; font-weight: 900; font-size: 15px;
-    display: grid; place-items: center; box-shadow: 0 0 12px 2px rgba(245,165,36,.55);
+    display: grid; place-items: center; box-shadow: 0 0 12px 2px rgba(47,191,113,.6);
   }
   /* 애니메이션은 안쪽 요소에만: CSS2D가 바깥 요소의 transform으로 위치를 잡기 때문 */
   .alert > b { font-weight: 900; animation: blink .9s steps(2) infinite; }
@@ -151,7 +152,7 @@
     <span><i style="background:var(--read)"></i>읽는 중</span>
     <span><i style="background:var(--write)"></i>코드 쓰는 중</span>
     <span><i style="background:var(--run)"></i>명령 실행 중</span>
-    <span><i style="background:var(--wait)"></i>승인 기다리는 중</span>
+    <span><i style="background:var(--wait)"></i>응답 필요</span>
     <span><i style="background:var(--idle)"></i>쉬는 중</span>
   </div>
   <script type="module" src="/js/main.js"></script>

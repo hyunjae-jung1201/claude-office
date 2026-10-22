@@ -1,4 +1,4 @@
-// 사무실 건물: 바닥, 벽, 방 16개의 가구와 이름표. 좌표는 layout.js 의 타일 좌표(왼쪽 위 모서리 + 크기)를 쓴다.
+// 사무실 건물: 바닥, 벽, 방 13개의 가구와 이름표. 좌표는 layout.js 의 타일 좌표(왼쪽 위 모서리 + 크기)를 쓴다.
 import * as THREE from 'three';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FLOOR, ROOMS, ROOM_NAMES, deskZone } from './layout.js';
@@ -7,12 +7,13 @@ export const wx = (x) => x - FLOOR.w / 2;
 export const wz = (y) => y - FLOOR.d / 2;
 
 const FLOOR_TINT = {
-  library: '#2b3a60', work: '#244640', docs: '#40384f', planning: '#4a4030', research: '#25414f', hall: '#2a3149',
-  server: '#34294f', lab: '#23454a', build: '#4a3a2a', git: '#3a3f2a', data: '#2a3a55', meeting: '#4b3c2c',
-  briefing: '#3a3050', consult: '#2f4540', lounge: '#25453b', sleep: '#242a4a',
+  library: '#2b3a60', research: '#25414f', work: '#244640', docs: '#40384f', planning: '#4a4030',
+  server: '#34294f', data: '#2a3a55', lab: '#23454a', build: '#4a3a2a', git: '#3a3f2a', briefing: '#3a3050',
+  response: '#1f4a37', lounge: '#25453b',
 };
 const BOOKS = ['#4c8dff', '#f26b6b', '#f5a524', '#13a58a', '#8b5cf6', '#e8637a'];
 const WALL_H = 2.5;
+const GREEN = '#2fbf71'; // 사용자의 응답이 필요하다는 표시색
 
 export function buildOffice(scene) {
   const leds = [];
@@ -47,21 +48,33 @@ export function buildOffice(scene) {
     ball(x + 0.2, y + 0.2, 0.32, '#4fb08f', 0.62);
     ball(x + 0.1, y + 0.1, 0.2, '#3d9b7d', 0.55);
   };
+  const screen = (cx, cy, w, h, elev, color) => {
+    const s = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color }));
+    s.position.set(wx(cx), elev, wz(cy));
+    scene.add(s);
+  };
 
   // ---- 바닥, 방 색, 방 경계선
   put(new THREE.Mesh(new THREE.BoxGeometry(FLOOR.w, 0.3, FLOOR.d), mat('#232a43')), { cast: false }).position.set(0, -0.15, 0);
   for (const [id, r] of Object.entries(ROOMS)) {
     const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), mat(FLOOR_TINT[id]));
     m.rotation.x = -Math.PI / 2;
-    m.position.set(wx(r.x + r.w / 2), id === 'hall' ? 0.004 : 0.008, wz(r.y + r.d / 2));
+    m.position.set(wx(r.x + r.w / 2), 0.008, wz(r.y + r.d / 2));
     m.receiveShadow = true;
     scene.add(m);
+    const edge = id === 'response' ? GREEN : '#56628f';
     for (const [x, y, w, d] of [[r.x, r.y, r.w, 0.07], [r.x, r.y + r.d - 0.07, r.w, 0.07], [r.x, r.y, 0.07, r.d], [r.x + r.w - 0.07, r.y, 0.07, r.d]]) {
-      const line = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, d), mat('#56628f', { transparent: true, opacity: 0.55 }));
+      const line = new THREE.Mesh(new THREE.BoxGeometry(w, 0.03, d), mat(edge, { transparent: true, opacity: id === 'response' ? 0.8 : 0.55 }));
       line.position.set(wx(x + w / 2), 0.02, wz(y + d / 2));
       scene.add(line);
     }
   }
+  // 복도 바닥(방 사이): 약간 밝은 띠
+  const corridor = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR.w, 1.2), mat('#2a3149'));
+  corridor.rotation.x = -Math.PI / 2;
+  corridor.position.set(0, 0.004, wz(4.6));
+  corridor.receiveShadow = true;
+  scene.add(corridor);
   const grid = new THREE.GridHelper(Math.max(FLOOR.w, FLOOR.d), Math.max(FLOOR.w, FLOOR.d), '#aab7e8', '#aab7e8');
   grid.material.opacity = 0.05;
   grid.material.transparent = true;
@@ -83,8 +96,8 @@ export function buildOffice(scene) {
     frame.rotation.y = ry;
     scene.add(frame);
   };
-  for (const cx of [5.0, 7.0, 9.0, 11.6, 18.4]) window3(1.3, 1.0, wx(cx), 1.5, -FLOOR.d / 2 + 0.03, 0);
-  for (const cy of [7.6, 12.4]) window3(1.3, 1.0, -FLOOR.w / 2 + 0.03, 1.5, wz(cy), Math.PI / 2);
+  for (const cx of [5.0, 8.0, 10.0, 12.0, 15.2]) window3(1.3, 1.0, wx(cx), 1.5, -FLOOR.d / 2 + 0.03, 0);
+  for (const cy of [7.0, 11.0]) window3(1.3, 1.0, -FLOOR.w / 2 + 0.03, 1.5, wz(cy), Math.PI / 2);
 
   // ---- 자료실: 책장
   box(0.3, 0.15, 2.8, 0.6, 2.0, '#b98450');
@@ -95,15 +108,22 @@ export function buildOffice(scene) {
     }
   }
 
+  // ---- 리서치실: 컴퓨터 책상 세 개와 지구본 (자료실 바로 옆)
+  for (const x of [3.6, 4.65, 5.7]) {
+    box(x, 0.5, 0.9, 0.7, 0.72, '#b9c4d8');
+    box(x + 0.25, 0.62, 0.4, 0.05, 0.34, '#26304d', 0.78);
+    screen(x + 0.45, 0.65, 0.34, 0.24, 1.0, '#7fb6ff');
+  }
+  cyl(3.8, 1.05, 0.04, 0.2, '#7a8bb0', 0.72);
+  ball(3.8, 1.05, 0.17, '#4c8dff', 1.05);
+
   // ---- 작업실: 팀마다 책상·모니터·팀 색 표시·의자
   const deskAccents = [];
   for (let i = 0; i < 5; i++) {
     const z = deskZone(i);
     box(z.x + 0.2, 0.5, 1.0, 0.7, 0.75, '#e1c597');
     box(z.x + 0.5, 0.62, 0.4, 0.05, 0.34, '#26304d', 0.85);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.36, 0.26), new THREE.MeshBasicMaterial({ color: '#7fe0c8' }));
-    screen.position.set(wx(z.x + 0.7), 1.03, wz(0.62) + 0.03);
-    scene.add(screen);
+    screen(z.x + 0.7, 0.65, 0.36, 0.26, 1.03, '#7fe0c8');
     const strip = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.04, 0.06), mat('#e8637a'));
     strip.position.set(wx(z.x + 0.7), 0.77, wz(1.3) + 0.03);
     scene.add(strip);
@@ -111,8 +131,8 @@ export function buildOffice(scene) {
     box(z.x + 0.45, 2.15, 0.5, 0.45, 0.4, '#7a8bb0');
   }
 
-  // ---- 문서실: 글 쓰는 책상, 종이 더미, 스탠드
-  for (const x of [10.55, 11.6, 12.65]) {
+  // ---- 문서실: 글 쓰는 책상, 종이 더미, 스탠드 (작업실 바로 옆)
+  for (const x of [13.75, 14.8, 15.85]) {
     box(x, 0.5, 0.9, 0.7, 0.72, '#c9b78f');
     box(x + 0.15, 0.7, 0.35, 0.45, 0.06, '#ffffff', 0.72);
     box(x + 0.55, 0.62, 0.2, 0.2, 0.05, '#7a6a4a', 0.72);
@@ -120,33 +140,15 @@ export function buildOffice(scene) {
     ball(x + 0.65, 0.72, 0.1, '#ffe9a8', 1.1, glow('#ffe9a8', 1.1));
   }
 
-  // ---- 기획실: 화이트보드와 포스트잇, 낮은 탁자
-  box(13.9, 0.08, 2.6, 0.06, 1.3, '#e8ecf8', 0.8);
+  // ---- 기획실: 화이트보드와 포스트잇, 낮은 탁자 (문서실 바로 옆)
+  box(17.1, 0.08, 2.6, 0.06, 1.3, '#e8ecf8', 0.8);
   const NOTES = ['#ffd166', '#ff8fa3', '#8fd3ff', '#b8f2a8', '#ffb86b'];
-  for (let k = 0; k < 9; k++) box(14.1 + (k % 5) * 0.46, 0.14, 0.26, 0.02, 0.26, NOTES[k % 5], 1.0 + Math.floor(k / 5) * 0.4);
-  box(14.2, 1.0, 2.0, 0.7, 0.7, '#d8b98a');
-  box(14.5, 1.2, 0.5, 0.3, 0.03, '#ffffff', 0.7);
+  for (let k = 0; k < 9; k++) box(17.3 + (k % 5) * 0.46, 0.14, 0.26, 0.02, 0.26, NOTES[k % 5], 1.0 + Math.floor(k / 5) * 0.4);
+  box(17.4, 1.0, 2.0, 0.7, 0.7, '#d8b98a');
+  box(17.7, 1.2, 0.5, 0.3, 0.03, '#ffffff', 0.7);
 
-  // ---- 리서치실: 컴퓨터 책상 세 개와 지구본
-  for (const x of [17.0, 18.05, 19.1]) {
-    box(x, 0.5, 0.9, 0.7, 0.72, '#b9c4d8');
-    box(x + 0.25, 0.62, 0.4, 0.05, 0.34, '#26304d', 0.78);
-    const s = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.24), new THREE.MeshBasicMaterial({ color: '#7fb6ff' }));
-    s.position.set(wx(x + 0.45), 1.0, wz(0.62) + 0.03);
-    scene.add(s);
-  }
-  cyl(17.2, 1.05, 0.04, 0.2, '#7a8bb0', 0.72);
-  ball(17.2, 1.05, 0.17, '#4c8dff', 1.05);
-
-  // ---- 지시 대기 구역: 팀마다 벤치
-  for (let i = 0; i < 5; i++) {
-    const bx = 4.2 + 1.5 * i;
-    box(bx - 0.5, 4.5, 1.0, 0.5, 0.3, '#3c4b7c');
-    box(bx - 0.5, 4.46, 1.0, 0.1, 0.62, '#2f3b66');
-  }
-
-  // ---- 서버실: 랙과 깜빡이는 LED
-  for (const y0 of [5.8, 7.0, 8.2]) {
+  // ---- 서버실: 랙과 깜빡이는 LED (자료실 아래)
+  for (const y0 of [5.5, 6.7, 7.9]) {
     box(0.1, y0, 0.95, 1.05, 1.75, '#2a3150');
     for (let j = 0; j < 5; j++) {
       const on = (j + Math.round(y0)) % 3 ? '#35e0a1' : '#8b5cf6';
@@ -158,96 +160,87 @@ export function buildOffice(scene) {
     }
   }
 
-  // ---- 테스트 랩: 실험대, 플라스크, 통과 모니터
-  box(3.55, 5.55, 2.9, 0.6, 0.85, '#3d5a66');
-  [['#35e0a1', 3.8], ['#f5a524', 4.3], ['#8b5cf6', 4.75]].forEach(([c, x]) => {
-    cyl(x, 5.85, 0.09, 0.26, c, 0.85, glow(c, 0.5));
-    ball(x, 5.85, 0.1, c, 1.15, glow(c, 0.5));
-  });
-  box(5.4, 5.7, 0.5, 0.05, 0.36, '#26304d', 0.88);
-  const labScreen = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.26), new THREE.MeshBasicMaterial({ color: '#35e0a1' }));
-  labScreen.position.set(wx(5.65), 1.18, wz(5.76) + 0.03);
-  scene.add(labScreen);
+  // ---- 데이터 창고: 드라이브 선반, 상자 더미, 구름 (서버실 옆, 테스트 랩 앞)
+  box(3.6, 5.4, 2.8, 0.5, 1.4, '#26344f');
+  for (let r = 0; r < 3; r++) for (let k = 0; k < 6; k++) box(3.7 + k * 0.44, 5.82, 0.34, 0.08, 0.28, k % 2 ? '#4c8dff' : '#35e0a1', 0.15 + r * 0.45);
+  box(5.7, 8.0, 0.6, 0.6, 0.5, '#b9854f');
+  box(5.85, 8.05, 0.5, 0.5, 0.45, '#c99a5b', 0.5);
+  for (const [dx, dy, r] of [[0, 0, 0.3], [0.35, 0.05, 0.25], [-0.3, 0.08, 0.22]]) ball(4.9 + dx, 8.3 + dy, r, '#e8ecf8', 1.8, mat('#e8ecf8', { transparent: true, opacity: 0.85 }));
 
-  // ---- 빌드실: 컨베이어 벨트(줄무늬가 움직임), 상자, 돌아가는 톱니
-  box(6.8, 5.7, 2.8, 0.55, 0.35, '#2b3350');
+  // ---- 테스트 랩: 실험대, 플라스크, 통과 모니터 (작업실 맞은편)
+  box(6.75, 5.35, 2.9, 0.6, 0.85, '#3d5a66');
+  [['#35e0a1', 7.0], ['#f5a524', 7.5], ['#8b5cf6', 7.95]].forEach(([c, x]) => {
+    cyl(x, 5.65, 0.09, 0.26, c, 0.85, glow(c, 0.5));
+    ball(x, 5.65, 0.1, c, 1.15, glow(c, 0.5));
+  });
+  box(8.6, 5.5, 0.5, 0.05, 0.36, '#26304d', 0.88);
+  screen(8.85, 5.56, 0.4, 0.26, 1.18, '#35e0a1');
+
+  // ---- 빌드실: 컨베이어 벨트(줄무늬가 흐름), 상자, 돌아가는 톱니 (테스트 랩 옆)
+  box(10.0, 5.5, 2.8, 0.55, 0.35, '#2b3350');
   for (let k = 0; k < 8; k++) {
-    const stripe = box(6.85 + k * 0.36, 5.72, 0.12, 0.51, 0.02, '#f5a524', 0.355);
-    belts.push({ mesh: stripe, x0: 6.85, len: 2.8 - 0.12, off: k * 0.36 });
+    const stripe = box(10.05 + k * 0.36, 5.52, 0.12, 0.51, 0.02, '#f5a524', 0.355);
+    belts.push({ mesh: stripe, x0: 10.05, len: 2.8 - 0.12, off: k * 0.36 });
   }
-  box(8.5, 6.1, 0.5, 0.5, 0.5, '#b9854f', 0.35);
-  box(9.05, 6.2, 0.4, 0.4, 0.4, '#c99a5b', 0.35);
-  const gear = cyl(7.4, 5.55, 0.3, 0.1, '#f5a524', 1.2);
+  box(11.7, 6.0, 0.5, 0.5, 0.5, '#b9854f', 0.35);
+  box(12.25, 6.1, 0.4, 0.4, 0.4, '#c99a5b', 0.35);
+  const gear = cyl(10.6, 5.35, 0.3, 0.1, '#f5a524', 1.2);
   gear.rotation.x = Math.PI / 2;
   spinners.push(gear);
 
-  // ---- 형상관리실: 브랜치 판과 금고
-  box(10.1, 5.5, 2.6, 0.05, 1.3, '#1d2540', 0.8);
-  box(10.25, 5.56, 2.3, 0.02, 0.05, '#4c8dff', 1.45);
-  box(10.7, 5.56, 1.2, 0.02, 0.05, '#13a58a', 1.15);
-  box(11.4, 5.56, 1.0, 0.02, 0.05, '#f5a524', 1.75);
-  for (const [x, e, c] of [[10.3, 1.45, '#4c8dff'], [11.2, 1.45, '#4c8dff'], [11.9, 1.15, '#13a58a'], [12.3, 1.45, '#f5a524']]) ball(x, 5.58, 0.07, c, e + 0.025, glow(c, 0.9));
-  box(12.3, 5.8, 0.55, 0.6, 1.3, '#6b7280');
+  // ---- 형상관리실: 브랜치 판과 금고 (빌드실 옆)
+  box(13.3, 5.3, 2.6, 0.05, 1.3, '#1d2540', 0.8);
+  box(13.45, 5.36, 2.3, 0.02, 0.05, '#4c8dff', 1.45);
+  box(13.9, 5.36, 1.2, 0.02, 0.05, '#13a58a', 1.15);
+  box(14.6, 5.36, 1.0, 0.02, 0.05, '#f5a524', 1.75);
+  for (const [x, e, c] of [[13.5, 1.45, '#4c8dff'], [14.4, 1.45, '#4c8dff'], [15.1, 1.15, '#13a58a'], [15.5, 1.45, '#f5a524']]) ball(x, 5.38, 0.07, c, e + 0.025, glow(c, 0.9));
+  box(15.5, 5.7, 0.55, 0.6, 1.3, '#6b7280');
 
-  // ---- 데이터 창고: 드라이브 선반, 상자 더미, 구름
-  box(13.2, 5.6, 2.8, 0.5, 1.4, '#26344f');
-  for (let r = 0; r < 3; r++) for (let k = 0; k < 6; k++) box(13.3 + k * 0.44, 6.0, 0.34, 0.08, 0.28, k % 2 ? '#4c8dff' : '#35e0a1', 0.15 + r * 0.45);
-  box(15.1, 8.3, 0.6, 0.6, 0.5, '#b9854f');
-  box(15.3, 8.35, 0.5, 0.5, 0.45, '#c99a5b', 0.5);
-  for (const [dx, dy, r] of [[0, 0, 0.3], [0.35, 0.05, 0.25], [-0.3, 0.08, 0.22]]) ball(14.6 + dx, 8.8 + dy, r, '#e8ecf8', 1.8, mat('#e8ecf8', { transparent: true, opacity: 0.85 }));
+  // ---- 브리핑룸: 큰 화면과 연단 (기획실 맞은편)
+  box(16.9, 5.3, 2.6, 0.05, 1.2, '#cfe0ff', 0.8, glow('#3b64c0', 0.9));
+  box(17.9, 6.1, 0.7, 0.5, 1.0, '#7a6a4a');
+  plant(19.4, 8.3);
 
-  // ---- 회의실: 탁자와 의자
-  box(17.0, 7.3, 2.4, 1.4, 0.75, '#dbb27a');
-  box(17.8, 7.65, 1.0, 0.65, 0.02, '#ffffff', 0.76);
-  for (const cx of [17.3, 18.3, 19.1]) {
-    box(cx, 6.85, 0.4, 0.35, 0.42, '#7a8bb0');
-    box(cx, 8.8, 0.4, 0.35, 0.42, '#7a8bb0');
-  }
-
-  // ---- 브리핑룸: 연단과 왼쪽 벽의 큰 화면
-  box(1.3, 10.6, 0.7, 0.5, 1.0, '#7a6a4a');
-  box(0.04, 10.4, 0.05, 2.6, 1.3, '#cfe0ff', 0.8, glow('#3b64c0', 0.9));
-  box(0.5, 13.2, 0.5, 0.5, 0.45, '#7a8bb0');
-  plant(2.6, 13.3);
-
-  // ---- 상담실: 책상, 맞은편 의자 두 개, 화분
-  box(4.5, 10.2, 1.4, 0.6, 0.7, '#d8b98a');
-  box(4.6, 11.0, 0.45, 0.45, 0.42, '#7a8bb0');
-  box(5.35, 11.0, 0.45, 0.45, 0.42, '#7a8bb0');
-  plant(6.0, 13.3);
-
-  // ---- 휴게실: 소파, 탁자, 카페 카운터와 커피 머신
-  box(6.9, 12.7, 5.6, 0.95, 0.45, '#3d9b7d');
-  box(6.9, 12.7, 5.6, 0.28, 0.95, '#2f8268');
-  box(6.9, 12.7, 0.28, 0.95, 0.7, '#2f8268');
-  box(12.22, 12.7, 0.28, 0.95, 0.7, '#2f8268');
-  box(8.6, 11.3, 1.6, 0.7, 0.4, '#d8b98a');
-  box(7.0, 9.95, 3.0, 0.6, 0.9, '#5a4a3a');
-  box(7.4, 10.0, 0.5, 0.4, 0.45, '#26304d', 0.9);
-  ball(7.65, 10.25, 0.05, '#ff6b6f', 1.4, glow('#ff6b6f', 1.2));
-  for (const x of [8.5, 8.8, 9.1]) cyl(x, 10.25, 0.06, 0.12, '#ffffff', 0.9);
-  plant(12.7, 10.2);
-  plant(6.8, 10.8);
-
-  // ---- 수면실: 침대 5개(팀마다 하나)와 은은한 등
+  // ---- 응답 대기실: 초록 조명의 대기 벤치 (사용자의 응답이 필요할 때 여기서 기다린다)
   for (let i = 0; i < 5; i++) {
-    const bx = 14.1 + 1.2 * i;
-    box(bx - 0.55, 12.3, 1.1, 1.5, 0.18, '#3a3f66');
-    box(bx - 0.5, 12.35, 1.0, 1.4, 0.14, '#8aa0d8', 0.18);
-    box(bx - 0.4, 12.4, 0.8, 0.3, 0.12, '#e8ecf8', 0.32);
+    const bx = 1.2 + 1.3 * i;
+    box(bx - 0.5, 11.2, 1.0, 0.5, 0.3, '#2e6b4c');
+    box(bx - 0.5, 11.16, 1.0, 0.1, 0.62, '#245a3f');
   }
-  ball(19.6, 10.6, 0.12, '#ffd28a', 0.8, glow('#ffd28a', 1.3));
-  box(19.5, 10.5, 0.2, 0.2, 0.6, '#5a4a3a');
+  box(0.3, 9.6, 7.4, 0.05, 0.04, GREEN, 0, glow(GREEN, 1.0)); // 바닥의 초록 줄
+  box(7.0, 12.2, 0.4, 0.4, 0.3, '#b98450');
+  ball(7.2, 12.4, 0.3, '#4fb08f', 0.62);
+
+  // ---- 휴게실: 소파, 탁자, 카페 카운터 (응답 대기실 옆) + 오른쪽에 침대(꺼진 세션)
+  box(9.0, 12.0, 5.6, 0.95, 0.45, '#3d9b7d');
+  box(9.0, 12.0, 5.6, 0.28, 0.95, '#2f8268');
+  box(9.0, 12.0, 0.28, 0.95, 0.7, '#2f8268');
+  box(14.32, 12.0, 0.28, 0.95, 0.7, '#2f8268');
+  box(10.4, 10.9, 1.6, 0.7, 0.4, '#d8b98a');
+  box(9.0, 9.55, 3.0, 0.6, 0.9, '#5a4a3a');
+  box(9.4, 9.6, 0.5, 0.4, 0.45, '#26304d', 0.9);
+  ball(9.65, 9.85, 0.05, '#ff6b6f', 1.4, glow('#ff6b6f', 1.2));
+  for (const x of [10.5, 10.8, 11.1]) cyl(x, 9.85, 0.06, 0.12, '#ffffff', 0.9);
+  for (let i = 0; i < 5; i++) {
+    const bx = 15.2 + 1.0 * i;
+    box(bx - 0.47, 11.3, 0.94, 1.5, 0.18, '#3a3f66');
+    box(bx - 0.44, 11.33, 0.88, 1.44, 0.14, '#8aa0d8', 0.18);
+    box(bx - 0.36, 11.38, 0.72, 0.3, 0.12, '#e8ecf8', 0.32);
+  }
+  ball(19.6, 10.0, 0.12, '#ffd28a', 0.8, glow('#ffd28a', 1.3));
+  box(19.5, 9.9, 0.2, 0.2, 0.6, '#5a4a3a');
+  plant(8.3, 9.7);
+  plant(14.4, 9.7);
 
   // ---- 방 이름표
   const roomLabel = (id) => {
     const r = ROOMS[id];
     const el = document.createElement('div');
-    el.className = 'room';
+    el.className = 'room' + (id === 'response' ? ' room-response' : '');
     el.textContent = ROOM_NAMES[id];
     const o = new CSS2DObject(el);
     const onWall = r.y === 0; // 뒷벽에 붙은 방은 이름표를 벽 위쪽에 둬서 아바타·가구에 가려지지 않게 한다
-    o.position.set(wx(r.x + r.w / 2), onWall ? WALL_H - 0.15 : 0.05, onWall ? wz(0.1) : wz(id === 'hall' ? r.y + r.d - 0.2 : r.y + 0.35));
+    o.position.set(wx(r.x + r.w / 2), onWall ? WALL_H - 0.15 : 0.05, onWall ? wz(0.1) : wz(r.y + 0.3));
     scene.add(o);
   };
   Object.keys(ROOMS).forEach(roomLabel);
@@ -257,6 +250,6 @@ export function buildOffice(scene) {
 
 // 방별 은은한 조명(색이 방의 분위기를 만든다)
 export const LAMPS = [
-  ['#8b5cf6', 1.7, 7.5, 14], ['#2bd4b0', 6.9, 2.0, 9], ['#4fd1c5', 5.0, 7.4, 8], ['#ffa94d', 8.2, 7.4, 8],
-  ['#7aa2ff', 11.4, 7.4, 6], ['#ffb870', 9.6, 12.0, 10], ['#6f7fe8', 16.7, 12.0, 8], ['#ffd28a', 18.2, 7.6, 7],
+  ['#8b5cf6', 1.7, 7.2, 14], ['#2bd4b0', 10.1, 2.0, 9], ['#4fd1c5', 8.2, 7.1, 8], ['#ffa94d', 11.4, 7.1, 8],
+  ['#7aa2ff', 14.6, 7.1, 6], ['#3ddc84', 4.0, 11.3, 9], ['#ffb870', 11.5, 11.7, 10], ['#6f7fe8', 17.4, 11.7, 8],
 ];
