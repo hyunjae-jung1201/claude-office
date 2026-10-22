@@ -206,7 +206,7 @@ export function createScene(canvas, overlay) {
     el.querySelector('.dot').style.boxShadow = `0 0 0 4px ${dot}33`;
     const sleeping = entity.goal.pose === 'sleep' && !entity.member;
     // 자는 아바타는 z z만, 대기 중인 아바타는 "지시 대기 구역"에 앉아 있는 것으로 충분하니 말풍선을 숨긴다
-    entity.bubbleObj.visible = !sleeping && status !== 'idle';
+    entity.bubbleObj.visible = false; // 하는 일은 왼쪽 목록에 적는다(아바타 위에는 이름표·표시만 둔다)
     entity.alertObj.visible = status === 'wait';
     entity.zzzObj.visible = sleeping;
   }
@@ -295,7 +295,6 @@ export function createScene(canvas, overlay) {
         const seat = memberSeat(i, slot);
         ent.goal = { ...seat, pose: r.status === 'running' ? 'type' : 'stand' };
         setBubble(ent, r.label, ent.status, false, r.status === 'failed' ? '#e5484d' : r.color);
-        ent.bubbleObj.visible = true; // 검토가 끝난 역할자도 한 줄 결과(요약)를 퇴근 전까지 보여 준다
       });
       for (const [key, ent] of members) {
         if (ent.team === i && !seen.has(key) && !ent.leaving) {

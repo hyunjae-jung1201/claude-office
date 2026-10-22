@@ -1,5 +1,6 @@
 import { createScene } from './scene.js';
 import { createPanel } from './panel.js';
+import { createRoster } from './roster.js';
 
 const canvas = document.getElementById('c');
 const overlay = document.getElementById('overlay');
@@ -7,7 +8,24 @@ const conn = document.getElementById('conn');
 const connText = conn.querySelector('span');
 const scene = createScene(canvas, overlay);
 const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
+const roster = createRoster({ root: document.getElementById('roster') });
 window.__office = scene; // 화면 검증용
+window.__roster = roster;
+
+// 목록 켜기/끄기(좁은 화면에서는 기본 꺼짐). 선택은 이 브라우저에만 기억한다.
+const roBtn = document.getElementById('ro-btn');
+const narrow = window.matchMedia('(max-width: 760px)');
+let roOn = !narrow.matches;
+try { const v = localStorage.getItem('office.roster'); if (v !== null) roOn = v === '1'; } catch { /* 저장소를 못 쓰면 기본값 */ }
+function applyRoster() {
+  document.body.classList.toggle('roster-off', !roOn && !narrow.matches);
+  document.body.classList.toggle('roster-on', roOn && narrow.matches);
+  roBtn.setAttribute('aria-pressed', String(roOn));
+  window.dispatchEvent(new Event('resize')); // 3D 화면 크기를 다시 잡는다
+}
+roBtn.addEventListener('click', () => { roOn = !roOn; try { localStorage.setItem('office.roster', roOn ? '1' : '0'); } catch { /* 무시 */ } applyRoster(); });
+narrow.addEventListener('change', () => { roOn = !narrow.matches; applyRoster(); });
+applyRoster();
 
 function setConn(up) {
   conn.classList.toggle('down', !up);
@@ -23,6 +41,7 @@ function connect() {
       const snap = JSON.parse(e.data);
       scene.update(snap);
       panel.update(snap);
+      roster.update(snap);
     } catch (err) { console.error('bad snapshot', err); }
   };
   ws.onclose = () => {

@@ -25,12 +25,15 @@ process.stdin.setEncoding('utf8');
 process.stdin.on('data', (c) => (input += c));
 process.stdin.on('end', () => {
   try {
+    let hookEvent;
+    try { hookEvent = JSON.parse(input)?.hook_event_name; } catch { /* 본문 형식은 서버가 판단한다 */ }
     const url = new URL('/event', base);
     const req = http.request(
       url,
       { method: 'POST', headers: { 'content-type': 'application/json' }, timeout: 1000 },
       (res) => {
-        // 200 이면 서버가 이 세션에 전할 역할자 의견을 실어 보낸 것: hookSpecificOutput 이 있는 JSON 일 때만 그대로 출력한다
+        // 200 이면 서버가 이 세션에 전할 역할자 의견을 실어 보낸 것. 이 훅이 UserPromptSubmit 일 때만, 새 객체에
+        // additionalContext 문자열 하나만 담아 출력한다(서버 응답의 다른 필드 — 권한 결정 등 — 는 절대 전달하지 않는다).
         if (res.statusCode !== 200) { res.resume(); res.on('end', done); res.on('error', done); return; }
         let body = '';
         res.setEncoding('utf8');
@@ -38,8 +41,10 @@ process.stdin.on('end', () => {
         res.on('error', done);
         res.on('end', () => {
           try {
-            const out = JSON.parse(body);
-            if (out && typeof out === 'object' && out.hookSpecificOutput) process.stdout.write(JSON.stringify(out));
+            const ctx = JSON.parse(body)?.hookSpecificOutput?.additionalContext;
+            if (hookEvent === 'UserPromptSubmit' && typeof ctx === 'string' && ctx) {
+              process.stdout.write(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: ctx.slice(0, 10_000) } }));
+            }
           } catch { /* 형식이 다르면 무시 */ }
           done();
         });

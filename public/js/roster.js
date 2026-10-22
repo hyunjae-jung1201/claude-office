@@ -1,0 +1,104 @@
+// 왼쪽 목록: 아바타 모습 + 이름 + 지금 하는 일(예전 말풍선 내용). 모든 텍스트는 textContent 로만 넣는다.
+import { rosterRows } from './roster-model.js';
+
+const CELEBRATE_MS = 4000;
+const NS = 'http://www.w3.org/2000/svg';
+const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#5b6479', failed: '#e5484d' };
+const BADGE = { ok: ['✓', '통과'], concern: ['⚠', '우려'], block: ['⛔', '중단 권고'] };
+
+const el = (tag, cls, text) => {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+};
+
+function face() {
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const [cx, cy] of [[8.5, 11], [15.5, 11]]) {
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 1.35);
+    svg.append(c);
+  }
+  const p = document.createElementNS(NS, 'path');
+  p.setAttribute('d', 'M8.6 15.2c1.9 1.7 4.9 1.7 6.8 0');
+  p.setAttribute('fill', 'none'); p.setAttribute('stroke-width', 1.5); p.setAttribute('stroke-linecap', 'round');
+  svg.append(p);
+  return svg;
+}
+
+function makeRow(row) {
+  const li = el('li', `ro ${row.kind}`);
+  const blob = el('span', 'blob');
+  blob.append(face(), el('i', 'st'));
+  const body = el('span', 'ro-body');
+  const top = el('span', 'ro-top');
+  top.append(el('b', 'ro-name'), el('span', 'ro-badge'));
+  body.append(top, el('span', 'ro-text'));
+  li.append(blob, body);
+  return li;
+}
+
+export function createRoster({ root, now = () => performance.now() }) {
+  const list = root.querySelector('.ro-list');
+  const search = root.querySelector('.ro-search input');
+  const count = root.querySelector('.ro-count');
+  const rowsByKey = new Map();
+  const finished = new Map(); // 팀 key -> 마지막으로 본 finishedAt
+  const celebrate = new Map(); // 팀 key -> 완료 표시를 끝낼 시각
+  let first = true;
+  let lastRows = [];
+
+  const set = (node, text) => { if (node.textContent !== text) node.textContent = text; };
+
+  function render() {
+    const q = search.value.trim().toLowerCase();
+    const t = now();
+    const shown = lastRows.filter((r) => !q || `${r.name} ${r.text} ${r.place}`.toLowerCase().includes(q));
+    const keep = new Set(shown.map((r) => r.key));
+    for (const [k, li] of rowsByKey) if (!keep.has(k)) { li.remove(); rowsByKey.delete(k); }
+    shown.forEach((r, i) => {
+      let li = rowsByKey.get(r.key);
+      if (!li) { li = makeRow(r); rowsByKey.set(r.key, li); }
+      if (list.children[i] !== li) list.insertBefore(li, list.children[i] ?? null);
+      const done = r.kind === 'team' && t < (celebrate.get(r.key) ?? 0);
+      li.className = `ro ${r.kind}${r.wait ? ' wait' : ''}${done ? ' done' : ''}${r.status === 'off' ? ' off' : ''}`;
+      li.style.setProperty('--c', r.color);
+      li.style.setProperty('--st', STATUS_COLOR[r.status] ?? STATUS_COLOR.idle);
+      set(li.querySelector('.ro-name'), r.name);
+      set(li.querySelector('.ro-text'), done ? '완료!' : r.text);
+      const place = r.place ? `${r.place}` : '';
+      li.title = `${r.name}${place ? ` · ${place}` : ''}${r.text ? `\n${r.text}` : ''}`;
+      const badge = li.querySelector('.ro-badge');
+      if (r.badge) {
+        const [icon, label] = BADGE[r.badge.verdict] ?? BADGE.concern;
+        set(badge, r.badge.verdict === 'concern' ? `${icon} ${r.badge.concerns}` : icon);
+        badge.className = `ro-badge ${r.badge.verdict}`;
+        badge.title = `${label}${r.badge.concerns ? ` (${r.badge.concerns}건)` : ''}`;
+      } else { set(badge, ''); badge.className = 'ro-badge'; }
+    });
+    set(count, `${lastRows.filter((r) => r.kind === 'team').length}개 팀 · ${lastRows.length}명`);
+    list.classList.toggle('empty', shown.length === 0);
+  }
+
+  search.addEventListener('input', render);
+
+  return {
+    update(snapshot) {
+      lastRows = rosterRows(snapshot);
+      const t = now();
+      for (const r of lastRows) {
+        if (r.kind !== 'team') continue;
+        // 완료 표시: 처음 받은 스냅샷의 기존 값은 무시하고 새로 생긴 finishedAt 만 몇 초 보여 준다
+        if (!first && r.finishedAt && r.finishedAt !== finished.get(r.key)) celebrate.set(r.key, t + CELEBRATE_MS);
+        finished.set(r.key, r.finishedAt);
+      }
+      first = false;
+      render();
+    },
+    render,
+    rows: () => lastRows,
+  };
+}

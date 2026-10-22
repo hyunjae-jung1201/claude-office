@@ -13,6 +13,7 @@
     --line: rgba(160,176,230,.18);
     --read: #4c8dff; --write: #13a58a; --run: #8b5cf6; --wait: #2fbf71; --idle: #8a94a6; --off: #8a94a6;
     --done: #2fbf71;
+    --roster-w: 288px;
   }
   * { box-sizing: border-box; }
   html, body { margin: 0; height: 100%; overflow: hidden; }
@@ -21,12 +22,13 @@
     color: var(--ink);
     font-family: -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
   }
-  #stage { position: fixed; inset: 0; }
+  #stage { position: fixed; top: 0; right: 0; bottom: 0; left: var(--roster-w); }
+  body.roster-off { --roster-w: 0px; }
   #stage canvas { display: block; width: 100%; height: 100%; }
   #overlay { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 
   header {
-    position: fixed; top: 14px; left: 16px; right: 16px; z-index: 5;
+    position: fixed; top: 14px; left: calc(var(--roster-w) + 16px); right: 16px; z-index: 5;
     display: flex; justify-content: space-between; align-items: center; pointer-events: none;
   }
   .brand { font-weight: 800; font-size: 15px; letter-spacing: -.01em; }
@@ -39,7 +41,7 @@
   #conn.down { color: #ff8a8e; }
 
   .legend {
-    position: fixed; left: 16px; bottom: 14px; z-index: 5; display: flex; gap: 14px; flex-wrap: wrap;
+    position: fixed; left: calc(var(--roster-w) + 16px); bottom: 14px; z-index: 5; display: flex; gap: 14px; flex-wrap: wrap;
     font-size: 12px; font-weight: 600; background: rgba(30,38,64,.88); padding: 7px 12px; border-radius: 999px;
     box-shadow: 0 0 0 1px var(--line), 0 2px 10px rgba(0,0,0,.35);
   }
@@ -80,6 +82,57 @@
   .rp-sev { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: #34406a; }
   .rp-finding.major .rp-sev { background: #7a5a16; } .rp-finding.critical .rp-sev { background: #8a2b30; }
   .rp-file { color: #8fb2ff; font-size: 12px; } .rp-text { flex-basis: 100%; line-height: 1.5; }
+
+  /* ---- 왼쪽 목록: 아바타 모습 · 이름 · 지금 하는 일 ---- */
+  #roster {
+    position: fixed; top: 0; left: 0; bottom: 0; width: var(--roster-w); z-index: 7; display: flex; flex-direction: column;
+    background: #151a2e; border-right: 1px solid var(--line);
+  }
+  body.roster-off #roster { display: none; }
+  .ro-search { margin: 14px 14px 6px; position: relative; }
+  .ro-search svg { position: absolute; left: 11px; top: 50%; width: 15px; height: 15px; margin-top: -7.5px; stroke: #8d99bd; fill: none; stroke-width: 2; stroke-linecap: round; pointer-events: none; }
+  .ro-search input {
+    width: 100%; font: inherit; font-size: 13px; color: var(--ink); background: #1b2240; border: 1px solid var(--line); border-radius: 10px;
+    padding: 9px 12px 9px 33px;
+  }
+  .ro-search input::placeholder { color: #7f8bb0; }
+  .ro-search input:focus-visible { outline: 2px solid #8fb2ff; outline-offset: 1px; }
+  .ro-count { padding: 10px 18px 6px; font-size: 12px; font-weight: 700; color: #8d99bd; }
+  .ro-list { list-style: none; margin: 0; padding: 4px 8px 16px; overflow-y: auto; flex: 1; }
+  .ro-list.empty::before { content: "찾는 아바타가 없습니다"; display: block; color: #8d99bd; font-size: 13px; padding: 14px 12px; }
+  .ro { display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 12px; min-width: 0; }
+  .ro:hover { background: rgba(255,255,255,.05); }
+  .ro.team + .ro.team, .ro.sub-end + .ro.team { margin-top: 2px; }
+  .ro.member, .ro.role { margin-left: 26px; padding: 6px 10px; }
+  .blob {
+    position: relative; flex: none; width: 36px; height: 33px; border-radius: 50% 50% 34% 34% / 62% 62% 38% 38%;
+    background: linear-gradient(165deg, color-mix(in srgb, var(--c) 45%, #fff), var(--c) 72%);
+  }
+  .blob svg { position: absolute; inset: 3px 6px 0; width: calc(100% - 12px); height: calc(100% - 3px); }
+  .blob svg circle { fill: #1c1230; } .blob svg path { stroke: #1c1230; }
+  .ro.member .blob, .ro.role .blob { width: 28px; height: 26px; }
+  .blob .st { position: absolute; right: -3px; bottom: -3px; width: 11px; height: 11px; border-radius: 50%; background: var(--st); box-shadow: 0 0 0 2.5px #151a2e; }
+  .ro-body { display: flex; flex-direction: column; min-width: 0; flex: 1; gap: 1px; }
+  .ro-top { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .ro-name { font-size: 14.5px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ro.member .ro-name, .ro.role .ro-name { font-size: 13px; }
+  .ro-text { font-size: 12.5px; color: #98a3c4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ro.member .ro-text, .ro.role .ro-text { font-size: 12px; }
+  .ro-badge { flex: none; font-size: 11px; font-weight: 800; }
+  .ro-badge.ok { color: #4ad58a; } .ro-badge.concern { color: #f5a524; } .ro-badge.block { color: #ff6b6f; }
+  .ro.off .blob { filter: grayscale(.85) brightness(.7); } .ro.off .ro-name { color: #8d99bd; }
+  .ro.wait { background: rgba(47,191,113,.12); box-shadow: inset 3px 0 0 var(--wait); }
+  .ro.wait .ro-text { color: #9af0bf; font-weight: 600; }
+  .ro.wait .blob .st { animation: pulse 1.2s ease-in-out infinite; }
+  .ro.done .ro-text { color: #4ad58a; font-weight: 700; }
+  @keyframes pulse { 50% { transform: scale(1.35); opacity: .6; } }
+  #ro-btn {
+    font: inherit; font-size: 12px; font-weight: 700; color: var(--ink); background: var(--paper); border: 0; cursor: pointer;
+    padding: 5px 12px; border-radius: 999px; box-shadow: 0 0 0 1px var(--line), 0 2px 10px rgba(0,0,0,.4);
+  }
+  #ro-btn:focus-visible { outline: 2px solid #8fb2ff; outline-offset: 2px; }
+  @media (max-width: 760px) { :root { --roster-w: 0px; } #roster { display: none; width: min(300px, 86vw); } body.roster-on #roster { display: flex; } }
+  @media (prefers-reduced-motion: reduce) { .ro.wait .blob .st { animation: none; } }
 
   /* 팀장 곁의 판정 배지 */
   .badge { font-size: 12px; font-weight: 800; padding: 2px 8px; border-radius: 999px; background: var(--paper); box-shadow: 0 0 0 1px var(--line), 0 2px 8px rgba(0,0,0,.5); white-space: nowrap; }
@@ -134,10 +187,19 @@
 </script>
 </head>
 <body>
+  <aside id="roster" aria-label="아바타 목록">
+    <label class="ro-search">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input type="search" placeholder="아바타 찾기" aria-label="아바타 찾기" autocomplete="off">
+    </label>
+    <div class="ro-count" aria-live="off"></div>
+    <ul class="ro-list"></ul>
+  </aside>
   <div id="stage"><canvas id="c"></canvas><div id="overlay"></div></div>
   <header>
     <div class="brand">Claude Office</div>
     <div class="head-right">
+      <button id="ro-btn" type="button" aria-pressed="true">목록</button>
       <button id="rp-btn" type="button" aria-expanded="false" aria-controls="rp">보고서</button>
       <div id="conn" class="down" role="status"><i></i><span>연결 중…</span></div>
     </div>

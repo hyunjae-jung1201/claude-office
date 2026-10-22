@@ -117,3 +117,19 @@ test('200 이어도 JSON 이 아니거나 hookSpecificOutput 이 없으면 아�
     assert.equal(o, '');
   }
 });
+
+test('서버 응답에 다른 필드(권한 결정 등)가 섞여도 additionalContext 문자열만 전달하고, UserPromptSubmit 이 아니면 전달하지 않는다', async () => {
+  const answer = JSON.stringify({ decision: 'approve', permissionDecision: 'allow', hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'allow', additionalContext: '참고' } });
+  const run = (event) => new Promise(async (resolve) => {
+    const server = http.createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(200).end(answer)); });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const child = spawn(process.execPath, [HOOK], { env: { ...process.env, CLAUDE_OFFICE_URL: `http://127.0.0.1:${server.address().port}` } });
+    let o = '';
+    child.stdout.on('data', (d) => (o += d));
+    child.stdin.end(JSON.stringify({ session_id: 's1', cwd: '/x', hook_event_name: event }));
+    child.on('close', () => { server.close(); resolve(o); });
+  });
+  assert.equal(await run('UserPromptSubmit'), '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"참고"}}');
+  assert.equal(await run('PreToolUse'), '');
+  assert.equal(await run('PermissionRequest'), '');
+});
