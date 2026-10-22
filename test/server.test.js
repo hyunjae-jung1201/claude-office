@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, readdirSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startServer } from '../src/server.js';
@@ -638,5 +638,26 @@ test('지금 검토: 모르는 팀·잘못된 본문·다른 Origin·JSON 아님
   });
   await withServer({ config }, async ({ port }) => {
     assert.equal((await reviewNow(port, { team: 'A' })).status, 409); // 역할자 기능이 꺼져 있다
+  });
+});
+
+// ---- 작업 로그 초안 + 기록원 아바타
+test('dailyLog 를 켜면 팀의 요청·수정 파일이 자동기록.md 로 쓰이고, 쓰는 동안 기록원 아바타가 문서실에 나타난다', async () => {
+  const logDir = mkdtempSync(join(tmpdir(), 'office-dlog-'));
+  const cfgD = { ...config, dailyLog: { dir: logDir, intervalSeconds: 0.05 } };
+  await withServer({ config: cfgD, dailyDataDir: mkdtempSync(join(tmpdir(), 'office-dlog-data-')) }, async ({ port }) => {
+    const c = await connect(port);
+    await post(port, { session_id: 'dl1', cwd: '/w/a', hook_event_name: 'UserPromptSubmit', prompt: '로그인 버그 고쳐줘' });
+    await post(port, { session_id: 'dl1', cwd: '/w/a', hook_event_name: 'PreToolUse', tool_name: 'Edit', tool_input: { file_path: '/w/a/src/login.js' } });
+    const s = await c.waitFor((x) => teamA(x).roles.some((r) => r.id === 'recorder'));
+    const rec = teamA(s).roles.find((r) => r.id === 'recorder');
+    assert.deepEqual([rec.name, rec.room], ['기록원', 'docs']);
+    const file = await until(() => { const d = readdirSync(logDir)[0]; return d && existsSync(join(logDir, d, '자동기록.md')) && join(logDir, d, '자동기록.md'); });
+    const md = readFileSync(file, 'utf8');
+    assert.match(md, /## A/);
+    assert.match(md, /1\. 로그인 버그 고쳐줘/);
+    assert.match(md, /src\/login\.js ×1/);
+    assert.ok(!md.includes('## B')); // 아무 일 없는 팀은 쓰지 않는다
+    c.close();
   });
 });

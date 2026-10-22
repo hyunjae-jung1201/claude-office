@@ -18,6 +18,7 @@ import { createReviewStore } from './roles/store.js';
 import { groupFilesByRepo, dirtyFiles } from './roles/context.js';
 import { createFeedbackBox } from './roles/feedback.js';
 import { runRole } from './roles/runner.js';
+import { createDailyLog } from './daily.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HOST = '127.0.0.1';
@@ -45,6 +46,7 @@ export async function startServer({
   remoteFactory = startRemote,
   sessionsDir,
   liveMs = 3000,
+  dailyDataDir, // 작업 로그 초안의 중간 저장 폴더(기본 data/daily)
   roles = null, // 역할 정의(Map). 없거나 config.roles.enabled 가 거짓이면 역할자 검토를 하지 않는다
   reviewStore = null,
   reviewRun = runRole,
@@ -74,6 +76,10 @@ export async function startServer({
   };
 
   const feedback = rolesOn && config.roles.deliver === 'session' ? createFeedbackBox({ now, minSeverity: config.roles.deliverMinSeverity }) : null;
+  // 하루 작업 로그 초안(자동기록.md): config.dailyLog 가 있을 때만
+  const dailyLog = config.dailyLog
+    ? createDailyLog({ dir: config.dailyLog.dir, dataDir: dailyDataDir ?? join(ROOT, 'data', 'daily'), now, intervalMs: config.dailyLog.intervalSeconds * 1000, emit: (e) => { applyReviewEvent(state, e, now()); broadcast(); } })
+    : null;
   let scheduler = null;
   let tracker = null;
   const hookSeen = new Map(); // hook 신호를 보내는 세션 -> 마지막 신호 시각 (같은 세션을 세션 기록으로 또 세지 않기 위해)
@@ -93,7 +99,9 @@ export async function startServer({
     }
     // 이 PC의 세션은 등록 정보에서 이름을 찾는다(원격 이벤트는 수집기가 이름을 실어 보낸다)
     ev.sessionName ??= ev.host ? undefined : registry.nameOf(ev.sessionId);
-    if (!matchProject(config, ev.cwd, ev.host, ev.sessionName)) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
+    const project = matchProject(config, ev.cwd, ev.host, ev.sessionName);
+    if (!project) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
+    dailyLog?.record(project, ev);
     applyEvent(state, ev, ev.ts);
     const key = `${ev.sessionId}|${ev.agentId ?? ''}`;
     // 말풍선을 바꾸는 이벤트만 번호를 올린다(toolDone은 제외: 요약이 도구 종료 뒤에 도착해도 보이게)
@@ -259,6 +267,7 @@ export async function startServer({
       resolveTeam: (job) => job.team ?? teamOfSession(state, job.sessionId) ?? matchProject(config, job.repoRoot)?.name,
       emit: (e) => {
         if (e.type === 'done' && feedback) feedback.add(e.sessionId, e.review);
+        if (e.type === 'done' && e.team) dailyLog?.recordReview(e.team, e.review);
         applyReviewEvent(state, e, now());
         broadcast();
       },
@@ -281,6 +290,7 @@ export async function startServer({
       clearInterval(timer);
       clearInterval(liveTimer);
       scheduler?.close();
+      dailyLog?.close();
       for (const r of remotes) r.stop();
       localCollector?.stop();
       for (const ws of clients) ws.terminate();

@@ -203,3 +203,11 @@ test('projects[].testCommand / testTimeoutSeconds: 문자열 배열과 범위만
   for (const bad of ['npm test', [], ['npm', ''], [1]]) assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', testCommand: bad }] })), /testCommand/);
   for (const bad of [1, 99999, 'x']) assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', testCommand: ['npm', 'test'], testTimeoutSeconds: bad }] })), /testTimeoutSeconds/);
 });
+
+test('dailyLog: 절대 경로 dir 과 주기(초)를 검증하고, 없으면 꺼짐', () => {
+  assert.equal(loadConfig(cfgFile({ projects: [] })).dailyLog, undefined);
+  const c = loadConfig(cfgFile({ projects: [], dailyLog: { dir: '/mnt/c/logs' } }));
+  assert.deepEqual(c.dailyLog, { dir: '/mnt/c/logs', intervalSeconds: 120 });
+  assert.equal(loadConfig(cfgFile({ projects: [], dailyLog: { dir: '/x', intervalSeconds: 30 } })).dailyLog.intervalSeconds, 30);
+  for (const bad of ['/x', { dir: 'relative' }, { dir: '/x', intervalSeconds: 1 }, { dir: '/x', intervalSeconds: 'a' }, { }]) assert.throws(() => loadConfig(cfgFile({ projects: [], dailyLog: bad })), /dailyLog/);
+});

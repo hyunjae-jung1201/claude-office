@@ -64,6 +64,14 @@ function validateProjects(list, remotes = []) {
 
 const ROLES_DEFAULTS = { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', deliverMinSeverity: 'major', excludePaths: [] };
 
+function validateDailyLog(raw) {
+  if (raw === undefined) return undefined;
+  if (!raw || typeof raw !== 'object' || typeof raw.dir !== 'string' || !raw.dir.startsWith('/')) throw new Error('dailyLog.dir는 절대 경로 문자열이어야 합니다');
+  const intervalSeconds = raw.intervalSeconds ?? 120;
+  if (!Number.isFinite(intervalSeconds) || intervalSeconds < 10 || intervalSeconds > 3600) throw new Error('dailyLog.intervalSeconds는 10~3600 사이 숫자여야 합니다');
+  return { dir: trimSlash(raw.dir), intervalSeconds };
+}
+
 function validateRolesConfig(raw = {}) {
   const roles = { ...ROLES_DEFAULTS, ...raw, projects: raw.projects ?? {} };
   const ids = (v, where) => {
@@ -90,7 +98,8 @@ function validateRolesConfig(raw = {}) {
 export function loadConfig(path) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
   const remotes = validateRemotes(raw.remotes ?? []);
-  const config = { ...DEFAULTS, ...raw, remotes, projects: validateProjects(raw.projects ?? [], remotes), roles: validateRolesConfig(raw.roles) };
+  const dailyLog = validateDailyLog(raw.dailyLog);
+  const config = { ...DEFAULTS, ...raw, ...(dailyLog ? { dailyLog } : {}), remotes, projects: validateProjects(raw.projects ?? [], remotes), roles: validateRolesConfig(raw.roles) };
   if (!Number.isFinite(config.responseWaitMinutes) || config.responseWaitMinutes < 0) throw new Error('responseWaitMinutes는 0 이상의 숫자여야 합니다');
   // 화면은 팀당 팀원 4명까지만 자리를 배치한다
   if (!Number.isInteger(config.maxMembers) || config.maxMembers < 1 || config.maxMembers > 4) {
