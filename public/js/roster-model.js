@@ -3,6 +3,30 @@ import { ROOM_NAMES, TEAM_COUNT as TEAM_MAX } from './layout.js';
 
 const IDLE_TEXT = { idle: '쉬는 중', off: '꺼져 있음', wait: '응답을 기다리는 중' };
 const str = (v) => (typeof v === 'string' ? v : '');
+const num = (v) => (Number.isFinite(v) ? v : null);
+const recentOf = (v) => (Array.isArray(v) ? v.filter((h) => h && Number.isFinite(h.at) && typeof h.label === 'string').map((h) => ({ at: h.at, label: h.label })) : []);
+
+export const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#5b6479', failed: '#e5484d' };
+
+// 상태가 시작된 뒤 지난 시간
+export function elapsed(ms) {
+  if (!Number.isFinite(ms)) return '';
+  const s = Math.floor(ms / 1000);
+  if (s < 10) return '방금 시작';
+  if (s < 60) return `${s}초째`;
+  if (s < 3600) return `${Math.floor(s / 60)}분째`;
+  return `${Math.floor(s / 3600)}시간째`;
+}
+
+// 지난 시간 → 짧은 한국어 표현
+export function ago(ms) {
+  if (!Number.isFinite(ms)) return '';
+  const s = Math.floor(ms / 1000);
+  if (s < 10) return '방금';
+  if (s < 60) return `${s}초 전`;
+  if (s < 3600) return `${Math.floor(s / 60)}분 전`;
+  return `${Math.floor(s / 3600)}시간 전`;
+}
 
 export function rosterRows(snapshot) {
   const rows = [];
@@ -13,14 +37,14 @@ export function rosterRows(snapshot) {
     const status = wait ? 'wait' : str(t.status) || 'idle';
     rows.push({
       key: `t${i}`, kind: 'team', name: t.name, color: str(t.color) || '#8a94a6', status, wait,
-      text: str(t.label) || IDLE_TEXT[status] || '', place: ROOM_NAMES[t.room] ?? '', badge: t.badge ?? null, finishedAt: t.finishedAt ?? null,
+      text: str(t.label) || IDLE_TEXT[status] || '', place: ROOM_NAMES[t.room] ?? '', badge: t.badge ?? null, finishedAt: t.finishedAt ?? null, since: num(t.since), recent: recentOf(t.recent),
     });
     for (const m of Array.isArray(t.members) ? t.members : []) {
-      rows.push({ key: `t${i}:m:${str(m.id)}`, kind: 'member', name: str(m.type) || '팀원', color: str(t.color) || '#8a94a6', status: str(m.status) || 'idle', wait: false, text: str(m.label), place: ROOM_NAMES[m.room] ?? '', badge: null });
+      rows.push({ key: `t${i}:m:${str(m.id)}`, kind: 'member', name: str(m.type) || '팀원', color: str(t.color) || '#8a94a6', status: str(m.status) || 'idle', wait: false, text: str(m.label), place: ROOM_NAMES[m.room] ?? '', badge: null, since: num(m.since), recent: recentOf(m.recent) });
     }
     for (const r of Array.isArray(t.roles) ? t.roles : []) {
       const status = r.status === 'running' ? 'write' : r.status === 'failed' ? 'failed' : 'idle';
-      rows.push({ key: `t${i}:r:${str(r.id)}`, kind: 'role', name: str(r.name) || str(r.id), color: str(r.color) || '#8a94a6', status, wait: false, text: str(r.label), place: ROOM_NAMES[r.room] ?? '', badge: null });
+      rows.push({ key: `t${i}:r:${str(r.id)}`, kind: 'role', name: str(r.name) || str(r.id), color: str(r.color) || '#8a94a6', status, wait: false, text: str(r.label), place: ROOM_NAMES[r.room] ?? '', badge: null, since: null, recent: [] });
     }
   });
   return rows;

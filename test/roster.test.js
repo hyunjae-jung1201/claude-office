@@ -54,3 +54,30 @@ test('job 아바타(room 있음)는 그 방 이름이 place 로 나오고, 실�
   const rows = rosterRows(snap([team({ roles: [{ id: 'tests', name: '테스터', color: '#d98324', status: 'running', label: '테스트 실행 중', room: 'lab' }, { id: 'rec', name: '기록원', color: '#c76bb0', status: 'failed', label: '기록 실패', room: 'docs' }] })]));
   assert.deepEqual(rows.slice(1).map((r) => [r.name, r.place, r.status]), [['테스터', '테스트 랩', 'write'], ['기록원', '문서실', 'failed']]);
 });
+
+test('목록 줄에 since·recent(상세 카드용)가 실리고, 알 수 없는 값은 걸러낸다', () => {
+  const rows = rosterRows(snap([team({ since: 5000, recent: [{ at: 4000, label: '읽는 중' }, { at: 'x', label: 5 }, null, { at: 4500, label: '쓰는 중' }], members: [{ id: 'a', type: 'Explore', status: 'read', label: '찾는 중', room: 'library', since: 6000, recent: [{ at: 5500, label: '찾는 중' }] }] })]));
+  assert.equal(rows[0].since, 5000);
+  assert.deepEqual(rows[0].recent, [{ at: 4000, label: '읽는 중' }, { at: 4500, label: '쓰는 중' }]);
+  assert.deepEqual([rows[1].since, rows[1].recent.length], [6000, 1]);
+  assert.deepEqual([rosterRows(snap([team()]))[0].since, rosterRows(snap([team()]))[0].recent], [null, []]);
+});
+
+test('ago: 지난 시간을 한국어 짧은 표현으로', async () => {
+  const { ago } = await import('../public/js/roster-model.js');
+  assert.equal(ago(4_000), '방금');
+  assert.equal(ago(45_000), '45초 전');
+  assert.equal(ago(5 * 60_000 + 10_000), '5분 전');
+  assert.equal(ago(3 * 3600_000 + 5 * 60_000), '3시간 전');
+  assert.equal(ago(-5), '방금');
+  assert.equal(ago(NaN), '');
+});
+
+test('elapsed: 상태가 시작된 뒤 지난 시간', async () => {
+  const { elapsed } = await import('../public/js/roster-model.js');
+  assert.equal(elapsed(3_000), '방금 시작');
+  assert.equal(elapsed(40_000), '40초째');
+  assert.equal(elapsed(7 * 60_000), '7분째');
+  assert.equal(elapsed(2 * 3600_000), '2시간째');
+  assert.equal(elapsed(null), '');
+});

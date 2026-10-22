@@ -143,6 +143,23 @@
   #view-reset[hidden] { display: none; }
   #view-reset kbd { margin-left: 6px; font: inherit; font-size: 11px; opacity: .65; border: 1px solid rgba(29,36,64,.4); border-radius: 4px; padding: 0 4px; }
   #view-reset:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  /* 아바타 상세 카드 */
+  #card {
+    position: fixed; z-index: 9; width: 250px; padding: 10px 12px 11px; border-radius: 12px; pointer-events: none;
+    background: rgba(27,34,64,.97); box-shadow: 0 0 0 1px var(--line), 0 10px 28px rgba(0,0,0,.55); font-size: 12.5px;
+  }
+  #card[hidden] { display: none; }
+  .cd-head { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  .cd-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .cd-name { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cd-kind { margin-left: auto; font-size: 10.5px; font-weight: 700; color: #9aa6c8; background: rgba(255,255,255,.07); padding: 1px 7px; border-radius: 999px; flex: none; }
+  .cd-now { font-weight: 700; color: var(--ink); padding-left: 9px; border-left: 3px solid var(--st, #8a94a6); line-height: 1.4; }
+  .cd-meta { margin: 5px 0 0 12px; color: #98a3c4; font-size: 11.5px; }
+  .cd-title { margin: 9px 0 3px; color: #8d99bd; font-size: 11px; font-weight: 700; }
+  .cd-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .cd-recent li { display: flex; justify-content: space-between; gap: 10px; color: #b4bfdc; }
+  .cd-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cd-ago { flex: none; color: #7f8bb0; font-size: 11px; }
   #toast {
     position: fixed; left: calc(50% + var(--roster-w) / 2); bottom: 64px; transform: translateX(-50%); z-index: 9; max-width: min(520px, calc(100vw - 48px));
     background: #232b4d; color: var(--ink); font-size: 13px; font-weight: 700; padding: 9px 16px; border-radius: 999px;
@@ -229,6 +246,7 @@
     <ul class="ro-list"></ul>
   </aside>
   <button id="view-reset" type="button" hidden>전체 보기 <kbd>Esc</kbd></button>
+  <div id="card" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <div id="stage"><canvas id="c"></canvas><div id="overlay"></div></div>
   <header>

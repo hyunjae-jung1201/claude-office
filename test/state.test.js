@@ -384,3 +384,39 @@ test('job 이벤트: 팀이 없거나 모르는 id 의 상태 갱신은 무시�
   applyReviewEvent(st, { type: 'job', team: 'A', id: 'ghost', status: 'done', label: 'x' }, 1000);
   assert.equal(teamA(st, 1000).roles.length, 0);
 });
+
+// ---- 최근 활동 기록(recent)과 현재 상태 시작 시각(since): 아바타 위에 올렸을 때 상세 카드에 쓴다
+test('팀·팀원의 최근 작업 문구가 바뀔 때마다 기록되고(최대 6개), 같은 문구는 이어붙이지 않는다', () => {
+  const st = createState(config);
+  feed(st, ev('start', 1000), ev('prompt', 2000), ev('tool', 3000, { category: 'read', toolName: 'Read', activity: 'library' }));
+  setLabel(st, 's1', null, '설정 파일 읽는 중', 3500);
+  feed(st, ev('tool', 4000, { category: 'write', toolName: 'Edit', activity: 'work' }));
+  setLabel(st, 's1', null, '로그인 코드 수정 중', 4500);
+  setLabel(st, 's1', null, '로그인 코드 수정 중', 4600); // 같은 문구
+  const t = teamA(st, 5000);
+  assert.deepEqual(t.recent.map((r) => r.label), ['다음 지시 기다리는 중', '요청 파악 중', '파일 읽는 중', '설정 파일 읽는 중', '코드 작성 중', '로그인 코드 수정 중']);
+  assert.deepEqual(t.recent.map((r) => r.at), [1000, 2000, 3000, 3500, 4000, 4500]);
+});
+
+test('recent 는 최대 6개, since 는 상태(읽기/쓰기…)가 바뀐 시각이다(문구만 바뀌면 그대로)', () => {
+  const st = createState(config);
+  feed(st, ev('start', 1000), ev('tool', 2000, { category: 'read', toolName: 'Read', activity: 'library' }));
+  assert.equal(teamA(st, 2000).since, 2000);
+  for (let i = 0; i < 9; i++) setLabel(st, 's1', null, `읽는 중 ${i}`, 3000 + i);
+  const t = teamA(st, 4000);
+  assert.equal(t.recent.length, 6);
+  assert.equal(t.recent.at(-1).label, '읽는 중 8');
+  assert.equal(t.since, 2000); // 문구만 바뀌었다
+  feed(st, ev('tool', 5000, { category: 'write', toolName: 'Edit', activity: 'work' }));
+  assert.equal(teamA(st, 5000).since, 5000);
+});
+
+test('하위 에이전트도 recent·since 를 갖고, 꺼진 팀은 빈 recent', () => {
+  const st = createState(config);
+  feed(st, ev('start', 1000), ev('agentStart', 2000, { agentId: 'a1', agentType: 'Explore' }), ev('tool', 3000, { agentId: 'a1', category: 'read', toolName: 'Grep', activity: 'library' }));
+  setLabel(st, 's1', 'a1', '로그인 함수 찾는 중', 3200);
+  const m = teamA(st, 4000).members[0];
+  assert.deepEqual(m.recent.map((r) => r.label), ['작업 시작 중', '파일 읽는 중', '로그인 함수 찾는 중']);
+  assert.equal(m.since, 3000);
+  assert.deepEqual(snapshot(st, 4000).teams.find((t) => t.name === 'B').recent, []);
+});

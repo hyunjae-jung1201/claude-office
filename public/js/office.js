@@ -6,6 +6,7 @@ import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, DOOR_W, DOOR_LINES, deskZone } from './layout.js';
 import * as T from './textures.js';
+import { dayState } from './daylight.js';
 
 export const wx = (x) => x - FLOOR.w / 2;
 export const wz = (y) => y - FLOOR.d / 2;
@@ -22,6 +23,7 @@ export function buildOffice(scene) {
   const spinners = [];
   const belts = [];
   const deskAccents = [];
+  const dynamic = []; // 시간·활동에 따라 색이 바뀌는 것(합치지 않는다)
 
   // ---------------------------------------------------------------- 재료·도형 도우미
   const matCache = new Map();
@@ -111,7 +113,9 @@ export function buildOffice(scene) {
     cyl(cx, cy, 0.07, 0.025, '#2a2f3d', elev);
     box(cx - 0.015, cy - 0.015, 0.03, 0.03, 0.12, '#2a2f3d', elev + 0.02, { r: 0.005 });
     box(cx - w / 2 - 0.02, cy - 0.025, w + 0.04, 0.04, h + 0.04, '#20242f', elev + 0.12, { r: 0.012 });
-    flat(cx, cy + 0.0, w, h, elev + 0.12 + (h + 0.04) / 2, basic(tex), 0).position.z += 0.025;
+    const scr = flat(cx, cy + 0.0, w, h, elev + 0.12 + (h + 0.04) / 2, basic(tex), 0);
+    scr.position.z += 0.025;
+    return scr;
   };
   const keyboard = (x, y, elev) => box(x, y, 0.34, 0.11, 0.02, '#3a3f4d', elev, { r: 0.008 });
   const chair = (x, y, color = '#3f5a7a', rot = 0) => {
@@ -251,7 +255,9 @@ export function buildOffice(scene) {
   wallPiece(0.09, 0.12, FLOOR.d, '#4a3d33', -FLOOR.w / 2 + 0.045, 0.06, 0);
   wallPiece(0.28, 0.1, FLOOR.d + 0.3, '#efe8d8', -FLOOR.w / 2 - 0.1, WALL_H + 0.02, 0.1);
 
-  const duskTex = T.cached('dusk', () => T.dusk(61));
+  const sky = T.skyPainter(61);
+  sky.paint(dayState(18.3));
+  const duskTex = sky.texture;
   const windowAt = (px, pz, w, h, side, py = 1.55) => {
     const g = new THREE.Group();
     g.position.set(px, py, pz);
@@ -437,7 +443,8 @@ export function buildOffice(scene) {
     cyl(x, 5.7, 0.07, 0.12, c, 0.87, { material: std(c, { emissive: c, ei: 0.5 }) });
     cyl(x, 5.7, 0.035, 0.12, '#dfe9ee', 1.11, { material: glassMat });
   });
-  monitor(8.85, 5.7, 0.87, T.cached('lab-screen', () => T.chartScreen(111)), 0.46, 0.3);
+  const labScreen = monitor(8.85, 5.7, 0.87, T.cached('lab-screen', () => T.chartScreen(111)), 0.46, 0.3);
+  dynamic.push(labScreen);
   box(8.1, 5.55, 0.4, 0.22, 0.04, '#cfd8d8', 0.87, { r: 0.01 }); // 시험관 꽂이
   for (let k = 0; k < 4; k++) cyl(8.17 + k * 0.09, 5.66, 0.02, 0.2, ['#e8637a', '#f5a524', '#35e0a1', '#7a8cff'][k], 0.9, { seg: 8 });
   box(7.0, 8.0, 1.3, 0.45, 0.78, '#cfd8d8', 0, { r: 0.03, rough: 0.4 }); // 보조 캐비닛
@@ -475,7 +482,8 @@ export function buildOffice(scene) {
   box(14.1, 8.1, 0.45, 0.35, 0.28, '#d9c7a3', 0, { r: 0.02 }); // 서류 상자
 
   // ---------------------------------------------------------------- 브리핑룸
-  flat(18.2, 5.35, 2.4, 1.2, 1.4, basic(T.cached('brief', () => T.chartScreen(131))));
+  const briefScreen = flat(18.2, 5.35, 2.4, 1.2, 1.4, basic(T.cached('brief', () => T.chartScreen(131))));
+  dynamic.push(briefScreen);
   box(16.95, 5.28, 2.5, 0.05, 1.3, '#20242f', 0.75, { r: 0.012 });
   box(17.75, 6.05, 0.75, 0.5, 1.0, '#6a4a2f', 0, { r: 0.03 }); // 연단
   box(17.82, 6.12, 0.6, 0.3, 0.05, '#2a2f3d', 1.0, { r: 0.01 });
@@ -490,7 +498,8 @@ export function buildOffice(scene) {
     box(bx - 0.55, 11.1, 1.1, 0.14, 0.7, '#346a50', 0, { r: 0.05 });
     box(bx - 0.2, 11.28, 0.38, 0.3, 0.1, ['#e8d7b0', '#d9a441', '#c9704f', '#e8d7b0', '#8fb2a0'][i], 0.32, { r: 0.05, rot: (i - 2) * 0.1 });
   }
-  box(0.3, 9.56, 7.4, 0.05, 0.03, GREEN, 0, { material: glow(GREEN, 1.0), r: 0.005 });
+  const responseLine = box(0.3, 9.56, 7.4, 0.05, 0.03, GREEN, 0, { material: glow(GREEN, 1.0), r: 0.005 });
+  dynamic.push(responseLine);
   box(7.0, 12.25, 0.5, 0.5, 0.42, '#d9c7a3', 0, { r: 0.04 });
   mug(7.2, 12.45, 0.42, '#8fb2a0');
   plant(0.4, 9.9, 1);
@@ -567,7 +576,7 @@ export function buildOffice(scene) {
   Object.keys(ROOMS).forEach(roomLabel);
 
   // 움직이거나 색이 바뀌는 것(LED·컨베이어·톱니·팀 명패)만 빼고, 같은 재료의 정적 물체는 하나로 합쳐 그린다(그리기 호출 수천 → 백여 개)
-  const keep = new Set([...leds.map((l) => l.led), ...belts.map((b) => b.mesh), ...spinners, ...deskAccents]);
+  const keep = new Set([...leds.map((l) => l.led), ...belts.map((b) => b.mesh), ...spinners, ...deskAccents, ...dynamic]);
   scene.updateMatrixWorld(true);
   const groups = new Map();
   const merged = [];
@@ -595,7 +604,7 @@ export function buildOffice(scene) {
     for (const g of geos) g.dispose();
   }
 
-  return { leds, spinners, belts, deskAccents };
+  return { leds, spinners, belts, deskAccents, sky, labScreen, briefScreen, responseLine };
 }
 
 // 방별 은은한 조명: 따뜻한 전구색을 기본으로, 기계가 있는 방만 차가운 빛

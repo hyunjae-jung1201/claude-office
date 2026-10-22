@@ -1,12 +1,15 @@
 import { createScene } from './scene.js';
 import { createPanel } from './panel.js';
 import { createRoster } from './roster.js';
+import { createCard } from './card.js';
 
 const canvas = document.getElementById('c');
 const overlay = document.getElementById('overlay');
 const conn = document.getElementById('conn');
 const connText = conn.querySelector('span');
-const scene = createScene(canvas, overlay);
+const hourParam = Number.parseFloat(new URLSearchParams(location.search).get('hour')); // ?hour=21 로 시각을 고정해 볼 수 있다
+const scene = createScene(canvas, overlay, { hour: hourParam });
+const card = createCard(document.getElementById('card'));
 const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
 let toastTimer = null;
 function toast(text) {
@@ -24,10 +27,30 @@ scene.onViewChange((away) => { viewBtn.hidden = !away; if (!away) focusedKey = n
 viewBtn.addEventListener('click', resetView);
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !viewBtn.hidden && !e.target.closest?.('input')) resetView(); });
 canvas.addEventListener('dblclick', resetView);
+// 3D 화면에서 아바타 위에 마우스를 올리면 상세 카드(드래그 중에는 숨김)
+let hoverKey = null;
+let hoverRaf = 0;
+let lastMove = null;
+canvas.addEventListener('pointermove', (e) => {
+  lastMove = e;
+  if (hoverRaf) return;
+  hoverRaf = requestAnimationFrame(() => {
+    hoverRaf = 0;
+    const m = lastMove;
+    if (!m) return;
+    const key = m.buttons ? null : scene.pickAt(m.clientX, m.clientY);
+    if (key !== hoverKey) { hoverKey = key; scene.highlight(key); }
+    if (key) card.show(roster.rows().find((r) => r.key === key), m.clientX + 16, m.clientY + 16); else card.hide();
+  });
+});
+canvas.addEventListener('pointerleave', () => { lastMove = null; if (hoverKey) { hoverKey = null; scene.highlight(null); } card.hide(); });
 const rpBtn = document.getElementById('rp-btn');
 const roster = createRoster({
   root: document.getElementById('roster'),
-  onHover: (key) => scene.highlight(key),
+  onHover: (key, rect) => {
+    scene.highlight(key);
+    if (key && rect) card.show(roster.rows().find((r) => r.key === key), rect.right + 10, rect.top); else card.hide();
+  },
   // 같은 줄을 한 번 더 누르면 전체 화면으로 돌아온다
   onSelect: (key) => {
     if (focusedKey === key && scene.view().zoom > 1.05) resetView();
@@ -79,6 +102,7 @@ function connect() {
       scene.update(snap);
       panel.update(snap);
       roster.update(snap);
+      card.refresh(roster.rows());
     } catch (err) { console.error('bad snapshot', err); }
   };
   ws.onclose = () => {

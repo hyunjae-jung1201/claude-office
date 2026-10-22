@@ -196,6 +196,59 @@ export function dusk(seed = 6) {
   });
 }
 
+// 창밖 하늘: 시간대(dayState)에 맞춰 다시 그린다. 도시 실루엣은 고정, 창문 불빛·별·해/달만 시간에 따라 변한다.
+export function skyPainter(seed = 6) {
+  const W = 256;
+  const H = 160;
+  const c = document.createElement('canvas');
+  c.width = W; c.height = H;
+  const g = c.getContext('2d');
+  const r = rng(seed);
+  const stars = Array.from({ length: 34 }, () => ({ x: r() * W, y: r() * H * 0.45, a: 0.3 + r() * 0.7 }));
+  const layers = [['#3a3452', 40, 70, false], ['#241f38', 24, 52, true]].map(([col, minH, maxH, lit]) => {
+    const blds = [];
+    let x = -4;
+    while (x < W) {
+      const bw = 10 + r() * 22;
+      const bh = minH + r() * (maxH - minH);
+      const wins = lit ? Array.from({ length: 6 }, () => (r() > 0.45 ? { x: 2 + r() * (bw - 5), y: 4 + r() * (bh - 8) } : null)).filter(Boolean) : [];
+      blds.push({ x, bw, bh, wins });
+      x += bw + 1 + r() * 4;
+    }
+    return { col, blds };
+  });
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return {
+    texture: tex,
+    paint(day) {
+      const sky = g.createLinearGradient(0, 0, 0, H);
+      sky.addColorStop(0, day.sky.top);
+      sky.addColorStop(0.55, day.sky.mid);
+      sky.addColorStop(1, day.sky.low);
+      g.fillStyle = sky;
+      g.fillRect(0, 0, W, H);
+      if (day.stars > 0.02) for (const s of stars) { g.fillStyle = `rgba(255,255,255,${s.a * day.stars})`; g.fillRect(s.x, s.y, 1.4, 1.4); }
+      // 해·달: 낮에는 밝은 해, 밤에는 흐린 달
+      const bright = day.sun.intensity > 0.5;
+      const grad = g.createRadialGradient(W * 0.72, H * 0.3, 2, W * 0.72, H * 0.3, bright ? 38 : 22);
+      grad.addColorStop(0, bright ? 'rgba(255,248,220,0.9)' : 'rgba(225,232,255,0.8)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, W, H);
+      for (const { col, blds } of layers) {
+        g.fillStyle = col;
+        for (const b of blds) {
+          g.fillRect(b.x, H - b.bh, b.bw, b.bh);
+          for (const w of b.wins) { g.fillStyle = `rgba(255,217,138,${0.15 + 0.85 * day.litWindows})`; g.fillRect(b.x + w.x, H - b.bh + w.y, 2, 2); }
+          g.fillStyle = col;
+        }
+      }
+      tex.needsUpdate = true;
+    },
+  };
+}
+
 export function codeScreen(seed = 7, hue = '#7fe0c8') {
   return canvasTexture(128, 80, (g, w, h) => {
     const r = rng(seed);

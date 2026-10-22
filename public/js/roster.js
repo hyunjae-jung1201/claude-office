@@ -1,9 +1,8 @@
 // 왼쪽 목록: 아바타 모습 + 이름 + 지금 하는 일(예전 말풍선 내용). 모든 텍스트는 textContent 로만 넣는다.
-import { rosterRows } from './roster-model.js';
+import { rosterRows, STATUS_COLOR } from './roster-model.js';
 
 const CELEBRATE_MS = 4000;
 const NS = 'http://www.w3.org/2000/svg';
-const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#5b6479', failed: '#e5484d' };
 const BADGE = { ok: ['✓', '통과'], concern: ['⚠', '우려'], block: ['⛔', '중단 권고'] };
 
 const el = (tag, cls, text) => {
@@ -89,9 +88,9 @@ export function createRoster({ root, now = () => performance.now(), onHover = ()
 
   search.addEventListener('input', render);
   const rowOf = (e) => e.target.closest?.('.ro');
-  list.addEventListener('pointerover', (e) => { const li = rowOf(e); if (li) onHover(li.dataset.key); });
+  list.addEventListener('pointerover', (e) => { const li = rowOf(e); if (li) onHover(li.dataset.key, li.getBoundingClientRect()); });
   list.addEventListener('pointerleave', () => onHover(null));
-  list.addEventListener('focusin', (e) => { const li = rowOf(e); if (li) onHover(li.dataset.key); });
+  list.addEventListener('focusin', (e) => { const li = rowOf(e); if (li) onHover(li.dataset.key, li.getBoundingClientRect()); });
   list.addEventListener('focusout', () => onHover(null));
   list.addEventListener('click', (e) => {
     const li = rowOf(e);

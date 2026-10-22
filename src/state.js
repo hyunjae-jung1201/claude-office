@@ -116,6 +116,18 @@ function sessionFor(state, ev, project) {
   return s;
 }
 
+const RECENT_MAX = 6;
+// 최근 작업 문구(바뀔 때만)와 현재 상태가 시작된 시각을 기록한다(아바타 상세 카드용)
+function record(target, ts) {
+  const h = (target.hist ??= []);
+  if (h.at(-1)?.label !== target.label) {
+    h.push({ at: ts, label: target.label });
+    if (h.length > RECENT_MAX) h.shift();
+  }
+  if (target.sinceStatus !== target.status) { target.sinceStatus = target.status; target.since = ts; }
+}
+const trail = (t) => ({ recent: (t.hist ?? []).map((h) => ({ ...h })), since: t.since ?? null });
+
 function setStatus(target, status, label) {
   target.status = status;
   target.label = label ?? DEFAULT_LABEL[status];
@@ -130,6 +142,15 @@ function applyMemberEvent(s, ev) {
 }
 
 export function applyEvent(state, ev, now) {
+  applyEventCore(state, ev, now);
+  const s = state.sessions.get(ev.sessionId);
+  if (!s) return;
+  const ts = ev.ts ?? now;
+  record(s, ts);
+  for (const m of s.members.values()) record(m, ts);
+}
+
+function applyEventCore(state, ev, now) {
   // 세션이 사라졌다는 신호는 팀에 맞는지와 상관없이 그 세션을 지운다
   if (ev.type === 'live' && ev.liveStatus === 'gone') {
     state.sessions.delete(ev.sessionId);
@@ -225,11 +246,13 @@ export function tick(state, now) {
   }
 }
 
-export function setLabel(state, sessionId, agentId, label) {
+export function setLabel(state, sessionId, agentId, label, at = Date.now()) {
   const s = state.sessions.get(sessionId);
   if (!s) return;
   const target = agentId ? s.members.get(agentId) : s;
-  if (target) target.label = label;
+  if (!target) return;
+  target.label = label;
+  record(target, at);
 }
 
 // 팀장이 지금 있을 방: 백그라운드 작업은 서버실, 쉬는 중은 지시 대기 구역(오래 쉬면 휴게실), 그 밖에는 하는 일의 종류
@@ -253,7 +276,7 @@ export function snapshot(state, now) {
       : [];
     const badge = state.badges.get(p.name) ?? null;
     if (!latest) {
-      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'lounge', members: [], overflow: 0, finishedAt: null, roles, badge };
+      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'lounge', members: [], overflow: 0, finishedAt: null, roles, badge, recent: [], since: null };
     }
     const all = [...latest.members.values()].sort((a, b) => a.startedAt - b.startedAt);
     // 응답은 끝났지만 백그라운드 명령이 도는 중이면 서버실에서 일하는 것으로 보여 준다
@@ -265,11 +288,12 @@ export function snapshot(state, now) {
       status: background ? 'run' : latest.status,
       label: background ? BACKGROUND_LABEL : room === 'response' && latest.status === 'idle' ? RESPONSE_LABEL : latest.label,
       room,
-      members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, room: memberRoom(m), startedAt: m.startedAt })),
+      members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, room: memberRoom(m), startedAt: m.startedAt, ...trail(m) })),
       overflow: Math.max(0, all.length - maxMembers),
       finishedAt: latest.finishedAt,
       roles,
       badge,
+      ...trail(latest),
     };
   });
   return { ts: now, teams, reviews: state.history, reviewNotice: state.notice ?? undefined };
