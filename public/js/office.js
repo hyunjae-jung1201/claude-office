@@ -2,6 +2,7 @@
 // 방향: "퇴근 시간 무렵의 작은 회사" — 따뜻한 조명, 나무·카펫·콘크리트 같은 실제 마감재, 책상 위 잡동사니와 낙서.
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, deskZone } from './layout.js';
 import * as T from './textures.js';
@@ -536,63 +537,18 @@ export function buildOffice(scene) {
   plant(14.5, 9.75, 0);
   plant(19.2, 12.3, 1);
 
-  // ---------------------------------------------------------------- 방 이름: 화면 위에 띄우지 않고 사무실 안에 그린다
-  // 윗줄 방은 뒷벽의 작은 명판, 나머지는 바닥에 칠한 글씨(아바타·가구에 가려질 뿐 화면을 가리지 않는다)
-  const textTex = (text, { fg, halo = null }) => { // 글자 폭에 맞춘 캔버스: { tex, aspect }
-    const c = document.createElement('canvas');
-    const g0 = c.getContext('2d');
-    const font = '800 64px "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif';
-    g0.font = font;
-    const w = Math.ceil(g0.measureText(text).width) + 48;
-    const h = 96;
-    c.width = w; c.height = h;
-    const g = c.getContext('2d');
-    g.font = font;
-    g.textAlign = 'center';
-    g.textBaseline = 'middle';
-    if (halo) { g.lineJoin = 'round'; g.lineWidth = 16; g.strokeStyle = halo; g.strokeText(text, w / 2, h / 2 + 3); }
-    g.fillStyle = fg;
-    g.fillText(text, w / 2, h / 2 + 3);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 4;
-    return { tex: t, aspect: w / h };
-  };
-  const FLOOR_LABEL_AT = { // 바닥 글씨 위치(복도 쪽이나 가구 없는 자리)
-    server: [2.4, 8.2], data: [4.8, 7.4], lab: [8.7, 6.7], build: [10.9, 7.0], git: [15.3, 7.0], briefing: [18.0, 8.3],
-    response: [3.9, 9.9], lounge: [16.8, 10.2],
-  };
-  for (const id of Object.keys(ROOMS)) {
+  // ---------------------------------------------------------------- 방 이름표(화면 위에 얹는 작은 알약 모양)
+  const roomLabel = (id) => {
     const r = ROOMS[id];
-    const text = ROOM_NAMES[id];
-    if (r.y === 0) { // 뒷벽 명판(벽에 붙은 놋쇠 문패)
-      const { tex, aspect } = textTex(text, { fg: '#3a3328' });
-      const ph = 0.52;
-      const pw = ph * aspect + 0.1;
-      const cx = wx(r.x + r.w / 2);
-      const plate = put(new THREE.Mesh(new THREE.BoxGeometry(pw, ph + 0.06, 0.04), std('#efe8d8')), false);
-      plate.position.set(cx, WALL_H - 0.3, wz(0.12));
-      scene.add(plate);
-      const face = new THREE.Mesh(new THREE.PlaneGeometry(ph * aspect, ph), new THREE.MeshBasicMaterial({ map: tex, transparent: true }));
-      face.position.set(cx, WALL_H - 0.3, wz(0.142));
-      scene.add(face);
-      const rail = put(new THREE.Mesh(new THREE.BoxGeometry(pw + 0.04, 0.03, 0.05), std(BRASS, { metal: 0.6, rough: 0.4 })), false);
-      rail.position.set(cx, WALL_H - 0.3 - (ph + 0.06) / 2 - 0.02, wz(0.12));
-      scene.add(rail);
-      continue;
-    }
-    const [x, y] = FLOOR_LABEL_AT[id];
-    const green = id === 'response';
-    const { tex, aspect } = textTex(text, { fg: green ? '#e6fff0' : '#fff8e6', halo: 'rgba(18,14,8,0.8)' });
-    const decal = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.95 * aspect, 0.95),
-      new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
-    );
-    decal.rotation.order = 'YXZ';
-    decal.rotation.set(-Math.PI / 2, Math.PI / 4, 0); // 글씨 줄이 화면 가로 방향이 되게 눕힌다
-    decal.position.set(wx(x), 0.03, wz(y));
-    scene.add(decal);
-  }
+    const el = document.createElement('div');
+    el.className = 'room' + (id === 'response' ? ' room-response' : '');
+    el.textContent = ROOM_NAMES[id];
+    const o = new CSS2DObject(el);
+    const onWall = r.y === 0; // 뒷벽에 붙은 방은 이름표를 벽 위쪽에 둬서 아바타·가구에 가려지지 않게 한다
+    o.position.set(wx(r.x + r.w / 2), onWall ? WALL_H - 0.15 : 0.05, onWall ? wz(0.1) : wz(r.y + 0.3));
+    scene.add(o);
+  };
+  Object.keys(ROOMS).forEach(roomLabel);
 
   // 움직이거나 색이 바뀌는 것(LED·컨베이어·톱니·팀 명패)만 빼고, 같은 재료의 정적 물체는 하나로 합쳐 그린다(그리기 호출 수천 → 백여 개)
   const keep = new Set([...leds.map((l) => l.led), ...belts.map((b) => b.mesh), ...spinners, ...deskAccents]);
