@@ -220,3 +220,11 @@ test('remotes[].push: 다른 PC 가 밀어 넣는 원격은 ssh 없이도 받고
   assert.throws(() => loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC9' }] })), /ssh|push/);
   assert.throws(() => loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC9', push: 'yes' }] })), /push/);
 });
+
+test('approvals: 기본은 꺼짐, enabled(boolean)·waitSeconds(5~300)만 받고, 팀별로 approvals:false 로 제외한다', () => {
+  assert.deepEqual(loadConfig(cfgFile({ projects: [] })).approvals, { enabled: false, waitSeconds: 45 });
+  assert.deepEqual(loadConfig(cfgFile({ projects: [], approvals: { enabled: true, waitSeconds: 60 } })).approvals, { enabled: true, waitSeconds: 60 });
+  for (const bad of [{ enabled: 'yes' }, { waitSeconds: 2 }, { waitSeconds: 9999 }, 'x']) assert.throws(() => loadConfig(cfgFile({ projects: [], approvals: bad })), /approvals/);
+  assert.equal(loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', approvals: false }] })).projects[0].approvals, false);
+  assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', approvals: 'no' }] })), /approvals/);
+});

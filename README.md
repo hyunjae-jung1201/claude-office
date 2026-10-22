@@ -74,6 +74,12 @@ Claude Code가 `~/.claude/sessions/<pid>.json`에 적는 **세션 등록 정보*
 세션이 파일을 수정하고 응답을 끝내면 PM·개발자·QA 역할자가 읽기 전용 `claude -p`로 변경을 검토한다. 검토 중에는 역할자 아바타가 팀 책상에 나타나 일하고, 끝나면 퇴근하며 팀장 곁에 판정 배지(✓ 통과 / ⚠ 우려 n / ⛔ 중단 권고)가 남는다. 오른쪽 위 **보고서** 버튼에서 최근 검토와 지적 상세를 볼 수 있고, 파일은 `data/reviews/`에 저장된다. 역할은 `roles/<id>.md` 파일을 추가해 늘린다. 자세한 사용법·설정·한계는 `docs/roles-howto.md`, 읽기 전용 검증은 `docs/roles-verification.md`.
 - 화면 확인용: `CLAUDE_OFFICE_FAKE_ROLES=1 CLAUDE_OFFICE_REVIEW_DIR=/tmp/x node src/server.js` (가짜 역할자 결과, 실제 claude 호출 없음)
 
+## 화면에서 승인하기 (선택)
+Claude 가 권한을 물을 때(예: 명령 실행) 사무실 화면 오른쪽 아래에 카드가 뜨고 **허용/거절**을 누르면 됩니다. 기본은 꺼져 있습니다.
+- 켜기: `config.json` 에 `"approvals": {"enabled": true, "waitSeconds": 45}` 추가 후 `node scripts/install-hooks.js --approvals --apply` (새 세션부터 적용). 팀별로 끄려면 `projects[].approvals: false`.
+- 사무실 화면(브라우저 탭)이 열려 있을 때만 동작합니다. 열려 있지 않거나 시간이 지나면 원래의 터미널 승인 창이 그대로 뜹니다.
+- 허용은 그 한 번만 적용되고, 터미널에서 먼저 답하면 카드는 사라집니다. 명령 내용의 비밀값은 가려서 보여 줍니다.
+
 ## 세션 이름으로 팀 찾기
 세션을 홈 폴더에서 열고 이름만 프로젝트 이름으로 붙여 쓰는 경우가 많아서, 폴더가 안 맞으면 Claude Code가 `~/.claude/sessions`에 적어 둔 **세션 이름**을 팀 이름/`aliases`와 비교한다(대소문자 무시). 폴더가 맞으면 폴더가 우선이다.
 ```json

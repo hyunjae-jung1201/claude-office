@@ -16,7 +16,8 @@ test('팀마다 한 줄, 그 아래에 팀원과 역할자가 들여쓴 줄로 �
   assert.equal(rows[1].place, '자료실');
   assert.equal(rows[2].status, 'write'); // 검토 중인 역할자는 일하는 중
   assert.equal(rows[3].status, 'idle');
-  assert.equal(rows[2].color, '#7c6cf0');
+  assert.notEqual(rows[2].color, '#7c6cf0'); // 역할 색에 팀 색이 섞인다
+  assert.equal(rows[2].teamColor, '#e8637a');
 });
 
 test('응답이 필요한 팀(응답 대기실)은 wait 표시가 된다', () => {
@@ -80,4 +81,17 @@ test('elapsed: 상태가 시작된 뒤 지난 시간', async () => {
   assert.equal(elapsed(7 * 60_000), '7분째');
   assert.equal(elapsed(2 * 3600_000), '2시간째');
   assert.equal(elapsed(null), '');
+});
+
+test('mixHex: 두 색을 비율로 섞고, 역할 줄은 팀 색이 섞여 팀마다 다른 색이 된다', async () => {
+  const { mixHex } = await import('../public/js/roster-model.js');
+  assert.equal(mixHex('#000000', '#ffffff', 0.5), '#808080');
+  assert.equal(mixHex('#ff0000', '#0000ff', 0), '#ff0000');
+  assert.equal(mixHex('#ff0000', '#0000ff', 1), '#0000ff');
+  assert.equal(mixHex('nope', '#123456', 0.5), '#123456'); // 이상한 값은 두 번째 색
+  const roles = [{ id: 'recorder', name: '기록원', color: '#c76bb0', status: 'running', label: '일지 갱신', room: 'docs' }];
+  const rows = rosterRows(snap([team({ name: 'A', color: '#7c6cf0', roles }), team({ name: 'B', color: '#e5b83a', roles })]));
+  const [a, b] = rows.filter((r) => r.kind === 'role');
+  assert.notEqual(a.color, b.color); // 같은 역할이라도 팀이 다르면 색이 다르다
+  assert.deepEqual([a.teamColor, b.teamColor], ['#7c6cf0', '#e5b83a']);
 });

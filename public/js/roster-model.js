@@ -3,6 +3,17 @@ import { ROOM_NAMES, TEAM_COUNT as TEAM_MAX } from './layout.js';
 
 const IDLE_TEXT = { idle: '쉬는 중', off: '꺼져 있음', wait: '응답을 기다리는 중' };
 const str = (v) => (typeof v === 'string' ? v : '');
+// 두 색(#rrggbb)을 t(0~1) 비율로 섞는다. 이상한 값이면 두 번째 색.
+export function mixHex(a, b, t) {
+  const rgb = (h) => (/^#[0-9a-f]{6}$/i.test(h) ? [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)) : null);
+  const x = rgb(a);
+  const y = rgb(b);
+  if (!x || !y) return typeof b === 'string' ? b : '#8a94a6';
+  return `#${x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('')}`;
+}
+// 역할·작업 아바타는 역할 색에 팀 색을 섞어, 같은 역할이라도 어느 팀 소속인지 보이게 한다
+export const ROLE_TEAM_MIX = 0.45;
+
 const num = (v) => (Number.isFinite(v) ? v : null);
 const recentOf = (v) => (Array.isArray(v) ? v.filter((h) => h && Number.isFinite(h.at) && typeof h.label === 'string').map((h) => ({ at: h.at, label: h.label })) : []);
 
@@ -40,11 +51,11 @@ export function rosterRows(snapshot) {
       text: str(t.label) || IDLE_TEXT[status] || '', place: ROOM_NAMES[t.room] ?? '', badge: t.badge ?? null, finishedAt: t.finishedAt ?? null, since: num(t.since), recent: recentOf(t.recent),
     });
     for (const m of Array.isArray(t.members) ? t.members : []) {
-      rows.push({ key: `t${i}:m:${str(m.id)}`, kind: 'member', name: str(m.type) || '팀원', color: str(t.color) || '#8a94a6', status: str(m.status) || 'idle', wait: false, text: str(m.label), place: ROOM_NAMES[m.room] ?? '', badge: null, since: num(m.since), recent: recentOf(m.recent) });
+      rows.push({ key: `t${i}:m:${str(m.id)}`, kind: 'member', name: str(m.type) || '팀원', color: str(t.color) || '#8a94a6', teamColor: str(t.color) || '#8a94a6', status: str(m.status) || 'idle', wait: false, text: str(m.label), place: ROOM_NAMES[m.room] ?? '', badge: null, since: num(m.since), recent: recentOf(m.recent) });
     }
     for (const r of Array.isArray(t.roles) ? t.roles : []) {
       const status = r.status === 'running' ? 'write' : r.status === 'failed' ? 'failed' : 'idle';
-      rows.push({ key: `t${i}:r:${str(r.id)}`, kind: 'role', name: str(r.name) || str(r.id), color: str(r.color) || '#8a94a6', status, wait: false, text: str(r.label), place: ROOM_NAMES[r.room] ?? '', badge: null, since: null, recent: [] });
+      rows.push({ key: `t${i}:r:${str(r.id)}`, kind: 'role', name: str(r.name) || str(r.id), color: mixHex(str(r.color) || '#8a94a6', str(t.color) || '#8a94a6', ROLE_TEAM_MIX), teamColor: str(t.color) || '#8a94a6', status, wait: false, text: str(r.label), place: ROOM_NAMES[r.room] ?? '', badge: null, since: null, recent: [] });
     }
   });
   return rows;

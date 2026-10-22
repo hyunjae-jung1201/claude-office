@@ -69,6 +69,7 @@ export function createRoster({ root, now = () => performance.now(), onHover = ()
       const done = r.kind === 'team' && t < (celebrate.get(r.key) ?? 0);
       li.className = `ro ${r.kind}${r.wait ? ' wait' : ''}${done ? ' done' : ''}${r.status === 'off' ? ' off' : ''}`;
       li.style.setProperty('--c', r.color);
+      li.style.setProperty('--team', r.teamColor ?? r.color); // 팀원·역할 줄의 왼쪽 선은 팀 색
       li.style.setProperty('--st', STATUS_COLOR[r.status] ?? STATUS_COLOR.idle);
       set(li.querySelector('.ro-name'), r.name);
       set(li.querySelector('.ro-text'), done ? '완료!' : r.text);

@@ -111,7 +111,7 @@
   .ro { display: flex; gap: 12px; align-items: center; padding: 9px 10px; border-radius: 12px; min-width: 0; }
   .ro:hover { background: rgba(255,255,255,.05); }
   .ro.team + .ro.team, .ro.sub-end + .ro.team { margin-top: 2px; }
-  .ro.member, .ro.role { margin-left: 26px; padding: 6px 10px; }
+  .ro.member, .ro.role { margin-left: 22px; padding: 6px 10px; border-left: 3px solid var(--team, transparent); border-radius: 4px 12px 12px 4px; }
   .blob {
     position: relative; flex: none; width: 36px; height: 33px; border-radius: 50% 50% 34% 34% / 62% 62% 38% 38%;
     background: linear-gradient(165deg, color-mix(in srgb, var(--c) 45%, #fff), var(--c) 72%);
@@ -143,6 +143,25 @@
   #view-reset[hidden] { display: none; }
   #view-reset kbd { margin-left: 6px; font: inherit; font-size: 11px; opacity: .65; border: 1px solid rgba(29,36,64,.4); border-radius: 4px; padding: 0 4px; }
   #view-reset:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  /* 승인 대기 패널: 오른쪽 아래 */
+  #approvals { position: fixed; right: 16px; bottom: 60px; z-index: 10; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 10px; max-height: calc(100vh - 140px); overflow: auto; }
+  #approvals[hidden] { display: none; }
+  .ap { background: rgba(27,34,64,.98); border-radius: 14px; padding: 11px 13px 10px; box-shadow: 0 0 0 1px rgba(47,191,113,.55), 0 12px 32px rgba(0,0,0,.6); font-size: 12.5px; }
+  .ap-head { display: flex; align-items: center; gap: 7px; margin-bottom: 7px; }
+  .ap-dot { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+  .ap-team { font-size: 14px; font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ap-tool { font-size: 11px; font-weight: 800; color: #9af0bf; background: rgba(47,191,113,.16); padding: 1px 8px; border-radius: 999px; flex: none; }
+  .ap-left { margin-left: auto; color: #8d99bd; font-size: 11px; font-variant-numeric: tabular-nums; flex: none; }
+  .ap-detail { margin: 0 0 9px; padding: 8px 10px; max-height: 150px; overflow: auto; background: rgba(0,0,0,.32); border-radius: 8px; font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; color: #dbe3fb; }
+  .ap-btns { display: flex; gap: 8px; justify-content: flex-end; }
+  .ap-btns button { font: inherit; font-size: 13px; font-weight: 800; border: 0; border-radius: 9px; padding: 7px 18px; cursor: pointer; }
+  .ap-allow { background: #2fbf71; color: #06210f; }
+  .ap-deny { background: rgba(229,72,77,.18); color: #ff8a8e; box-shadow: inset 0 0 0 1px rgba(229,72,77,.5); }
+  .ap-btns button:hover:not(:disabled) { filter: brightness(1.12); }
+  .ap-btns button:disabled { opacity: .55; cursor: progress; }
+  .ap-btns button:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .ap-note { margin-top: 7px; color: #7f8bb0; font-size: 11px; line-height: 1.4; }
+
   /* 아바타 상세 카드 */
   #card {
     position: fixed; z-index: 9; width: 250px; padding: 10px 12px 11px; border-radius: 12px; pointer-events: none;
@@ -246,6 +265,7 @@
     <ul class="ro-list"></ul>
   </aside>
   <button id="view-reset" type="button" hidden>전체 보기 <kbd>Esc</kbd></button>
+  <div id="approvals" role="region" aria-label="승인 대기" aria-live="polite" hidden></div>
   <div id="card" hidden></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <div id="stage"><canvas id="c"></canvas><div id="overlay"></div></div>

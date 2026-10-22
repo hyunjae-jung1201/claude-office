@@ -41,6 +41,10 @@ function validateProjects(list, remotes = []) {
       if (!Array.isArray(p.testCommand) || p.testCommand.length === 0 || p.testCommand.some((a) => typeof a !== 'string' || !a)) throw new Error(`프로젝트 ${p.name}의 testCommand는 비어 있지 않은 문자열 배열이어야 합니다 (예: ["npm", "test"])`);
       out.testCommand = [...p.testCommand];
     }
+    if (p.approvals !== undefined) {
+      if (typeof p.approvals !== 'boolean') throw new Error(`프로젝트 ${p.name}의 approvals는 true/false여야 합니다`);
+      if (p.approvals === false) out.approvals = false; // 이 팀은 사무실 화면 승인에서 제외
+    }
     if (p.testTimeoutSeconds !== undefined) {
       if (!Number.isFinite(p.testTimeoutSeconds) || p.testTimeoutSeconds < 5 || p.testTimeoutSeconds > 1800) throw new Error(`프로젝트 ${p.name}의 testTimeoutSeconds는 5~1800 사이 숫자여야 합니다`);
       out.testTimeoutSeconds = p.testTimeoutSeconds;
@@ -73,6 +77,15 @@ function validateDailyLog(raw) {
   return { dir: trimSlash(raw.dir), intervalSeconds };
 }
 
+function validateApprovals(raw) {
+  if (raw === undefined) return { enabled: false, waitSeconds: 45 };
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('approvals는 { enabled, waitSeconds } 객체여야 합니다');
+  const out = { enabled: false, waitSeconds: 45, ...raw };
+  if (typeof out.enabled !== 'boolean') throw new Error('approvals.enabled는 true/false여야 합니다');
+  if (!Number.isFinite(out.waitSeconds) || out.waitSeconds < 5 || out.waitSeconds > 300) throw new Error('approvals.waitSeconds는 5~300 사이 숫자여야 합니다');
+  return { enabled: out.enabled, waitSeconds: out.waitSeconds };
+}
+
 function validateRolesConfig(raw = {}) {
   const roles = { ...ROLES_DEFAULTS, ...raw, projects: raw.projects ?? {} };
   const ids = (v, where) => {
@@ -100,7 +113,8 @@ export function loadConfig(path) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
   const remotes = validateRemotes(raw.remotes ?? []);
   const dailyLog = validateDailyLog(raw.dailyLog);
-  const config = { ...DEFAULTS, ...raw, ...(dailyLog ? { dailyLog } : {}), remotes, projects: validateProjects(raw.projects ?? [], remotes), roles: validateRolesConfig(raw.roles) };
+  const approvals = validateApprovals(raw.approvals);
+  const config = { ...DEFAULTS, ...raw, ...(dailyLog ? { dailyLog } : {}), approvals, remotes, projects: validateProjects(raw.projects ?? [], remotes), roles: validateRolesConfig(raw.roles) };
   if (!Number.isFinite(config.responseWaitMinutes) || config.responseWaitMinutes < 0) throw new Error('responseWaitMinutes는 0 이상의 숫자여야 합니다');
   // 화면은 팀당 팀원 4명까지만 자리를 배치한다
   if (!Number.isInteger(config.maxMembers) || config.maxMembers < 1 || config.maxMembers > 4) {

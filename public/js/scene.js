@@ -4,7 +4,7 @@ import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.j
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route, meetingSpot } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
-import { parseRosterKey } from './roster-model.js';
+import { parseRosterKey, mixHex, ROLE_TEAM_MIX } from './roster-model.js';
 import { roomActivity } from './activity.js';
 import { dayState, hourKST } from './daylight.js';
 import { propsFor } from './roleprops.js';
@@ -416,7 +416,7 @@ export function createScene(canvas, overlay, opts = {}) {
         seen.add(key);
         let ent = members.get(key);
         if (!ent) {
-          ent = makeEntity({ team: i, member: true, id: `role:${r.id}`, tile: ENTRANCE, scale: MEMBER_SCALE, name: r.name, color: r.color, bubbleHeight: 1.3 });
+          ent = makeEntity({ team: i, member: true, id: `role:${r.id}`, tile: ENTRANCE, scale: MEMBER_SCALE, name: r.name, color: mixHex(r.color, team.color, ROLE_TEAM_MIX), bubbleHeight: 1.3 });
           members.set(key, ent);
         }
         ent.leaving = false;
