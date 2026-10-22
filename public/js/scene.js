@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FLOOR, ROOMS, ENTRANCE, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
+import { parseRosterKey } from './roster-model.js';
 
 const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#8a94a6' };
 const WALK_SPEED = 2.8; // 타일/초
@@ -432,13 +433,72 @@ export function createScene(canvas, overlay) {
       b.mesh.position.x = wx(b.x0 + p + 0.06);
     }
 
+    stepView(dt);
     controls.update();
     renderer.render(scene, camera);
     labelRenderer.render(scene, camera);
   }
 
+  // ---- 목록 연동: 줄에 마우스를 올리면 아바타가 강조되고, 누르면 화면이 그 아바타로 부드럽게 이동한다
+  const entityOf = (key) => {
+    const k = parseRosterKey(key);
+    if (!k) return null;
+    if (k.kind === 'team') return leaders[k.team] ?? null;
+    return members.get(k.kind === 'role' ? `${k.team}:role:${k.id}` : `${k.team}:${k.id}`) ?? null;
+  };
+  let hlEntity = null;
+  let hlUntil = 0; // 누른 뒤 잠시 강조를 유지한다
+  let hovering = false;
+  let focusAnim = null;
+  const homeTarget = target.clone();
+  const homeZoom = camera.zoom;
+
+  function setHighlight(entity) {
+    if (hlEntity === entity) return;
+    if (hlEntity) { hlEntity.tag.classList.remove('hl'); if (hlEntity.hlRing) hlEntity.hlRing.visible = false; }
+    hlEntity = entity;
+    if (entity) {
+      entity.tag.classList.add('hl');
+      if (!entity.hlRing) {
+        entity.hlRing = new THREE.Mesh(new THREE.RingGeometry(0.5, 0.68, 40), new THREE.MeshBasicMaterial({ color: '#ffd166', transparent: true, opacity: 0.95, side: THREE.DoubleSide }));
+        entity.hlRing.rotation.x = -Math.PI / 2;
+        entity.hlRing.position.y = 0.05;
+        entity.group.add(entity.hlRing);
+      }
+      entity.hlRing.visible = true;
+    }
+  }
+
+  function stepView(dt) {
+    if (hlEntity && !hovering && performance.now() > hlUntil) setHighlight(null);
+    if (hlEntity?.hlRing?.visible) { hlEntity.hlRing.scale.setScalar(1 + Math.sin(clock * 6) * 0.1); }
+    if (hlEntity && hlEntity.group.parent === null) setHighlight(null); // 퇴근해서 사라진 아바타
+    if (!focusAnim) return;
+    const k = 1 - Math.pow(0.0005, dt);
+    const next = controls.target.clone().lerp(focusAnim.to, k);
+    camera.position.add(next.clone().sub(controls.target)); // 카메라 각도는 그대로 두고 함께 평행 이동
+    controls.target.copy(next);
+    camera.zoom += (focusAnim.zoom - camera.zoom) * k;
+    camera.updateProjectionMatrix();
+    if (next.distanceTo(focusAnim.to) < 0.02 && Math.abs(camera.zoom - focusAnim.zoom) < 0.01) focusAnim = null;
+  }
+
   let lastSnapshot = null;
   const api = {
+    highlight(key) {
+      hovering = Boolean(key);
+      if (!key && performance.now() < hlUntil) return; // 방금 누른 아바타는 잠시 강조를 유지한다
+      setHighlight(key ? entityOf(key) : null);
+    },
+    focus(key) {
+      const e = entityOf(key);
+      if (!e) return false;
+      setHighlight(e);
+      hlUntil = performance.now() + 4000;
+      focusAnim = { to: new THREE.Vector3(e.group.position.x, 0.4, e.group.position.z), zoom: Math.max(camera.zoom, 1.9) };
+      return true;
+    },
+    resetView() { focusAnim = { to: homeTarget.clone(), zoom: homeZoom }; },
     update(snapshot) {
       lastSnapshot = snapshot;
       update(snapshot);

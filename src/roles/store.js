@@ -17,6 +17,12 @@ const maskDeep = (v) => {
   return v;
 };
 
+// 쓰다 멈춰도 반쪽 파일이 남지 않게: 임시 파일에 쓴 뒤 이름을 바꾼다(.tmp 는 목록에서 제외된다)
+function writeAtomic(path, text) {
+  writeFileSync(`${path}.tmp`, text, { mode: 0o600 });
+  renameSync(`${path}.tmp`, path);
+}
+
 function ensureDir(dir) {
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   chmodSync(dir, 0o700);
@@ -81,10 +87,10 @@ export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
       const safe = { ...review, results: maskDeep(review.results), notes: review.notes ? maskDeep(review.notes) : undefined };
       const d = repoDir(review.repoRoot);
       ensureDir(d);
-      writeFileSync(join(d, `${review.finishedAt}-${review.id}.json`), JSON.stringify(safe), { mode: 0o600 });
+      writeAtomic(join(d, `${review.finishedAt}-${review.id}.json`), JSON.stringify(safe));
       for (const old of filesOf(d).slice(keep)) { try { unlinkSync(join(d, old)); } catch { /* 이미 없음 */ } }
       const recent = forRepo(review.repoRoot, 30);
-      writeFileSync(join(d, 'latest.md'), renderLatestMd(recent), { mode: 0o600 });
+      writeAtomic(join(d, 'latest.md'), renderLatestMd(recent));
     },
     list(limit = 20) {
       const all = [];

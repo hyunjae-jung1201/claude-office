@@ -149,7 +149,7 @@ test('close 이후에 끝난 검토는 저장·이벤트 없이 조용히 버려
   await sched.idle();
   assert.equal(store.saved.length, 0);
   assert.ok(!events.some((e) => e.type === 'done'));
-  assert.equal(store.counter.used(), 0);
+  assert.equal(store.counter.used(), 3); // 이미 시작한 역할자 프로세스는 시작 시점에 한도에서 차감된다
 });
 
 test('buildBundle이 실패해도 submit은 예외를 던지지 않고 skipped로 알린다', async () => {
@@ -197,4 +197,31 @@ test('when: ui 역할은 화면 파일(html/css/jsx/vue 등)이 있을 때만 �
   const ui = await mk('.vue')();
   assert.equal(ui.find((e) => e.type === 'done').sessionId, 'S9');
   assert.equal((await mk('.py')()).find((e) => e.type === 'skipped').reason, 'no-roles');
+});
+
+test('일일 한도는 역할자 실행을 시작할 때 차감한다(끝나길 기다리지 않는다)', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { sched, store } = setup({ run: async () => { await gate; return OK; } });
+  sched.submit(job());
+  await new Promise((r) => setImmediate(r));
+  assert.equal(store.counter.used(), 3);
+  release();
+  await sched.idle();
+  assert.equal(store.counter.used(), 3); // 두 번 세지 않는다
+});
+
+test('close 하면 실행 중인 역할자에게 중단 신호(signal)가 간다', async () => {
+  const signals = [];
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const { sched } = setup({ run: async ({ signal }) => { signals.push(signal); await gate; return OK; } });
+  sched.submit(job());
+  await new Promise((r) => setImmediate(r));
+  assert.equal(signals.length, 3);
+  assert.ok(signals.every((s) => s && !s.aborted));
+  sched.close();
+  assert.ok(signals.every((s) => s.aborted));
+  release();
+  await sched.idle();
 });

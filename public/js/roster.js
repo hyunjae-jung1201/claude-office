@@ -41,7 +41,7 @@ function makeRow(row) {
   return li;
 }
 
-export function createRoster({ root, now = () => performance.now() }) {
+export function createRoster({ root, now = () => performance.now(), onHover = () => {}, onSelect = () => {}, onBadge = () => {}, onReset = () => {} }) {
   const list = root.querySelector('.ro-list');
   const search = root.querySelector('.ro-search input');
   const count = root.querySelector('.ro-count');
@@ -63,6 +63,9 @@ export function createRoster({ root, now = () => performance.now() }) {
       let li = rowsByKey.get(r.key);
       if (!li) { li = makeRow(r); rowsByKey.set(r.key, li); }
       if (list.children[i] !== li) list.insertBefore(li, list.children[i] ?? null);
+      li.dataset.key = r.key;
+      li.tabIndex = 0;
+      li.setAttribute('role', 'button');
       const done = r.kind === 'team' && t < (celebrate.get(r.key) ?? 0);
       li.className = `ro ${r.kind}${r.wait ? ' wait' : ''}${done ? ' done' : ''}${r.status === 'off' ? ' off' : ''}`;
       li.style.setProperty('--c', r.color);
@@ -84,6 +87,21 @@ export function createRoster({ root, now = () => performance.now() }) {
   }
 
   search.addEventListener('input', render);
+  const rowOf = (e) => e.target.closest?.('.ro');
+  list.addEventListener('pointerover', (e) => { const li = rowOf(e); if (li) onHover(li.dataset.key); });
+  list.addEventListener('pointerleave', () => onHover(null));
+  list.addEventListener('focusin', (e) => { const li = rowOf(e); if (li) onHover(li.dataset.key); });
+  list.addEventListener('focusout', () => onHover(null));
+  list.addEventListener('click', (e) => {
+    const li = rowOf(e);
+    if (!li) return;
+    if (e.target.closest('.ro-badge')?.textContent) onBadge(li.dataset.key); else onSelect(li.dataset.key);
+  });
+  list.addEventListener('keydown', (e) => {
+    const li = rowOf(e);
+    if (li && (e.key === 'Enter' || e.key === ' ') && e.target === li) { e.preventDefault(); onSelect(li.dataset.key); }
+  });
+  root.querySelector('.ro-reset')?.addEventListener('click', () => onReset());
 
   return {
     update(snapshot) {

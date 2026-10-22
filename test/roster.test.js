@@ -40,3 +40,12 @@ test('라벨이 비면 상태별 기본 문구를 쓰고, 이상한 값은 걸�
   assert.deepEqual(rosterRows(null), []);
   assert.deepEqual(rosterRows({}), []);
 });
+
+test('parseRosterKey: 목록 줄의 key 를 팀·종류·id 로 푼다', async () => {
+  const { parseRosterKey } = await import('../public/js/roster-model.js');
+  assert.deepEqual(parseRosterKey('t0'), { team: 0, kind: 'team' });
+  assert.deepEqual(parseRosterKey('t3:m:agent-1'), { team: 3, kind: 'member', id: 'agent-1' });
+  assert.deepEqual(parseRosterKey('t2:r:pm'), { team: 2, kind: 'role', id: 'pm' });
+  assert.deepEqual(parseRosterKey('t1:m:a:b'), { team: 1, kind: 'member', id: 'a:b' });
+  for (const bad of ['', 'x1', 't', 't1:x:y', null, undefined, 5]) assert.equal(parseRosterKey(bad), null);
+});

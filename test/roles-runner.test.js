@@ -127,3 +127,20 @@ test('runRole: 5MB 출력도 처리하고, 한도(8MB)를 넘는 출력은 잘�
   calls[1].child.emit('close', 0);
   assert.ok((await q).length <= 8 * 1024 * 1024);
 });
+
+test('buildRoleSpawn: .git 폴더 안(설정·자격 증명·기록)은 읽지 못한다', () => {
+  const denied = after(buildRoleSpawn(ROLE, 'p', '/r').args, '--disallowedTools');
+  for (const tool of ['Read', 'Grep', 'Glob']) assert.ok(denied.includes(`${tool}(**/.git/**)`), tool);
+});
+
+test('runRole: signal 이 중단되면 자식 프로세스를 끝내고 거부한다(이미 중단된 signal 이면 실행하지 않는다)', async () => {
+  const { spawnFn, calls } = fakeSpawn();
+  const ac = new AbortController();
+  const p = runRole({ role: ROLE, prompt: 'p', repoRoot: '/r', spawnFn, signal: ac.signal });
+  ac.abort();
+  await assert.rejects(p, /중단/);
+  assert.equal(calls[0].child.killed[0], 'SIGTERM');
+  const again = fakeSpawn();
+  await assert.rejects(runRole({ role: ROLE, prompt: 'p', repoRoot: '/r', spawnFn: again.spawnFn, signal: ac.signal }), /중단/);
+  assert.equal(again.calls.length, 0);
+});

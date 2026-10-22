@@ -26,3 +26,11 @@ export function rosterRows(snapshot) {
   });
   return rows;
 }
+
+// 'tN' | 'tN:m:<id>' | 'tN:r:<id>' → { team, kind, id? } (잘못된 값은 null)
+export function parseRosterKey(key) {
+  const m = typeof key === 'string' ? /^t(\d+)(?::([mr]):(.+))?$/.exec(key) : null;
+  if (!m) return null;
+  const team = Number(m[1]);
+  return m[2] ? { team, kind: m[2] === 'm' ? 'member' : 'role', id: m[3] } : { team, kind: 'team' };
+}

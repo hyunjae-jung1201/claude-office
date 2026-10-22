@@ -8,7 +8,14 @@ const conn = document.getElementById('conn');
 const connText = conn.querySelector('span');
 const scene = createScene(canvas, overlay);
 const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
-const roster = createRoster({ root: document.getElementById('roster') });
+const rpBtn = document.getElementById('rp-btn');
+const roster = createRoster({
+  root: document.getElementById('roster'),
+  onHover: (key) => scene.highlight(key),
+  onSelect: (key) => scene.focus(key),
+  onBadge: () => { if (document.getElementById('rp').hidden) rpBtn.click(); }, // 판정 배지를 누르면 보고서를 연다
+  onReset: () => scene.resetView(),
+});
 window.__office = scene; // 화면 검증용
 window.__roster = roster;
 

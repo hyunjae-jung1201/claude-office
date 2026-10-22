@@ -7,7 +7,7 @@ const MAX_OUTPUT = 8 * 1024 * 1024;
 
 const DENIED_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'MultiEdit', 'Bash', 'WebFetch', 'WebSearch', 'Task', 'Agent'];
 // 비밀값이 있을 만한 경로는 읽기 도구로도 열지 못하게 한다
-const SENSITIVE_GLOBS = ['**/.env*', '**/*.pem', '**/*.key', '**/id_*', '**/.npmrc', '**/.netrc', '**/*secret*', '**/*credentials*', '~/.ssh/**', '~/.aws/**', '~/.gnupg/**', '~/.claude/**', '~/.config/**', '~/.docker/**', '~/.kube/**', '~/.git-credentials'];
+const SENSITIVE_GLOBS = ['**/.env*', '**/*.pem', '**/*.key', '**/id_*', '**/.npmrc', '**/.netrc', '**/*secret*', '**/*credentials*', '~/.ssh/**', '~/.aws/**', '~/.gnupg/**', '~/.claude/**', '~/.config/**', '~/.docker/**', '~/.kube/**', '~/.git-credentials', '**/.git/**'];
 const DENY_READ = ['Read', 'Grep', 'Glob'].flatMap((tool) => SENSITIVE_GLOBS.map((g) => `${tool}(${g})`));
 
 export function buildRoleSpawn(role, prompt, repoRoot) {
@@ -25,8 +25,9 @@ export function buildRoleSpawn(role, prompt, repoRoot) {
   };
 }
 
-export function runRole({ role, prompt, repoRoot, timeoutMs = DEFAULT_TIMEOUT_MS, spawnFn = spawn }) {
+export function runRole({ role, prompt, repoRoot, timeoutMs = DEFAULT_TIMEOUT_MS, spawnFn = spawn, signal }) {
   return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new Error('중단됨'));
     const { args, options } = buildRoleSpawn(role, prompt, repoRoot);
     const child = spawnFn('claude', args, options);
     const out = [];
@@ -37,8 +38,15 @@ export function runRole({ role, prompt, repoRoot, timeoutMs = DEFAULT_TIMEOUT_MS
       if (done) return;
       done = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', onAbort);
       fn(v);
     };
+    const onAbort = () => {
+      child.kill('SIGTERM');
+      setTimeout(() => child.kill('SIGKILL'), 3000).unref?.();
+      finish(reject, new Error('중단됨'));
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
     const timer = setTimeout(() => {
       child.kill('SIGTERM');
       setTimeout(() => child.kill('SIGKILL'), 3000).unref?.();

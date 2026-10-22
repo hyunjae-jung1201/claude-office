@@ -116,3 +116,15 @@ test('형식이 어긋난 보고서 파일(JSON이지만 results 없음 등)은 
   assert.deepEqual(s.list().map((r) => r.finishedAt), [500]);
   assert.deepEqual(s.forRepo('/work/app').map((r) => r.finishedAt), [500]);
 });
+
+test('save 는 임시 파일을 남기지 않고, 쓰다 만 .tmp 파일은 목록에 보이지 않는다', async () => {
+  const { readdirSync, writeFileSync: wf } = await import('node:fs');
+  const dir = tmp();
+  const s = createReviewStore({ dir });
+  s.save(review({ repoRoot: '/a/app' }));
+  const sub = readdirSync(dir, { withFileTypes: true }).find((e) => e.isDirectory()).name;
+  assert.ok(!readdirSync(join(dir, sub)).some((f) => f.endsWith('.tmp')));
+  wf(join(dir, sub, '9999999999999-zzzz.json.tmp'), '{"half":');
+  assert.equal(s.forRepo('/a/app').length, 1);
+  assert.equal(s.list().length, 1);
+});

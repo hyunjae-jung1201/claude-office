@@ -26,6 +26,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
   let active = 0;
   const waiters = [];
   let closed = false;
+  const abort = new AbortController(); // close() 때 실행 중인 역할자를 끝낸다
 
   const acquire = () => new Promise((resolve) => {
     const go = () => { active++; resolve(); };
@@ -48,6 +49,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     if (selected.length === 0) { safeEmit({ type: 'skipped', ...base, reason: 'no-roles' }); return; }
     if (store.counter.used() + selected.length > config.roles.dailyLimit) { safeEmit({ type: 'skipped', ...base, reason: 'limit' }); return; }
 
+    store.counter.add(selected.length); // 프로세스를 시작하는 시점에 한도에서 차감한다(비용은 이미 나가는 것)
     const startedAt = now();
     safeEmit({ type: 'start', ...base, repoName: bundle.repoName, roles: selected.map((r) => ({ id: r.id, name: r.name, color: r.color })) });
 
@@ -58,7 +60,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
         safeEmit({ type: 'role', ...base, roleId: role.id, status: 'running' });
         let result;
         try {
-          result = parseRoleOutput(await run({ role, prompt: buildPrompt(role, bundle), repoRoot: job.repoRoot }), role.id);
+          result = parseRoleOutput(await run({ role, prompt: buildPrompt(role, bundle), repoRoot: job.repoRoot, signal: abort.signal }), role.id);
         } catch (e) {
           result = { roleId: role.id, verdict: 'failed', summary: '', findings: [], error: String(e.message ?? e).slice(0, 200) };
         }
@@ -77,7 +79,6 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
       verdict: aggregateVerdict(results), concerns: countConcerns(results), results, files: job.files,
     };
     store.save(review);
-    store.counter.add(selected.length);
     safeEmit({ type: 'done', ...base, review, sessionId: job.sessionId });
   }
 
@@ -120,7 +121,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     async idle() {
       while (inflight.size) await Promise.all([...inflight]);
     },
-    close() { closed = true; },
+    close() { closed = true; abort.abort(); },
     stats: () => ({ running: running.size, queued: waiters.length, dailyUsed: store.counter.used(), limitReached: store.counter.used() >= config.roles.dailyLimit }),
   };
 }
