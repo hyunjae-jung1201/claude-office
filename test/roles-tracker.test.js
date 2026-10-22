@@ -362,3 +362,11 @@ test('reviewNow: 쿨다운 중이어도 실행하고, 하위 폴더 경계를 �
   assert.equal(await t.tracker.reviewNow('/plain/proj'), 1);
   assert.equal(t.due.length, 2);
 });
+
+test('같은 세션에서 stop 이 겹쳐 들어와도 같은 파일로 검토가 두 번 나가지 않는다', async () => {
+  const slow = async (files) => { await new Promise((r) => setTimeout(r, 20)); return groupFiles(files); };
+  const { tracker, due, ev } = setup(baseConfig({ cooldownMinutes: 0 }), { groupFiles: slow });
+  await tracker.onEvent(ev('tool', edit('/r1/a.js')));
+  await Promise.all([tracker.onEvent(ev('stop')), tracker.onEvent(ev('stop'))]);
+  assert.equal(due.length, 1);
+});

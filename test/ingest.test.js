@@ -28,10 +28,9 @@ test('ingest.js: 표준입력의 줄을 묶어 /ingest?remote=이름 으로 보�
   const r = await run(['PC1'], '{"a":1}\n{"b":2}\n', { CLAUDE_OFFICE_URL: `http://127.0.0.1:${port}` });
   server.close();
   assert.equal(r.code, 0);
-  assert.equal(got.length >= 1, true);
-  assert.equal(got[0].url, '/ingest?remote=PC1');
-  assert.equal(got[0].type, 'application/x-ndjson');
-  assert.equal(got.map((g) => g.body).join('').split('\n').filter(Boolean).length, 2);
+  assert.ok(got.length >= 1);
+  for (const g of got) { assert.equal(g.url, '/ingest?remote=PC1'); assert.equal(g.type, 'application/x-ndjson'); }
+  assert.deepEqual(got.flatMap((g) => g.body.split('\n').filter(Boolean)), ['{"a":1}', '{"b":2}']); // 순서와 내용이 그대로
 });
 
 test('ingest.js: 서버가 꺼져 있어도 멈추지 않고 입력이 끝나면 종료하며, 이름이 없으면 오류 종료', async () => {

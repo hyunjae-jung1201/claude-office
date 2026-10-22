@@ -52,7 +52,14 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
   }
 
   // 모인 파일을 저장소별로 나눠, 조건이 맞는 저장소마다 due 를 낸다. onlyPending 이면 보류 중인 저장소만.
-  async function evaluate(sessionId, s, reason, { onlyPending = false, ignoreCooldown = false, ignoreMin = false, inPath = null } = {}) {
+  // 같은 세션의 평가는 한 줄로 세운다(await 사이에 stop·tick·수동 검토가 겹쳐 같은 파일을 두 번 내보내지 않게)
+  function evaluate(sessionId, s, reason, opts) {
+    const run = (s.lock ?? Promise.resolve()).then(() => evaluateNow(sessionId, s, reason, opts));
+    s.lock = run.catch(() => {});
+    return run;
+  }
+
+  async function evaluateNow(sessionId, s, reason, { onlyPending = false, ignoreCooldown = false, ignoreMin = false, inPath = null } = {}) {
     // 원격 PC 의 파일은 이 PC 의 파일 시스템으로 저장소를 찾지 않는다(같은 경로의 다른 파일일 수 있다)
     const groups = s.host ? new Map() : await groupFiles([...s.files]);
     // git 저장소가 아니어도 팀 폴더 안이면 Claude 의 수정 기록으로 검토한다(editGroups). 둘 다 아니면 계속 쌓이지 않게 버린다
@@ -88,8 +95,8 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
       onDue(job);
     }
     if (fired) s.requests = [];
-    return fired;
     s.edits = s.edits.filter((e) => s.files.has(e.file)); // 검토가 끝났거나 버려진 파일의 수정 기록은 지운다
+    return fired;
   }
 
   // 첫 편집 직전의 HEAD 를 저장소별로 기록해 둔다(같은 턴에 커밋해도 변경을 볼 수 있게)

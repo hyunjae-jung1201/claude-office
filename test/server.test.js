@@ -694,3 +694,18 @@ test('ingest: 모르는 원격·ssh 로 읽는 원격·Origin·잘못된 Content
     assert.equal((await fetch(`http://127.0.0.1:${port}/ingest`, { method: 'POST', headers: { 'content-type': 'application/x-ndjson' }, body: '' })).status, 400); // remote 값 없음
   });
 });
+
+test('ingest: tools 에 null 등 잘못된 항목이 있어도 서버가 죽지 않고 뒤의 정상 줄은 반영된다', async () => {
+  await withServer({ config: pushConfig, remoteFactory: noRemote }, async ({ port }) => {
+    const c = await connect(port);
+    const r = await ingest(port, 'PC1', [
+      { s: 'x9', c: '/home/u/proj', k: 'tool', tools: [null, 5, 'x'] },
+      { s: 'x9', c: '/home/u/proj', k: 'tool', tools: 'nope' },
+      { s: 'x9', c: '/home/u/proj', k: 'result', ids: null },
+      { s: 'x9', c: '/home/u/proj', k: 'tool', tools: [{ i: 't9', n: 'Bash', d: 'ls' }] },
+    ]);
+    assert.equal(r.status, 204);
+    await c.waitFor((x) => x.teams.find((t) => t.name === 'P').status === 'run');
+    c.close();
+  });
+});

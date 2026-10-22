@@ -68,6 +68,7 @@ export function projectionToEvents(p, ctx, now) {
 
   const out = [];
   if (!ctx.seen.has(sessionId)) {
+    if (ctx.seen.size > 1000) ctx.seen.clear(); // 오래된 세션이 쌓이지 않게
     ctx.seen.add(sessionId);
     out.push({ ...base, type: 'start' });
   } else if (p.k === 'init' && !(p.last && p.age < WORKING_AGE_S)) {

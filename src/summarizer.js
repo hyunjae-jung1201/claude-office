@@ -52,6 +52,7 @@ export function createSummarizer({ run = defaultRun, minIntervalMs = 5000, now =
       const key = `${ev.cwd}|${ev.category}`;
       const t = now();
       if (lastCall.has(key) && t - lastCall.get(key) < minIntervalMs) return fallback;
+      if (lastCall.size > 500) lastCall.clear(); // 오래된 키가 쌓이지 않게
       lastCall.set(key, t);
 
       const prompt =
