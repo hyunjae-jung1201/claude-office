@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, deskZone } from './layout.js';
+import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, DOOR_W, DOOR_LINES, deskZone } from './layout.js';
 import * as T from './textures.js';
 
 export const wx = (x) => x - FLOOR.w / 2;
@@ -537,15 +537,31 @@ export function buildOffice(scene) {
   plant(14.5, 9.75, 0);
   plant(19.2, 12.3, 1);
 
-  // ---------------------------------------------------------------- 방 이름표(화면 위에 얹는 작은 알약 모양)
+  // ---------------------------------------------------------------- 칸막이 벽: 가운데·아랫줄 방의 윗변에 낮은 벽(문 틈 포함)
+  // 낮게(0.9) 세워 복도의 아바타 머리·몸은 벽 너머로 보이고, 방 이름은 이 벽 위에 단다.
+  const PART_H = 0.9;
+  for (const { y, doors } of DOOR_LINES) {
+    const cuts = [0, ...doors.flatMap((d) => [d - DOOR_W / 2, d + DOOR_W / 2]), FLOOR.w];
+    for (let i = 0; i < cuts.length; i += 2) {
+      const x0 = cuts[i];
+      const w = cuts[i + 1] - x0;
+      if (w < 0.05) continue;
+      box(x0, y, w, 0.14, PART_H, '#7f9a90', 0, { r: 0.012, rough: 0.7 }); // 세이지색 벽(뒷벽 판넬과 같은 색)
+      box(x0 - 0.01, y - 0.01, w + 0.02, 0.16, 0.05, '#efe8d8', PART_H, { r: 0.01 }); // 위쪽 마감
+      box(x0, y + 0.13, w, 0.025, 0.1, '#4a3d33', 0, { r: 0.004 }); // 걸레받이
+    }
+    for (const d of doors) for (const dx of [d - DOOR_W / 2 - 0.05, d + DOOR_W / 2 - 0.05]) box(dx, y - 0.02, 0.1, 0.18, PART_H + 0.1, BRASS, 0, { r: 0.015, metal: 0.5, rough: 0.45 }); // 문기둥
+  }
+
+  // ---------------------------------------------------------------- 방 이름표(작은 알약 모양): 칸막이·뒷벽 위에 단다
   const roomLabel = (id) => {
     const r = ROOMS[id];
     const el = document.createElement('div');
     el.className = 'room' + (id === 'response' ? ' room-response' : '');
     el.textContent = ROOM_NAMES[id];
     const o = new CSS2DObject(el);
-    const onWall = r.y === 0; // 뒷벽에 붙은 방은 이름표를 벽 위쪽에 둬서 아바타·가구에 가려지지 않게 한다
-    o.position.set(wx(r.x + r.w / 2), onWall ? WALL_H - 0.15 : 0.05, onWall ? wz(0.1) : wz(r.y + 0.3));
+    const onWall = r.y === 0; // 뒷벽 방은 벽 위쪽, 나머지는 칸막이 위(문 틈을 피해 방의 오른쪽에)
+    o.position.set(wx(onWall ? r.x + r.w / 2 : r.x + r.w * 0.7), onWall ? WALL_H - 0.15 : PART_H + 0.12, wz(onWall ? 0.1 : r.y + 0.07));
     scene.add(o);
   };
   Object.keys(ROOMS).forEach(roomLabel);

@@ -127,3 +127,56 @@ test('잘못된 입력은 오류', () => {
   assert.throws(() => memberSeat(0, 4), RangeError);
   assert.throws(() => memberTarget('read', 0, 4, 'lab'), RangeError);
 });
+
+// ---- 칸막이 벽과 출입구: 벽을 뚫고 지나가지 않고 문(틈)으로 돌아서 간다
+import { DOOR_LINES, DOOR_W, route } from '../public/js/layout.js';
+
+const inGap = (x, y) => DOOR_LINES.find((l) => l.y === y).doors.some((d) => Math.abs(x - d) <= DOOR_W / 2 + 1e-9);
+// 경로의 모든 선분이 칸막이 선(y)을 문 안에서만 건너는지
+function crossesOnlyThroughDoors(from, to, via) {
+  const pts = [from, ...via, to];
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[i + 1];
+    for (const { y } of DOOR_LINES) {
+      if ((a.y < y) === (b.y < y)) continue;
+      const x = a.x + ((b.x - a.x) * (y - a.y)) / (b.y - a.y);
+      if (!inGap(x, y)) return false;
+    }
+  }
+  return true;
+}
+
+test('같은 구역 안(벽을 안 건너는 이동)은 경유점이 없다', () => {
+  assert.deepEqual(route({ x: 2, y: 1 }, { x: 15, y: 3 }), []);
+  assert.deepEqual(route({ x: 1, y: 6 }, { x: 3, y: 8 }), []);
+  assert.deepEqual(route({ x: 9, y: 10 }, { x: 18, y: 12 }), []);
+});
+
+test('문 틈으로 곧장 건너는 이동은 경유점이 없고, 벽 쪽으로 건너면 문을 거쳐 돌아간다', () => {
+  const door = DOOR_LINES.find((l) => l.y === 5.2).doors[2];
+  assert.deepEqual(route({ x: door, y: 3 }, { x: door, y: 7 }), []);
+  const from = { x: 2, y: 3 };
+  const to = { x: 3.2, y: 7 }; // 곧장 가면 문이 아닌 벽을 지난다
+  const via = route(from, to);
+  assert.ok(via.length >= 2);
+  assert.ok(crossesOnlyThroughDoors(from, to, via));
+});
+
+test('여러 칸막이를 건너는 먼 이동(작업실 → 휴게실, 휴게실 → 입구)도 모두 문으로 지난다', () => {
+  for (const [from, to] of [
+    [{ x: 9.5, y: 2.0 }, { x: 10.2, y: 12.2 }], [{ x: 18, y: 12.4 }, { x: 20, y: 4.6 }], [{ x: 0.9, y: 10.5 }, { x: 19, y: 1 }],
+    [{ x: 7.1, y: 6.6 }, { x: 3.0, y: 11.5 }], [{ x: 5.5, y: 3 }, { x: 18.5, y: 7.4 }], [{ x: 20, y: 4.6 }, { x: 2.5, y: 8.65 }],
+  ]) {
+    const via = route(from, to);
+    assert.ok(crossesOnlyThroughDoors(from, to, via), JSON.stringify([from, to, via]));
+    for (const p of via) assert.ok(p.x >= -0.01 && p.x <= 20.01 && p.y >= -0.01 && p.y <= 13.01);
+  }
+});
+
+test('방마다 문이 하나씩 있고 방 안쪽 가장자리에서 떨어져 있다', () => {
+  const m = DOOR_LINES.find((l) => l.y === 5.2);
+  assert.equal(m.doors.length, 6);
+  m.doors.forEach((d, i) => assert.ok(d - DOOR_W / 2 >= ROOMS[['server', 'data', 'lab', 'build', 'git', 'briefing'][i]].x - 1e-9));
+  assert.equal(DOOR_LINES.find((l) => l.y === 9.4).doors.length, 2);
+});

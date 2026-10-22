@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
+import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
 import { parseRosterKey } from './roster-model.js';
 
@@ -405,10 +405,15 @@ export function createScene(canvas, overlay) {
   }
 
   function step(entity, dt) {
-    const dx = entity.goal.x - entity.pos.x;
-    const dy = entity.goal.y - entity.pos.y;
+    // 칸막이 벽은 문(틈)으로만 지난다: 목적지가 바뀌면 경유점을 다시 계산한다
+    const gk = `${entity.goal.x},${entity.goal.y}`;
+    if (entity.goalKey !== gk) { entity.goalKey = gk; entity.path = route(entity.pos, entity.goal); }
+    while (entity.path.length && Math.hypot(entity.path[0].x - entity.pos.x, entity.path[0].y - entity.pos.y) < 0.1) entity.path.shift();
+    const next = entity.path.length ? entity.path[0] : entity.goal;
+    const dx = next.x - entity.pos.x;
+    const dy = next.y - entity.pos.y;
     const dist = Math.hypot(dx, dy);
-    const moving = dist > 0.04;
+    const moving = dist > 0.04 || entity.path.length > 0;
     if (moving) {
       const k = Math.min(1, (WALK_SPEED * dt) / dist);
       entity.pos.x += dx * k;

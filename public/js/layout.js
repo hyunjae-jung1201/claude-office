@@ -104,3 +104,30 @@ export function memberTarget(status, teamIndex, memberIndex, room = roomFor(stat
   const [dx, dy] = MEMBER_OFFSETS[memberIndex];
   return { x: base.x + dx, y: base.y + dy, pose: base.pose };
 }
+
+// ---- 칸막이 벽과 출입구: 가운데 줄·아랫줄 방의 윗변에 낮은 벽이 서 있고, 방마다 문(틈)이 하나 있다.
+// 아바타는 벽을 뚫지 않고 문 앞을 거쳐 이동한다(route).
+export const DOOR_W = 1.2;
+export const DOOR_LINES = [
+  { y: 5.2, doors: [0.95, 4.3, 7.5, 10.7, 13.9, 17.3] }, // 서버실·데이터 창고·테스트 랩·빌드실·형상관리실·브리핑룸
+  { y: 9.4, doors: [2.0, 16.2] }, // 응답 대기실·휴게실
+];
+
+// from → to 로 가는 길에 칸막이 벽을 비껴가야 하면 문 앞뒤의 경유점을 돌려준다(없으면 빈 배열). 목적지 자체는 포함하지 않는다.
+export function route(from, to) {
+  const pts = [];
+  let cur = { x: from.x, y: from.y };
+  const south = to.y > from.y;
+  const lines = [...DOOR_LINES].sort((a, b) => (south ? a.y - b.y : b.y - a.y));
+  for (const { y, doors } of lines) {
+    if ((cur.y < y) === (to.y < y)) continue; // 이 벽을 건너지 않는다
+    const cx = cur.x + ((to.x - cur.x) * (y - cur.y)) / (to.y - cur.y);
+    if (doors.some((d) => Math.abs(cx - d) <= DOOR_W / 2 - 0.1)) continue; // 곧장 가도 문 틈으로 지난다
+    const detour = (x) => Math.abs(cur.x - x) + Math.abs(x - to.x);
+    const door = doors.reduce((best, x) => (detour(x) < detour(best) ? x : best), doors[0]);
+    const s = south ? 1 : -1;
+    pts.push({ x: door, y: y - s * 0.45 }, { x: door, y: y + s * 0.45 });
+    cur = { x: door, y: y + s * 0.45 };
+  }
+  return pts;
+}
