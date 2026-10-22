@@ -550,7 +550,7 @@ export function buildOffice(scene) {
     g.font = font;
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    if (halo) { g.lineJoin = 'round'; g.lineWidth = 12; g.strokeStyle = halo; g.strokeText(text, w / 2, h / 2 + 3); }
+    if (halo) { g.lineJoin = 'round'; g.lineWidth = 16; g.strokeStyle = halo; g.strokeText(text, w / 2, h / 2 + 3); }
     g.fillStyle = fg;
     g.fillText(text, w / 2, h / 2 + 3);
     const t = new THREE.CanvasTexture(c);
@@ -559,15 +559,15 @@ export function buildOffice(scene) {
     return { tex: t, aspect: w / h };
   };
   const FLOOR_LABEL_AT = { // 바닥 글씨 위치(복도 쪽이나 가구 없는 자리)
-    server: [2.3, 8.35], data: [4.6, 7.4], lab: [8.2, 7.4], build: [11.4, 7.4], git: [15.0, 8.35], briefing: [18.2, 8.35],
-    response: [2.6, 10.2], lounge: [16.6, 10.4],
+    server: [2.4, 8.2], data: [4.8, 7.4], lab: [8.7, 6.7], build: [10.9, 7.0], git: [15.3, 7.0], briefing: [18.0, 8.3],
+    response: [3.9, 9.9], lounge: [16.8, 10.2],
   };
   for (const id of Object.keys(ROOMS)) {
     const r = ROOMS[id];
     const text = ROOM_NAMES[id];
     if (r.y === 0) { // 뒷벽 명판(벽에 붙은 놋쇠 문패)
       const { tex, aspect } = textTex(text, { fg: '#3a3328' });
-      const ph = 0.36;
+      const ph = 0.52;
       const pw = ph * aspect + 0.1;
       const cx = wx(r.x + r.w / 2);
       const plate = put(new THREE.Mesh(new THREE.BoxGeometry(pw, ph + 0.06, 0.04), std('#efe8d8')), false);
@@ -583,9 +583,9 @@ export function buildOffice(scene) {
     }
     const [x, y] = FLOOR_LABEL_AT[id];
     const green = id === 'response';
-    const { tex, aspect } = textTex(text, { fg: green ? 'rgba(220,255,232,0.92)' : 'rgba(255,248,230,0.9)', halo: 'rgba(20,16,10,0.55)' });
+    const { tex, aspect } = textTex(text, { fg: green ? '#e6fff0' : '#fff8e6', halo: 'rgba(18,14,8,0.8)' });
     const decal = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.62 * aspect, 0.62),
+      new THREE.PlaneGeometry(0.95 * aspect, 0.95),
       new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }),
     );
     decal.rotation.order = 'YXZ';
