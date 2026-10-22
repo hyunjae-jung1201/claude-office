@@ -538,8 +538,8 @@ export function buildOffice(scene) {
   plant(19.2, 12.3, 1);
 
   // ---------------------------------------------------------------- 칸막이 벽: 가운데·아랫줄 방의 윗변에 낮은 벽(문 틈 포함)
-  // 낮게(0.9) 세워 복도의 아바타 머리·몸은 벽 너머로 보이고, 방 이름은 이 벽 위에 단다.
-  const PART_H = 0.9;
+  // (높이 1.4) 복도의 아바타 머리는 벽 너머로 보이고, 방 이름은 이 벽 위에 단다.
+  const PART_H = 1.4;
   for (const { y, doors } of DOOR_LINES) {
     const cuts = [0, ...doors.flatMap((d) => [d - DOOR_W / 2, d + DOOR_W / 2]), FLOOR.w];
     for (let i = 0; i < cuts.length; i += 2) {
