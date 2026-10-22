@@ -16,6 +16,7 @@ import { createReviewTracker } from './roles/tracker.js';
 import { createScheduler } from './roles/scheduler.js';
 import { createReviewStore } from './roles/store.js';
 import { groupFilesByRepo } from './roles/context.js';
+import { createFeedbackBox } from './roles/feedback.js';
 import { runRole } from './roles/runner.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -72,6 +73,7 @@ export async function startServer({
     return n;
   };
 
+  const feedback = rolesOn && config.roles.deliver === 'session' ? createFeedbackBox({ now, minSeverity: config.roles.deliverMinSeverity }) : null;
   let scheduler = null;
   let tracker = null;
   const hookSeen = new Map(); // hook 신호를 보내는 세션 -> 마지막 신호 시각 (같은 세션을 세션 기록으로 또 세지 않기 위해)
@@ -134,6 +136,9 @@ export async function startServer({
       if (!ev) return res.writeHead(400).end();
       hookSeen.set(ev.sessionId, now());
       handleEvent(ev);
+      // 역할자 의견 전달(deliver: session): 같은 세션의 다음 프롬프트에만 한 번 붙인다
+      const note = ev.type === 'prompt' ? feedback?.take(ev.sessionId) : undefined;
+      if (note) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: note } }));
       res.writeHead(204).end();
     });
     req.on('error', () => res.writeHead(400).end());
@@ -213,7 +218,11 @@ export async function startServer({
       config, roles, store, run: reviewRun, now,
       // 화면에 보일 팀: 그 세션이 속한 팀 → 저장소를 덮는 팀 → 없음(보고서 패널에만 남는다)
       resolveTeam: (job) => teamOfSession(state, job.sessionId) ?? matchProject(config, job.repoRoot)?.name,
-      emit: (e) => { applyReviewEvent(state, e, now()); broadcast(); },
+      emit: (e) => {
+        if (e.type === 'done' && feedback) feedback.add(e.sessionId, e.review);
+        applyReviewEvent(state, e, now());
+        broadcast();
+      },
     });
     tracker = createReviewTracker({ config, now, groupFiles: groupFilesByRepo, onDue: (job) => scheduler.submit(job) });
   }

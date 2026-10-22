@@ -150,7 +150,7 @@ test('aliases: 다른 host의 프로젝트와는 섞이지 않고, 중복 별칭
 // ---- roles 설정
 test('roles 기본값', () => {
   const c = loadConfig(cfgFile({ projects: [] }));
-  assert.deepEqual(c.roles, { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', excludePaths: [], projects: {} });
+  assert.deepEqual(c.roles, { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', deliverMinSeverity: 'major', excludePaths: [], projects: {} });
 });
 
 test('roles: 값을 덮어쓸 수 있고, 형식 오류·deliver 값은 거부한다', () => {
@@ -158,7 +158,7 @@ test('roles: 값을 덮어쓸 수 있고, 형식 오류·deliver 값은 거부�
   assert.equal(c.roles.cooldownMinutes, 10);
   assert.equal(c.roles.dailyLimit, 120);
   assert.deepEqual(c.roles.projects['/r'], { roles: ['qa'], minWrites: 3 });
-  assert.throws(() => loadConfig(cfgFile({ roles: { deliver: 'session' }, projects: [] })), /deliver|report/);
+  assert.throws(() => loadConfig(cfgFile({ roles: { deliver: 'email' }, projects: [] })), /deliver/);
   assert.throws(() => loadConfig(cfgFile({ roles: { default: 'pm' }, projects: [] })), /default/);
   assert.throws(() => loadConfig(cfgFile({ roles: { cooldownMinutes: -1 }, projects: [] })), /cooldownMinutes/);
   assert.throws(() => loadConfig(cfgFile({ roles: { projects: { '/r': { roles: 'qa' } } }, projects: [] })), /roles/);
@@ -181,4 +181,10 @@ test('responseWaitMinutes: 기본 5, 0 이상의 숫자여야 한다', () => {
   assert.equal(loadConfig(cfgFile({ responseWaitMinutes: 0.5, projects: [] })).responseWaitMinutes, 0.5);
   assert.throws(() => loadConfig(cfgFile({ responseWaitMinutes: -1, projects: [] })), /responseWaitMinutes/);
   assert.throws(() => loadConfig(cfgFile({ responseWaitMinutes: 'x', projects: [] })), /responseWaitMinutes/);
+});
+
+test('roles.deliver: session 을 받아들이고 deliverMinSeverity 를 검증한다', () => {
+  const c = loadConfig(cfgFile({ roles: { deliver: 'session', deliverMinSeverity: 'minor' }, projects: [] }));
+  assert.deepEqual([c.roles.deliver, c.roles.deliverMinSeverity], ['session', 'minor']);
+  assert.throws(() => loadConfig(cfgFile({ roles: { deliverMinSeverity: 'info' }, projects: [] })), /deliverMinSeverity/);
 });

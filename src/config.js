@@ -53,7 +53,7 @@ function validateProjects(list, remotes = []) {
   });
 }
 
-const ROLES_DEFAULTS = { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', excludePaths: [] };
+const ROLES_DEFAULTS = { enabled: true, default: ['pm', 'developer', 'qa'], cooldownMinutes: 5, minWrites: 1, dailyLimit: 120, deliver: 'report', deliverMinSeverity: 'major', excludePaths: [] };
 
 function validateRolesConfig(raw = {}) {
   const roles = { ...ROLES_DEFAULTS, ...raw, projects: raw.projects ?? {} };
@@ -68,7 +68,8 @@ function validateRolesConfig(raw = {}) {
   posInt(roles.cooldownMinutes, 'cooldownMinutes', 0);
   posInt(roles.minWrites, 'minWrites', 1);
   posInt(roles.dailyLimit, 'dailyLimit', 1);
-  if (roles.deliver !== 'report') throw new Error('roles.deliver는 현재 "report"만 지원합니다');
+  if (!['report', 'session'].includes(roles.deliver)) throw new Error('roles.deliver는 "report"(보고만) 또는 "session"(다음 프롬프트에 의견 전달)이어야 합니다');
+  if (!['minor', 'major', 'critical'].includes(roles.deliverMinSeverity)) throw new Error('roles.deliverMinSeverity는 minor|major|critical 중 하나여야 합니다');
   for (const [path, v] of Object.entries(roles.projects)) {
     if (v.roles !== undefined) ids(v.roles, `roles.projects ${path}의 roles`);
     if (v.cooldownMinutes !== undefined) posInt(v.cooldownMinutes, 'projects.cooldownMinutes', 0);

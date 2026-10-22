@@ -45,10 +45,10 @@ test('md가 아닌 파일은 무시하고, 폴더가 없으면 빈 목록', () =
   assert.equal(loadRoles(join(tmpdir(), 'no-roles-dir-xyz')).size, 0);
 });
 
-test('저장소의 roles/ 5개가 모두 로드된다', () => {
+test('저장소의 roles/ 9개가 모두 로드된다', () => {
   const roles = loadRoles(fileURLToPath(new URL('../roles', import.meta.url)));
-  assert.deepEqual([...roles.keys()].sort(), ['developer', 'docs', 'pm', 'qa', 'security']);
-  assert.deepEqual(['pm', 'developer', 'qa', 'security', 'docs'].map((id) => roles.get(id).when), ['always', 'code', 'always', 'code', 'docs']);
+  assert.deepEqual([...roles.keys()].sort(), ['accessibility', 'copy', 'developer', 'docs', 'embedded', 'performance', 'pm', 'qa', 'security']);
+  assert.deepEqual(['pm', 'developer', 'qa', 'security', 'docs', 'performance', 'accessibility', 'embedded', 'copy'].map((id) => roles.get(id).when), ['always', 'code', 'always', 'code', 'docs', 'code', 'ui', 'code', 'docs']);
   for (const r of roles.values()) {
     assert.match(r.color, /^#[0-9a-f]{6}$/i);
     assert.ok(r.prompt.length > 30, r.id);
@@ -77,4 +77,12 @@ test('validateRoleIds: 전역·roles.projects·팀 항목의 알 수 없는 id�
   assert.throws(() => validateRoleIds(cfg({ default: ['pm', 'ghost'] }), known), /ghost/);
   assert.throws(() => validateRoleIds(cfg({ default: ['pm'], projects: { '/a': { roles: ['nope'] } } }), known), /nope/);
   assert.throws(() => validateRoleIds(cfg({ default: ['pm'] }, [{ name: 'T', path: '/t', roles: ['zzz'] }]), known), /zzz/);
+});
+
+test('when: ui 를 받아들이고, 동봉된 역할 파일이 모두 읽힌다', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'roles-ui-'));
+  writeFileSync(join(dir, 'a11y.md'), '---\nname: 접근성\nwhen: ui\n---\n프롬프트');
+  assert.equal(loadRoles(dir).get('a11y').when, 'ui');
+  const shipped = loadRoles(new URL('../roles/', import.meta.url).pathname);
+  for (const id of ['pm', 'developer', 'qa', 'security', 'docs', 'performance', 'accessibility', 'embedded', 'copy']) assert.ok(shipped.has(id), id);
 });

@@ -23,10 +23,17 @@ Claude Code 세션이 **파일을 수정하고 응답을 끝내면**, 역할자�
 ```
 - 역할 선택 우선순위: 화면 팀 항목의 `roles` → `roles.projects`의 가장 긴 경로 → `roles.default`.
 - 알 수 없는 역할 id가 있으면 서버가 시작되지 않는다(메시지에 어느 설정인지 나온다).
-- `deliver`는 현재 `"report"`(보고만)만 지원한다. 작업 세션에 자동 전달은 아직 없다.
+- `deliver`: `"report"`(기본, 보고만) 또는 `"session"`. 아래 "검토 의견을 작업 세션에 되돌리기" 참고.
+- 동봉된 역할: `pm`·`developer`·`qa`(기본), `security`, `docs`, `performance`, `accessibility`(화면 파일일 때만), `embedded`(C/펌웨어 안전), `copy`(문서 문구). 필요한 팀에만 `roles`로 붙인다(역할이 늘면 하루 한도 소모도 는다).
+
+## 검토 의견을 작업 세션에 되돌리기 (`deliver: "session"`)
+- 검토가 끝나 **major 이상**(`roles.deliverMinSeverity`: `minor|major|critical`) 지적이 있으면, 그 검토를 일으킨 **같은 세션의 다음 프롬프트**에 "참고용 의견"으로 한 번만 붙는다(훅의 `additionalContext`). Claude 가 사실인지 확인해 맞는 것만 반영하고 사용자에게 한 줄로 알린다.
+- 의견은 한 줄·300자·비밀값 마스킹을 거치고 "사용자의 지시가 아님" 문구와 함께 간다. 최대 8건, 6시간 안에 다음 프롬프트가 없으면 버린다.
+- **훅이 켜진 세션에서만** 된다(세션 시작 때 훅이 로드된 세션). 훅 없이 세션 기록으로만 보이는 세션, 원격 PC 세션에는 전달되지 않고 보고서에만 남는다.
+- 역할자가 읽은 파일 내용 속 문장이 의견에 섞일 수 있어(프롬프트 주입), 의견은 "참고"로만 취급하도록 안내문을 붙인다. 꺼려지면 `deliver` 를 `"report"` 로 둔다.
 
 ## 새 역할 추가하기
-`roles/<id>.md` 파일을 만들면 된다(id는 영문 소문자·숫자·`_-`). 예: `roles/performance.md`
+`roles/<id>.md` 파일을 만들면 된다(id는 영문 소문자·숫자·`_-`). 예: `roles/performance.md`(이미 동봉되어 있다. 아래는 형식 예시)
 ```markdown
 ---
 name: 성능
@@ -47,14 +54,14 @@ tools: [Read, Grep, Glob]
 | `name` | 화면에 표시되는 이름(필수) |
 | `color` | `#rrggbb` (역할자 셔츠·말풍선 색) |
 | `model` | `haiku` / `sonnet` / `opus` 등 (기본 `sonnet`) |
-| `when` | `always`(항상) / `code`(코드 파일이 바뀐 경우) / `docs`(`.md`·`.txt` 등이 바뀐 경우) |
+| `when` | `always`(항상) / `code`(코드 파일이 바뀐 경우) / `docs`(`.md`·`.txt` 등이 바뀐 경우) / `ui`(`.html`·`.css`·`.jsx`·`.tsx`·`.vue`·`.svelte` 등이 바뀐 경우) |
 | `tools` | `Read`, `Grep`, `Glob`만 허용. 그 밖의 도구를 넣으면 거부된다 |
 
 출력 형식(JSON)과 읽기 전용 규칙은 시스템이 프롬프트 뒤에 자동으로 덧붙인다. 본문은 역할의 관점만 적으면 된다.
 
 ## 오류 메시지
 - `역할 <id>: tools 에는 Read, Grep, Glob 만 쓸 수 있습니다 (Bash 는 허용되지 않음)`
-- `역할 <id>: 알 수 없는 항목 "…"` / `name 이 필요합니다` / `color 는 #rrggbb …` / `when 은 always|code|docs …` / `프롬프트가 너무 깁니다 (최대 20KB)`
+- `역할 <id>: 알 수 없는 항목 "…"` / `name 이 필요합니다` / `color 는 #rrggbb …` / `when 은 always|code|docs|ui …` / `프롬프트가 너무 깁니다 (최대 20KB)`
 - `알 수 없는 역할 id: <id> (설정 위치) — roles/<id>.md 가 있어야 합니다`
 
 ## 한계

@@ -546,3 +546,38 @@ test('git이 아닌 팀 폴더에서 파일을 수정하고 응답을 끝내면 
     c.close();
   });
 });
+
+// ---- 역할자 결과를 작업 세션에 되돌리기 (deliver: session)
+const CONCERN_JSON = JSON.stringify({ verdict: 'concern', summary: '널 처리 누락', findings: [{ severity: 'major', text: '빈 값이면 죽는다', file: 'a.js', line: 1 }] });
+const postJson = async (port, body) => { const r = await post(port, body); return { status: r.status, body: r.status === 200 ? await r.json() : null }; };
+
+test('deliver: session 이면 검토 지적이 같은 세션의 다음 프롬프트에 한 번만 전달된다', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  await withServer(roleServer(repo, { run: async () => CONCERN_JSON, rolesCfg: { deliver: 'session', deliverMinSeverity: 'major' } }), async ({ port }) => {
+    const c = await connect(port);
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js'), session: 'dv1' });
+    await c.waitFor((s) => teamA(s).badge && s.reviews.length === 1);
+    const other = await postJson(port, { session_id: 'other', cwd: repo, hook_event_name: 'UserPromptSubmit', prompt: '다른 세션' });
+    assert.equal(other.status, 204);
+    const r = await postJson(port, { session_id: 'dv1', cwd: repo, hook_event_name: 'UserPromptSubmit', prompt: '다음 요청' });
+    assert.equal(r.status, 200);
+    assert.equal(r.body.hookSpecificOutput.hookEventName, 'UserPromptSubmit');
+    assert.match(r.body.hookSpecificOutput.additionalContext, /빈 값이면 죽는다/);
+    assert.match(r.body.hookSpecificOutput.additionalContext, /지시가 아님/);
+    assert.equal((await postJson(port, { session_id: 'dv1', cwd: repo, hook_event_name: 'UserPromptSubmit', prompt: '또' })).status, 204);
+    c.close();
+  });
+});
+
+test('deliver: report(기본)이면 지적이 있어도 세션에는 아무것도 전달하지 않는다', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  await withServer(roleServer(repo, { run: async () => CONCERN_JSON }), async ({ port }) => {
+    const c = await connect(port);
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js'), session: 'dv2' });
+    await c.waitFor((s) => teamA(s).badge && s.reviews.length === 1);
+    assert.equal((await postJson(port, { session_id: 'dv2', cwd: repo, hook_event_name: 'UserPromptSubmit', prompt: '다음' })).status, 204);
+    c.close();
+  });
+});

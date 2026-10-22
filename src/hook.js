@@ -29,7 +29,21 @@ process.stdin.on('end', () => {
     const req = http.request(
       url,
       { method: 'POST', headers: { 'content-type': 'application/json' }, timeout: 1000 },
-      (res) => { res.resume(); res.on('end', done); res.on('error', done); },
+      (res) => {
+        // 200 이면 서버가 이 세션에 전할 역할자 의견을 실어 보낸 것: hookSpecificOutput 이 있는 JSON 일 때만 그대로 출력한다
+        if (res.statusCode !== 200) { res.resume(); res.on('end', done); res.on('error', done); return; }
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => { if (body.length < 20_000) body += c; });
+        res.on('error', done);
+        res.on('end', () => {
+          try {
+            const out = JSON.parse(body);
+            if (out && typeof out === 'object' && out.hookSpecificOutput) process.stdout.write(JSON.stringify(out));
+          } catch { /* 형식이 다르면 무시 */ }
+          done();
+        });
+      },
     );
     req.on('timeout', () => { req.destroy(); done(); });
     req.on('error', done);

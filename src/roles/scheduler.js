@@ -7,10 +7,11 @@ import { rolesFor } from './loader.js';
 
 const CODE_EXT = new Set(['.js', '.jsx', '.ts', '.tsx', '.mjs', '.cjs', '.py', '.java', '.kt', '.kts', '.c', '.cc', '.cpp', '.h', '.hpp', '.go', '.rs', '.sh', '.rb', '.php', '.cs', '.swift', '.m', '.sql', '.html', '.css', '.vue', '.svelte']);
 const DOC_EXT = new Set(['.md', '.txt', '.rst', '.adoc']);
+const UI_EXT = new Set(['.html', '.htm', '.css', '.scss', '.jsx', '.tsx', '.vue', '.svelte']);
 const MIN = 60_000;
 
 const hasKind = (files, set) => files.some((f) => set.has(extname(f).toLowerCase()));
-const matchesWhen = (role, files) => role.when === 'always' || (role.when === 'code' && hasKind(files, CODE_EXT)) || (role.when === 'docs' && hasKind(files, DOC_EXT));
+const matchesWhen = (role, files) => role.when === 'always' || (role.when === 'code' && hasKind(files, CODE_EXT)) || (role.when === 'docs' && hasKind(files, DOC_EXT)) || (role.when === 'ui' && hasKind(files, UI_EXT));
 
 export async function defaultBuildBundle(job) {
   if (job.edits) return buildEditsBundle(job);
@@ -77,7 +78,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     };
     store.save(review);
     store.counter.add(selected.length);
-    safeEmit({ type: 'done', ...base, review });
+    safeEmit({ type: 'done', ...base, review, sessionId: job.sessionId });
   }
 
   async function process(job) {

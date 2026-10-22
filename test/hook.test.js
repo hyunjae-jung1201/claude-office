@@ -85,3 +85,35 @@ test('CLAUDE_OFFICE_ROLE이 있으면 아무것도 보내지 않는다 (역할�
   assert.equal(code, 0);
   assert.equal(hits, 0);
 });
+
+test('서버가 200 JSON 으로 답하면(역할자 의견 전달) 그대로 stdout 에 출력한다', async () => {
+  const answer = '{"hookSpecificOutput":{"hookEventName":"UserPromptSubmit","additionalContext":"참고"}}';
+  const server = http.createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(200, { 'content-type': 'application/json' }).end(answer)); });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const out = await new Promise((resolve) => {
+    const child = spawn(process.execPath, [HOOK], { env: { ...process.env, CLAUDE_OFFICE_URL: `http://127.0.0.1:${server.address().port}` } });
+    let o = '';
+    child.stdout.on('data', (d) => (o += d));
+    child.stdin.end('{"session_id":"s1","hook_event_name":"UserPromptSubmit","cwd":"/x","prompt":"hi"}');
+    child.on('close', (code) => resolve({ code, o }));
+  });
+  server.close();
+  assert.equal(out.code, 0);
+  assert.equal(out.o.trim(), answer);
+});
+
+test('200 이어도 JSON 이 아니거나 hookSpecificOutput 이 없으면 아무것도 출력하지 않는다', async () => {
+  for (const answer of ['not json', '{"x":1}']) {
+    const server = http.createServer((req, res) => { req.resume(); req.on('end', () => res.writeHead(200).end(answer)); });
+    await new Promise((r) => server.listen(0, '127.0.0.1', r));
+    const o = await new Promise((resolve) => {
+      const child = spawn(process.execPath, [HOOK], { env: { ...process.env, CLAUDE_OFFICE_URL: `http://127.0.0.1:${server.address().port}` } });
+      let s = '';
+      child.stdout.on('data', (d) => (s += d));
+      child.stdin.end('{"session_id":"s1"}');
+      child.on('close', () => resolve(s));
+    });
+    server.close();
+    assert.equal(o, '');
+  }
+});

@@ -183,3 +183,18 @@ test('job에 edits가 있으면 git 없이 수정 기록으로 만든 변경 내
   assert.match(prompts[0], /-const a = 1;/);
   assert.match(prompts[0], /\+const a = 2;/);
 });
+
+test('when: ui 역할은 화면 파일(html/css/jsx/vue 등)이 있을 때만 실행되고, done 에 세션 id 가 실린다', async () => {
+  const mk = (ext) => async () => {
+    const events = [];
+    const roles = new Map([['ui', { id: 'ui', name: 'UI', color: '#112233', when: 'ui', model: 'sonnet', tools: [], prompt: 'p' }]]);
+    const sched = createScheduler({ config: cfg({ default: ['ui'] }), roles, store: fakeStore(), run: async () => OK, emit: (e) => events.push(e),
+      buildBundle: async (job) => ({ repoRoot: job.repoRoot, repoName: 'r', requests: [], lastResponse: '', files: job.files, diff: '+x', truncated: false, stats: ' f', excluded: [] }) });
+    sched.submit({ repoRoot: '/r', sessionId: 'S9', files: [`/r/a${ext}`], requests: [], lastResponse: '', reason: 'stop' });
+    await sched.idle();
+    return events;
+  };
+  const ui = await mk('.vue')();
+  assert.equal(ui.find((e) => e.type === 'done').sessionId, 'S9');
+  assert.equal((await mk('.py')()).find((e) => e.type === 'skipped').reason, 'no-roles');
+});

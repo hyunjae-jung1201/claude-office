@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 
 const READ_ONLY_TOOLS = new Set(['Read', 'Grep', 'Glob']);
 const KEYS = new Set(['name', 'color', 'model', 'when', 'tools']);
-const WHEN = new Set(['always', 'code', 'docs']);
+const WHEN = new Set(['always', 'code', 'docs', 'ui']);
 const PROMPT_LIMIT = 20 * 1024;
 const unquote = (v) => v.replace(/^(["'])(.*)\1$/, '$2');
 
@@ -31,7 +31,7 @@ function parseRole(id, text) {
   const color = fm.color ? unquote(fm.color) : '#8a94a6';
   if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error(`역할 ${id}: color 는 #rrggbb 형식이어야 합니다 ("${color}")`);
   const when = fm.when ? unquote(fm.when) : 'always';
-  if (!WHEN.has(when)) throw new Error(`역할 ${id}: when 은 always|code|docs 중 하나여야 합니다 ("${when}")`);
+  if (!WHEN.has(when)) throw new Error(`역할 ${id}: when 은 always|code|docs|ui 중 하나여야 합니다 ("${when}")`);
   const model = fm.model ? unquote(fm.model) : 'sonnet';
   if (!/^[A-Za-z0-9._-]+$/.test(model)) throw new Error(`역할 ${id}: model 형식이 올바르지 않습니다 ("${model}")`);
 
