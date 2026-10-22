@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
-import { toolCategory, maskDetail, USER_WAIT_TOOLS, EDIT_TOOLS } from './events.js';
+import { toolCategory, maskDetail, USER_WAIT_TOOLS, EDIT_TOOLS, activityOf } from './events.js';
 import { maskSecrets } from './mask.js';
 import { minimalEnv } from './env.js';
 
@@ -37,10 +37,10 @@ function toolEvents(tools, base, ctx, agent = {}) {
   return tools.map((t) => {
     const category = toolCategory(t.n);
     if (t.i) ctx.tools.set(t.i, category);
-    if (USER_WAIT_TOOLS[t.n]) return { ...base, type: 'wait', waitKind: USER_WAIT_TOOLS[t.n], ...agent };
+    if (USER_WAIT_TOOLS[t.n]) return { ...base, type: 'wait', waitKind: USER_WAIT_TOOLS[t.n], activity: activityOf(t.n, ''), ...agent };
     // 편집 도구의 경로 원문(서버 안에서 git 저장소를 찾는 데만 쓰인다)
     const filePath = EDIT_TOOLS.has(t.n) && typeof t.d === 'string' && t.d.startsWith('/') && t.d.length <= 1000 ? t.d : undefined;
-    return { ...base, type: 'tool', category, toolName: t.n, filePath, detail: maskDetail(t.d), ...agent };
+    return { ...base, type: 'tool', category, toolName: t.n, activity: activityOf(t.n, t.d), filePath, detail: maskDetail(t.d), ...agent };
   });
 }
 

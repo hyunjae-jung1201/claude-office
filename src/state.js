@@ -16,6 +16,8 @@ const BACKGROUND_LABEL = '백그라운드 작업 중';
 
 export const ROLE_LINGER_MS = 8000; // 검토가 끝난 역할자가 화면에 남아 있는 시간
 const HISTORY_LIMIT = 20;
+export const BREAK_AFTER_MS = 5 * 60 * 1000; // 이보다 오래 쉬면 지시 대기 구역에서 휴게실로 간다
+const DEFAULT_ROOM = { read: 'library', write: 'work', run: 'server', wait: 'meeting', idle: 'hall', off: 'sleep' };
 const LIMIT_NOTICE = '오늘 검토 한도에 도달했습니다';
 
 export function createState(config) {
@@ -83,6 +85,8 @@ function sessionFor(state, ev, project) {
       lastEventAt: ev.ts,
       busySince: null,
       openTools: 0,
+      activity: null,
+      idleAt: ev.ts,
       finishedAt: null,
       members: new Map(),
     };
@@ -99,8 +103,8 @@ function setStatus(target, status, label) {
 function applyMemberEvent(s, ev) {
   const m = s.members.get(ev.agentId);
   if (!m) return;
-  if (ev.type === 'tool') setStatus(m, ev.category);
-  else if (ev.type === 'wait') setStatus(m, 'wait');
+  if (ev.type === 'tool') { setStatus(m, ev.category); m.activity = ev.activity ?? null; }
+  else if (ev.type === 'wait') { setStatus(m, 'wait'); m.activity = ev.activity ?? null; }
   else if (ev.type === 'toolDone' && m.status === 'wait') setStatus(m, ev.category);
 }
 
@@ -150,19 +154,22 @@ export function applyEvent(state, ev, now) {
     case 'prompt':
       s.finishedAt = null;
       s.busySince ??= ts;
+      s.activity = 'library';
       setStatus(s, 'read', '요청 파악 중');
       break;
     case 'tool':
       s.finishedAt = null;
       s.busySince ??= ts;
       s.openTools += 1;
+      s.activity = ev.activity ?? null;
       setStatus(s, ev.category);
       break;
     case 'toolDone':
       s.openTools = Math.max(0, s.openTools - 1);
-      if (s.status === 'wait') setStatus(s, ev.category);
+      if (s.status === 'wait') { s.activity = null; setStatus(s, ev.category); }
       break;
     case 'wait':
+      s.activity = ev.activity ?? null;
       setStatus(s, 'wait');
       break;
     case 'stop': {
@@ -179,6 +186,8 @@ export function applyEvent(state, ev, now) {
     }
     default:
   }
+  // 쉬기 시작한 시각(지시 대기 구역 → 휴게실 전환 기준). 다시 일하면 초기화한다.
+  if (s.status === 'idle') s.idleAt ??= ts; else s.idleAt = null;
 }
 
 export function tick(state, now) {
@@ -196,6 +205,14 @@ export function setLabel(state, sessionId, agentId, label) {
   if (target) target.label = label;
 }
 
+// 팀장이 지금 있을 방: 백그라운드 작업은 서버실, 쉬는 중은 지시 대기 구역(오래 쉬면 휴게실), 그 밖에는 하는 일의 종류
+function leaderRoom(s, background, now) {
+  if (background) return 'server';
+  if (s.status === 'idle') return now - (s.idleAt ?? now) > BREAK_AFTER_MS ? 'lounge' : 'hall';
+  return s.activity ?? DEFAULT_ROOM[s.status];
+}
+const memberRoom = (m) => m.activity ?? DEFAULT_ROOM[m.status];
+
 export function snapshot(state, now) {
   const { projects, maxMembers } = state.config;
   const teams = projects.map((p) => {
@@ -209,7 +226,7 @@ export function snapshot(state, now) {
       : [];
     const badge = state.badges.get(p.name) ?? null;
     if (!latest) {
-      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, members: [], overflow: 0, finishedAt: null, roles, badge };
+      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'sleep', members: [], overflow: 0, finishedAt: null, roles, badge };
     }
     const all = [...latest.members.values()].sort((a, b) => a.startedAt - b.startedAt);
     // 응답은 끝났지만 백그라운드 명령이 도는 중이면 서버실에서 일하는 것으로 보여 준다
@@ -219,7 +236,8 @@ export function snapshot(state, now) {
       color: p.color,
       status: background ? 'run' : latest.status,
       label: background ? BACKGROUND_LABEL : latest.label,
-      members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, startedAt: m.startedAt })),
+      room: leaderRoom(latest, background, now),
+      members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, room: memberRoom(m), startedAt: m.startedAt })),
       overflow: Math.max(0, all.length - maxMembers),
       finishedAt: latest.finishedAt,
       roles,

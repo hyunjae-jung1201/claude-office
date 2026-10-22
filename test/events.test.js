@@ -141,3 +141,47 @@ test('stop은 마스킹된 assistantText(2000자)를 가진다', () => {
   assert.ok(!ev.assistantText.includes('abcd1234efgh'));
   assert.equal(normalizeEvent(base, NOW).assistantText, undefined);
 });
+
+// ---- 작업 종류(방) 분류
+import { activityOf } from '../src/events.js';
+
+test('activityOf: 도구와 입력으로 어느 방에서 하는 일인지 정한다', () => {
+  const cases = [
+    ['Read', '/r/a.js', 'library'], ['Grep', 'foo', 'library'], ['Glob', '**/*.js', 'library'],
+    ['WebSearch', 'node test runner', 'research'], ['WebFetch', 'https://x.dev', 'research'],
+    ['Edit', '/r/src/a.js', 'work'], ['Write', '/r/b.py', 'work'], ['NotebookEdit', '/r/n.ipynb', 'work'],
+    ['Edit', '/r/README.md', 'docs'], ['Write', '/r/docs/notes.txt', 'docs'], ['Edit', '/r/guide.rst', 'docs'],
+    ['TodoWrite', '', 'planning'], ['EnterPlanMode', '', 'planning'],
+    ['Agent', '조사', 'briefing'], ['Task', '조사', 'briefing'],
+    ['AskUserQuestion', '', 'consult'], ['ExitPlanMode', '', 'meeting'],
+    ['Bash', 'npm test', 'lab'], ['Bash', 'pytest -q tests/', 'lab'], ['Bash', 'node --test test/', 'lab'], ['Bash', 'eslint src', 'lab'], ['Bash', 'cargo test', 'lab'],
+    ['Bash', 'npm run build', 'build'], ['Bash', 'npm install', 'build'], ['Bash', 'pip install -r req.txt', 'build'], ['Bash', 'make -j8', 'build'], ['Bash', 'docker build .', 'build'],
+    ['Bash', 'git status', 'git'], ['Bash', 'git commit -m x', 'git'], ['Bash', 'gh pr create', 'git'],
+    ['Bash', 'wget https://x/train.zip', 'data'], ['Bash', 'curl -O https://x/a.bin', 'data'], ['Bash', 'rsync -av a b', 'data'], ['Bash', 'unzip data.zip', 'data'], ['Bash', 'scp a host:/b', 'data'],
+    ['Bash', 'systemctl status nginx', 'server'], ['Bash', 'ls -la', 'server'], ['Bash', 'python train.py', 'server'], ['Bash', 'ssh host uptime', 'server'],
+    ['mcp__x__y', '', 'work'], ['Whatever', '', 'work'],
+  ];
+  for (const [tool, detail, want] of cases) assert.equal(activityOf(tool, detail), want, `${tool} ${detail}`);
+});
+
+test('activityOf: git이 테스트·빌드보다 먼저, 앞쪽 환경변수·sudo·cd 접두는 건너뛴다', () => {
+  assert.equal(activityOf('Bash', 'git commit -m "npm test 추가"'), 'git');
+  assert.equal(activityOf('Bash', 'CI=1 npm test'), 'lab');
+  assert.equal(activityOf('Bash', 'sudo apt-get install -y curl'), 'build');
+  assert.equal(activityOf('Bash', 'cd /r && npm run build'), 'build');
+  assert.equal(activityOf('Bash', 'cd /r && git push'), 'git');
+});
+
+test('activityOf: 이상한 입력에도 예외 없이 기본 방', () => {
+  for (const [t, d] of [[undefined, undefined], ['Bash', undefined], ['Bash', 42], ['Edit', null], ['Read', {}]]) assert.doesNotThrow(() => activityOf(t, d));
+  assert.equal(activityOf('Bash', ''), 'server');
+});
+
+test('이벤트에 activity가 붙는다 (tool, wait, 하위 에이전트 호출)', () => {
+  const base = { session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse' };
+  assert.equal(normalizeEvent({ ...base, tool_name: 'Bash', tool_input: { command: 'npm test' } }, NOW).activity, 'lab');
+  assert.equal(normalizeEvent({ ...base, tool_name: 'Edit', tool_input: { file_path: '/r/README.md' } }, NOW).activity, 'docs');
+  assert.equal(normalizeEvent({ ...base, tool_name: 'Agent', tool_input: { description: '조사' } }, NOW).activity, 'briefing');
+  assert.equal(normalizeEvent({ ...base, tool_name: 'AskUserQuestion', tool_input: {} }, NOW).activity, 'consult');
+  assert.equal(normalizeEvent({ ...base, hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'git push' } }, NOW).activity, 'meeting');
+});

@@ -272,3 +272,63 @@ test('setReviewHistory: results가 없거나 이상한 검토가 섞여 있어�
   assert.doesNotThrow(() => setReviewHistory(st, [{ id: 'bad' }, null, rev({ id: 'ok1', finishedAt: 3000 }), { id: 'bad2', results: 'x' }]));
   assert.deepEqual(snapshot(st, 5000).reviews.map((r) => r.id), ['ok1']);
 });
+
+// ---- 방(room): 상태 + 작업 종류로 아바타가 갈 곳
+import { BREAK_AFTER_MS } from '../src/state.js';
+const roomA = (st, now) => teamA(st, now).room;
+
+test('room: 도구의 activity가 팀장의 방이 되고, 없으면 상태별 기본 방', () => {
+  const st = createState(aliasConfig);
+  feed(st, ev('start', 0));
+  assert.equal(roomA(st, 0), 'hall');
+  feed(st, ev('prompt', 1000));
+  assert.equal(roomA(st, 1000), 'library');
+  feed(st, ev('tool', 2000, { category: 'run', activity: 'lab', detail: 'npm test' }));
+  assert.equal(roomA(st, 2000), 'lab');
+  feed(st, ev('tool', 3000, { category: 'write', activity: 'docs' }));
+  assert.equal(roomA(st, 3000), 'docs');
+  feed(st, ev('tool', 4000, { category: 'run' })); // activity 없음(예: 이전 형식 이벤트)
+  assert.equal(roomA(st, 4000), 'server');
+  feed(st, ev('tool', 5000, { category: 'write' }));
+  assert.equal(roomA(st, 5000), 'work');
+  feed(st, ev('tool', 6000, { category: 'read' }));
+  assert.equal(roomA(st, 6000), 'library');
+});
+
+test('room: 하위 에이전트를 맡기는 중은 브리핑룸, 승인은 회의실, 질문은 상담실', () => {
+  const st = createState(aliasConfig);
+  feed(st, ev('tool', 1000, { category: 'write', activity: 'briefing' }));
+  assert.equal(roomA(st, 1000), 'briefing');
+  feed(st, ev('wait', 2000, { waitKind: 'approval', activity: 'meeting' }));
+  assert.equal(roomA(st, 2000), 'meeting');
+  feed(st, ev('wait', 3000, { waitKind: 'answer', activity: 'consult' }));
+  assert.equal(roomA(st, 3000), 'consult');
+  feed(st, ev('wait', 4000, { waitKind: 'approval' }));
+  assert.equal(roomA(st, 4000), 'meeting'); // activity 없어도 승인 대기는 회의실
+});
+
+test('room: 쉬는 중은 지시 대기 구역, 5분이 넘으면 휴게실, 꺼짐은 수면실, 백그라운드 작업은 서버실', () => {
+  const st = createState(aliasConfig);
+  feed(st, ev('tool', 0, { category: 'run', activity: 'build' }), ev('stop', 1000));
+  assert.equal(roomA(st, 1000 + BREAK_AFTER_MS - 1), 'hall');
+  assert.equal(roomA(st, 1000 + BREAK_AFTER_MS + 1), 'lounge');
+  feed(st, ev('prompt', 2_000_000));
+  assert.equal(roomA(st, 2_000_000), 'library'); // 다시 일하면 쉬는 시간은 초기화
+  feed(st, ev('stop', 2_001_000));
+  assert.equal(roomA(st, 2_001_000), 'hall');
+  assert.equal(snapshot(createState(aliasConfig), 0).teams[0].room, 'sleep');
+  const bg = createState(aliasConfig);
+  feed(bg, ev('start', 0), ev('stop', 1));
+  feed(bg, { sessionId: 's1', cwd: '/w/a', type: 'live', liveStatus: 'shell', ts: 5 });
+  assert.equal(roomA(bg, 10), 'server');
+});
+
+test('room: 팀원은 자기 도구의 activity, 없으면 책상(작업실)', () => {
+  const st = createState(aliasConfig);
+  feed(st, ev('agentStart', 0, { agentId: 'x', agentType: 'Explore' }));
+  assert.equal(teamA(st, 0).members[0].room, 'work');
+  feed(st, ev('tool', 1000, { category: 'read', activity: 'research', agentId: 'x' }));
+  assert.equal(teamA(st, 1000).members[0].room, 'research');
+  feed(st, ev('tool', 2000, { category: 'run', activity: 'lab', agentId: 'x' }));
+  assert.equal(teamA(st, 2000).members[0].room, 'lab');
+});
