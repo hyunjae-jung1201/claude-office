@@ -40,27 +40,63 @@ const BUILD = /\b(?:npm|yarn|pnpm|bun)\s+(?:run\s+)?(?:build|install|ci|i|add)\b
 const DATA_CMD = /^(?:wget|scp|rsync|gdown|kaggle|yt-dlp|youtube-dl|unzip|tar|7z|gsutil|huggingface-cli)\b|^aws\s+s3\b|^curl\b.*\s-(?:[A-Za-z]*[Oo]\b|-output\b|-remote-name\b)/;
 const WRAPPERS = new Set(['sudo', 'time', 'nohup', 'env', 'command', 'exec', 'nice']);
 
-function bashActivity(cmd) {
-  const found = new Set();
-  for (const raw of cmd.split(/&&|\|\||;|\|/)) {
-    let seg = raw.trim();
-    // 앞쪽 VAR=값 과 sudo/time 같은 접두를 건너뛴다
-    for (;;) {
-      const m = /^([A-Za-z_][A-Za-z0-9_]*=\S*|\S+)\s*/.exec(seg);
-      if (!m) break;
-      const tok = m[1];
-      if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok) || WRAPPERS.has(tok)) seg = seg.slice(m[0].length);
-      else break;
-    }
-    if (!seg) continue;
-    const first = seg.split(/\s+/)[0];
-    if (first === 'git' || first === 'gh') found.add('git');
-    else if (LAB.test(seg)) found.add('lab');
-    else if (BUILD.test(seg)) found.add('build');
-    else if (DATA_CMD.test(seg)) found.add('data');
+// 서버실은 서버·인프라 일(접속·프로세스·네트워크·컨테이너·장치)만. 파일을 읽는 명령은 자료실, 문서를 만들면 문서실, 그 밖의 손작업은 작업실.
+// 밑줄(_)은 단어 경계로 치지 않는다: make_ppt.py, eval_model.py
+const DOC_KEYWORDS = /(?<![A-Za-z])(?:pptx?|docx?|xlsx?|pdf|pandoc|libreoffice|soffice|reportlab|openpyxl|pptxgenjs|python-pptx|python-docx|slides?|deck)(?![A-Za-z])|슬라이드|보고서|발표|문서/i;
+const DOC_REF = /\.(?:md|markdown|txt|rst|adoc|docx?|pptx?|xlsx?|pdf)(?=["'\s]|$)/i; // 명령 안에서 글·문서 파일을 가리키는 부분
+const EXPERIMENT = /(?<![A-Za-z])(?:train|training|eval|evaluate|infer|inference|bench|benchmark|experiment|validate|predict|sweep)(?![A-Za-z])/i;
+const SERVER_TOOLS = new Set(['ssh', 'sshpass', 'docker', 'docker-compose', 'kubectl', 'systemctl', 'service', 'journalctl', 'kill', 'pkill', 'killall', 'pgrep', 'ps', 'top', 'htop', 'nvidia-smi', 'lsof', 'netstat', 'ss', 'ping', 'nc', 'nohup', 'screen', 'tmux', 'adb', 'uvicorn', 'gunicorn', 'nginx', 'redis-cli', 'fuser', 'crontab', 'curl']);
+const SERVER_RUN = /\b(?:npm\s+(?:start|run\s+(?:dev|start|serve))|node\s+\S*server\S*|flask\s+run|python3?\s+-m\s+http\.server)\b/;
+const SHELL_READ = new Set(['ls', 'cat', 'head', 'tail', 'less', 'more', 'find', 'grep', 'egrep', 'rg', 'ag', 'wc', 'stat', 'file', 'tree', 'du', 'df', 'diff', 'cmp', 'sort', 'uniq', 'awk', 'sed', 'jq', 'readlink', 'realpath', 'basename', 'dirname', 'which', 'type', 'pwd']);
+const FILE_TOOLS = new Set(['cp', 'mv', 'mkdir', 'touch', 'rm', 'ln', 'chmod', 'chown', 'tee', 'rmdir']);
+const RUNNER = /^(?:python[\d.]*|node|nodejs|ruby|perl|deno|bun|bash|sh|zsh|uv|poetry|pipenv)$|^\.{0,2}\//;
+const ROOM_PRIORITY = ['git', 'lab', 'build', 'data', 'docs', 'server', 'work', 'library'];
+
+// heredoc(<<'EOF' … EOF) 본문은 명령이 아니라 글/스크립트 내용이라, 명령 분류에서는 빼고(문서 키워드 검색에만 쓴다)
+const HEREDOC = /<<-?\s*(['"]?)([A-Za-z_]\w*)\1[^\n]*\n[\s\S]*?\n[ \t]*\2[ \t]*(?=\n|$)/g;
+const stripHeredocs = (cmd) => cmd.replace(HEREDOC, (m) => m.split('\n')[0]);
+
+function segmentRoom(seg, full) {
+  let rest = seg.trim();
+  // 앞쪽 VAR=값, sudo/time/timeout N 같은 접두를 건너뛴다
+  for (;;) {
+    const m = /^([A-Za-z_][A-Za-z0-9_]*=(?:"[^"]*"|'[^']*'|\S*)|\S+)\s*/.exec(rest);
+    if (!m) break;
+    const tok = m[1];
+    if (/^[A-Za-z_][A-Za-z0-9_]*=/.test(tok) || WRAPPERS.has(tok)) rest = rest.slice(m[0].length);
+    else if (tok === 'timeout') rest = rest.slice(m[0].length).replace(/^[\d.]+[smhd]?\s*/, '');
+    else break;
   }
-  for (const k of ['git', 'lab', 'build', 'data']) if (found.has(k)) return k;
-  return 'server';
+  if (!rest) return null;
+  const first = rest.split(/\s+/)[0].replace(/^.*\//, '').replace(/^\(+/, '');
+  if (first === 'git' || first === 'gh') return 'git';
+  if (LAB.test(rest)) return 'lab';
+  if (BUILD.test(rest)) return 'build';
+  if (DATA_CMD.test(rest)) return 'data';
+  const writes = /(?:^|[^>\d])>{1,2}\s*[^&\s]/.test(rest) || first === 'tee' || /\bsed\s+(?:-[A-Za-z]*i|--in-place)/.test(rest);
+  if (writes) return DOC_REF.test(rest) ? 'docs' : 'work'; // 글·문서 파일에 쓰면 문서실, 아니면 작업실
+  if (FILE_TOOLS.has(first)) return 'work';
+  if (RUNNER.test(rest.split(/\s+/)[0]) || RUNNER.test(first)) {
+    if (DOC_KEYWORDS.test(full)) return 'docs';
+    if (EXPERIMENT.test(rest)) return 'lab';
+    if (SERVER_RUN.test(rest)) return 'server';
+    return 'work';
+  }
+  if (SERVER_TOOLS.has(first) || SERVER_RUN.test(rest)) return first === 'curl' && /\s-[A-Za-z]*[Oo]\b|--output|--remote-name/.test(rest) ? 'data' : 'server';
+  if (/^soffice$|^libreoffice$|^pandoc$/.test(first)) return 'docs';
+  if (SHELL_READ.has(first)) return 'library';
+  return null;
+}
+
+function bashActivity(cmd) {
+  const shell = stripHeredocs(cmd);
+  const found = new Set();
+  for (const raw of shell.split(/&&|\|\||;|\||\n/)) {
+    const room = segmentRoom(raw, cmd);
+    if (room) found.add(room);
+  }
+  for (const r of ROOM_PRIORITY) if (found.has(r)) return r;
+  return 'work';
 }
 
 export function activityOf(tool, detail) {

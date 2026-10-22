@@ -158,7 +158,7 @@ test('activityOf: 도구와 입력으로 어느 방에서 하는 일인지 정�
     ['Bash', 'npm run build', 'build'], ['Bash', 'npm install', 'build'], ['Bash', 'pip install -r req.txt', 'build'], ['Bash', 'make -j8', 'build'], ['Bash', 'docker build .', 'build'],
     ['Bash', 'git status', 'git'], ['Bash', 'git commit -m x', 'git'], ['Bash', 'gh pr create', 'git'],
     ['Bash', 'wget https://x/train.zip', 'data'], ['Bash', 'curl -O https://x/a.bin', 'data'], ['Bash', 'rsync -av a b', 'data'], ['Bash', 'unzip data.zip', 'data'], ['Bash', 'scp a host:/b', 'data'],
-    ['Bash', 'systemctl status nginx', 'server'], ['Bash', 'ls -la', 'server'], ['Bash', 'python train.py', 'server'], ['Bash', 'ssh host uptime', 'server'],
+    ['Bash', 'systemctl status nginx', 'server'], ['Bash', 'ls -la', 'library'], ['Bash', 'python train.py', 'lab'], ['Bash', 'ssh host uptime', 'server'],
     ['mcp__x__y', '', 'work'], ['Whatever', '', 'work'],
   ];
   for (const [tool, detail, want] of cases) assert.equal(activityOf(tool, detail), want, `${tool} ${detail}`);
@@ -174,7 +174,7 @@ test('activityOf: git이 테스트·빌드보다 먼저, 앞쪽 환경변수·su
 
 test('activityOf: 이상한 입력에도 예외 없이 기본 방', () => {
   for (const [t, d] of [[undefined, undefined], ['Bash', undefined], ['Bash', 42], ['Edit', null], ['Read', {}]]) assert.doesNotThrow(() => activityOf(t, d));
-  assert.equal(activityOf('Bash', ''), 'server');
+  assert.equal(activityOf('Bash', ''), 'work');
 });
 
 test('이벤트에 activity가 붙는다 (tool, wait, 하위 에이전트 호출)', () => {
@@ -199,4 +199,34 @@ test('Edit/Write/MultiEdit 신호에 수정 전·후 내용(edit)이 담긴다 (
   assert.deepEqual([e3.edit.kind, e3.edit.edits.map((x) => [x.old, x.new])], ['multi', [['a', 'b'], ['c', 'd']]]);
   assert.equal(normalizeEvent({ ...base, tool_name: 'Read', tool_input: { file_path: '/p/a.js' } }, NOW).edit, undefined);
   assert.equal(normalizeEvent({ ...base, tool_name: 'Edit', tool_input: { file_path: 'relative.js', old_string: 'a', new_string: 'b' } }, NOW).edit, undefined);
+});
+
+// ---- 셸 명령 분류: 서버실은 서버·인프라 일만. 읽기는 자료실, 문서 만들기는 문서실, 그 밖은 작업실
+test('activityOf(Bash): 문서(PPT·워드·엑셀·PDF·마크다운)를 만드는 일은 서버실이 아니라 문서실', () => {
+  const docs = [
+    'python3 make_ppt.py', 'python3 gen_slides.py --out report.pptx', 'node build_deck.js && ls out/', 'soffice --headless --convert-to pdf a.docx', 'pandoc notes.md -o notes.docx',
+    "python3 - <<'EOF'\nfrom pptx import Presentation\nprs = Presentation()\nprs.save('a.pptx')\nEOF",
+    "cat > /w/notes.md <<'EOF'\n# 회의록\nEOF", 'echo "- 오늘 작업" >> "$D/log.md"', 'D="/mnt/c/Users/USER/Desktop/일지"; cat >> "$D/a.md" <<\'EOF\'\n내용\nEOF',
+  ];
+  for (const c of docs) assert.equal(activityOf('Bash', c), 'docs', c);
+});
+
+test('activityOf(Bash): 읽기 전용 명령은 자료실, 파일을 만지는 명령과 일반 스크립트 실행은 작업실', () => {
+  for (const c of ['ls -la', 'cat README.txt', 'grep -rn foo src | head', 'head -n 20 a.log', 'find . -name "*.js"', 'wc -l a.js', 'sed -n 1,20p a.js', 'tail -f a.log', 'diff a b', 'tree -L 2']) assert.equal(activityOf('Bash', c), 'library', c);
+  for (const c of ['sed -i s/a/b/ a.js', 'mkdir -p out && cp a.js out/', 'mv a b', 'rm -f tmp.txt', 'python3 analyze.py', 'node script.js', 'bash run.sh', './tool --flag', "python3 - <<'EOF'\nprint(1)\nEOF", 'echo hello', 'cat > a.js <<\'EOF\'\nx\nEOF']) assert.equal(activityOf('Bash', c), 'work', c);
+});
+
+test('activityOf(Bash): 서버·인프라·원격 접속·프로세스·네트워크는 서버실, 학습·평가 스크립트는 테스트 랩', () => {
+  for (const c of ['ssh host uptime', "sshpass -p x ssh -o A=b u@h 'ls /data'", 'docker ps', 'systemctl --user restart claude-office', 'journalctl -u x -n 20', 'kill 123', 'pkill -f node', 'ps aux | grep node', 'nvidia-smi', 'curl -s localhost:9410/api/reviews', 'adb devices', 'lsof -i :9410', 'nohup node src/server.js &', 'uvicorn app:app', 'npm start']) assert.equal(activityOf('Bash', c), 'server', c);
+  for (const c of ['python train.py --epochs 3', '.venv/bin/python3 eval_model.py', 'PYTHONPATH=. python benchmark.py', 'python3 -m pytest -q']) assert.equal(activityOf('Bash', c), 'lab', c);
+});
+
+test('activityOf(Bash): 우선순위(git > 테스트 > 빌드 > 데이터 > 문서 > 서버 > 작업 > 읽기), heredoc 본문 속 단어는 명령으로 세지 않는다', () => {
+  assert.equal(activityOf('Bash', 'cd /r && ls && git status'), 'git');
+  assert.equal(activityOf('Bash', 'cat a.js | head && npm test'), 'lab');
+  assert.equal(activityOf('Bash', 'ls && ssh host uptime'), 'server');
+  assert.equal(activityOf('Bash', 'timeout 250 npm test > out.txt 2>&1; grep -c ok out.txt'), 'lab');
+  assert.equal(activityOf('Bash', "cat > /w/notes.md <<'EOF'\ngit add .\nnpm test\nssh host\nEOF"), 'docs'); // 본문의 git/npm/ssh 는 무시
+  assert.equal(activityOf('Bash', 'cmd.exe /c gradlew assembleDebug'), 'build');
+  assert.equal(activityOf('Bash', 'wget https://x/a.zip && unzip a.zip'), 'data');
 });
