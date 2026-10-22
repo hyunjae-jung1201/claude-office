@@ -31,9 +31,9 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 
 | 방 | 언제 가나 |
 |---|---|
-| 자료실 | 파일 읽기·검색(Read/Grep/Glob), 요청 파악 |
+| 자료실 | 파일 읽기·검색(Read/Grep/Glob) |
 | 리서치실 | 웹 검색·조회(WebSearch/WebFetch) |
-| 작업실 | 코드 편집(Edit/Write) — 팀마다 책상 |
+| 작업실 | 코드 편집(Edit/Write), 요청 파악 — 팀마다 책상 |
 | 문서실 | `.md`·`.txt`·`.rst`·README 편집 |
 | 기획실 | 할 일·계획 정리(TodoWrite, 계획 모드) |
 | 서버실 | 그 밖의 셸 명령, 응답이 끝난 뒤에도 도는 백그라운드 작업 |

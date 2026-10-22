@@ -157,7 +157,7 @@ export function applyEvent(state, ev, now) {
     case 'prompt':
       s.finishedAt = null;
       s.busySince ??= ts;
-      s.activity = 'library';
+      s.activity = 'work'; // 요청 파악은 읽기가 아니라 팀 책상에서 시작한다(곧 쓸 도구의 방으로 이동)
       s.awaiting = false;
       setStatus(s, 'read', '요청 파악 중');
       break;

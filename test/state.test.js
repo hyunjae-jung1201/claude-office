@@ -282,7 +282,7 @@ test('room: 도구의 activity가 팀장의 방이 되고, 없으면 상태별 �
   feed(st, ev('start', 0));
   assert.equal(roomA(st, 0), 'lounge'); // 막 시작한 세션은 휴게실
   feed(st, ev('prompt', 1000));
-  assert.equal(roomA(st, 1000), 'library');
+  assert.equal(roomA(st, 1000), 'work'); // 요청 파악은 읽기가 아니라 팀 책상에서
   feed(st, ev('tool', 2000, { category: 'run', activity: 'lab', detail: 'npm test' }));
   assert.equal(roomA(st, 2000), 'lab');
   feed(st, ev('tool', 3000, { category: 'write', activity: 'docs' }));
@@ -316,7 +316,7 @@ test('room: 응답이 필요한 동안(턴이 끝난 뒤)은 응답 대기실, 5
   const later = teamA(st, 1000 + RESPONSE_WAIT_MS + 1);
   assert.deepEqual([later.room, later.label], ['lounge', '다음 지시 기다리는 중']);
   feed(st, ev('prompt', 2_000_000));
-  assert.equal(roomA(st, 2_000_000), 'library');
+  assert.equal(roomA(st, 2_000_000), 'work');
   feed(st, ev('stop', 2_001_000));
   assert.equal(roomA(st, 2_001_000), 'response');
 });
