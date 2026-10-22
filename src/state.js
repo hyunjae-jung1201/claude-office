@@ -14,7 +14,7 @@ export const DEFAULT_LABEL = {
 const WAITING_FOR_AGENTS = '하위 에이전트 기다리는 중';
 const BACKGROUND_LABEL = '백그라운드 작업 중';
 
-export const ROLE_LINGER_MS = 8000; // 검토가 끝난 역할자가 화면에 남아 있는 시간
+export const ROLE_LINGER_MS = 15000; // 검토가 끝난 역할자가 화면에 남아 있는 시간(그동안 기획실 탁자에서 회의한다)
 const HISTORY_LIMIT = 20;
 export const RESPONSE_WAIT_MS = 5 * 60 * 1000; // 턴이 끝난 뒤 이 시간 동안은 응답 대기실에서 사용자의 응답을 기다리고, 지나면 휴게실로 간다
 const DEFAULT_ROOM = { read: 'library', write: 'work', run: 'server', wait: 'response', idle: 'lounge', off: 'lounge' };

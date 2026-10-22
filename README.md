@@ -36,7 +36,8 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 | 작업실 | 코드 편집(Edit/Write), 요청 파악 — 팀마다 책상 |
 | 문서실 | `.md`·`.txt`·`.rst`·README 편집 |
 | 기획실 | 할 일·계획 정리(TodoWrite, 계획 모드) |
-| 서버실 | 그 밖의 셸 명령, 응답이 끝난 뒤에도 도는 백그라운드 작업 |
+| 서버실 | 서버·인프라 명령(`ssh`·`docker`·`systemctl`·`kill`·`curl localhost`·`adb`…)과 응답이 끝난 뒤에도 도는 백그라운드 작업 |
+| 자료실(셸) | 읽기 전용 셸 명령(`ls`·`cat`·`grep`·`head`…) — 문서·PPT 를 만드는 스크립트나 글 파일에 쓰는 명령은 문서실, 그 밖의 파일·스크립트 작업은 작업실 |
 | 데이터 창고 | `wget`, `curl -O`, `scp`, `rsync`, `unzip`, `tar` 등 |
 | 테스트 랩 | `npm test`, `pytest`, `eslint`, `cargo test` 등 |
 | 빌드실 | `npm run build/install`, `pip install`, `make`, `docker build` 등 |

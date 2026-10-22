@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
-import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route } from './layout.js';
+import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route, meetingSpot } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
 import { parseRosterKey } from './roster-model.js';
 import { roomActivity } from './activity.js';
@@ -358,9 +358,12 @@ export function createScene(canvas, overlay, opts = {}) {
         const slot = Math.min(3, team.members.length + idx);
         staggerLabels(ent, slot);
         // room 이 있는 job 아바타(테스터·기록원)는 그 방에서 일한다. 역할자 검토는 팀 책상에서.
+        // 검토를 끝낸 역할자는 기획실 탁자로 가서 서로 얘기한다(회의)
         ent.goal = r.room
           ? { ...memberTarget(ent.status, i, slot, r.room), room: r.room }
-          : { ...memberSeat(i, slot), pose: r.status === 'running' ? 'type' : 'stand' };
+          : r.status === 'running'
+            ? { ...memberSeat(i, slot), pose: 'type' }
+            : { ...meetingSpot(i, idx), pose: 'talk', room: 'planning' };
         setBubble(ent, r.label, ent.status, false, r.status === 'failed' ? '#e5484d' : r.color);
       });
       for (const [key, ent] of members) {
@@ -441,6 +444,14 @@ export function createScene(canvas, overlay, opts = {}) {
       armR.rotation.x = s * 0.55;
       lift = Math.abs(s) * 0.05;
       entity.body.rotation.z = Math.sin(t * 5.5 * entity.stride) * 0.03; // 걸음에 맞춘 좌우 흔들림
+    } else if (p === 'talk') {
+      // 회의 중: 번갈아 손짓을 하며 말하고, 고개를 끄덕인다
+      const speak = Math.sin(t * 0.7) > 0 ? 1 : 0.25;
+      armR.rotation.x = -0.7 + Math.sin(t * 3.2) * 0.45 * speak;
+      armL.rotation.x = -0.35 + Math.sin(t * 2.6 + 1) * 0.25 * speak;
+      head.rotation.x = Math.sin(t * 1.4) * 0.05;
+      head.rotation.y = Math.sin(t * 0.5) * 0.2;
+      lift = Math.sin(t * 2) * 0.008;
     } else if (p === 'drink') {
       // 커피 마시는 중: 가끔 잔을 입으로 가져가 한 모금
       const sip = Math.max(0, Math.sin(t * 1.5));
@@ -496,7 +507,7 @@ export function createScene(canvas, overlay, opts = {}) {
       entity.yaw += angleDiff(entity.yaw, want) * Math.min(1, dt * 12);
     } else {
       let want = goal.pose === 'type' || goal.pose === 'drink' ? Math.PI : goal.pose === 'sleep' ? 0 : Math.PI / 4; // sit/stand는 카메라 쪽
-      if (goal.pose === 'stand' || goal.pose === 'sit') { // 가까이 있는 아바타 쪽으로 몸을 반쯤 돌린다(서로 얘기하는 것처럼)
+      if (goal.pose === 'stand' || goal.pose === 'sit' || goal.pose === 'talk') { // 가까이 있는 아바타 쪽으로 몸을 반쯤 돌린다(서로 얘기하는 것처럼)
         const nb = nearestOther(entity, 1.5);
         if (nb) want += angleDiff(want, Math.atan2(nb.pos.x - entity.pos.x, nb.pos.y - entity.pos.y)) * 0.55;
       }

@@ -131,3 +131,11 @@ export function route(from, to) {
   }
   return pts;
 }
+
+// 검토자 회의 자리: 검토를 끝낸 역할자가 기획실 낮은 탁자(17.3~19.2 × 1.0~1.7) 둘레에 선다. 팀마다 살짝 어긋나게.
+const MEETING = [[17.15, 1.5], [19.4, 1.5], [17.85, 2.2], [18.8, 2.2]];
+export function meetingSpot(teamIndex, slot) {
+  checkTeam(teamIndex);
+  const [x, y] = MEETING[((slot % 4) + 4) % 4];
+  return { x: x + 0.06 * (teamIndex % 3), y: y + 0.05 * Math.floor(teamIndex / 3) };
+}

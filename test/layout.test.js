@@ -180,3 +180,19 @@ test('방마다 문이 하나씩 있고 방 안쪽 가장자리에서 떨어져 
   m.doors.forEach((d, i) => assert.ok(d - DOOR_W / 2 >= ROOMS[['server', 'data', 'lab', 'build', 'git', 'briefing'][i]].x - 1e-9));
   assert.equal(DOOR_LINES.find((l) => l.y === 9.4).doors.length, 2);
 });
+
+// ---- 검토자 회의: 검토를 끝낸 역할자는 기획실 낮은 탁자 둘레에 모인다
+import { meetingSpot } from '../public/js/layout.js';
+
+test('meetingSpot: 기획실 안, 탁자(17.3~19.2 × 1.0~1.7)를 피한 자리이고, 같은 팀 4자리는 서로 떨어져 있다', () => {
+  for (let team = 0; team < 6; team++) {
+    const spots = [0, 1, 2, 3].map((s) => meetingSpot(team, s));
+    for (const p of spots) {
+      assert.ok(inside(p, ROOMS.planning, 0.3), JSON.stringify(p));
+      assert.ok(!(p.x > 17.3 && p.x < 19.2 && p.y > 1.0 && p.y < 1.7), `탁자 위 ${JSON.stringify(p)}`);
+    }
+    for (let a = 0; a < 4; a++) for (let b = a + 1; b < 4; b++) assert.ok(dist(spots[a], spots[b]) >= 0.6);
+  }
+  assert.deepEqual(meetingSpot(0, 5), meetingSpot(0, 1)); // 5번째 이상은 자리를 돌려 쓴다
+  assert.throws(() => meetingSpot(9, 0), RangeError);
+});
