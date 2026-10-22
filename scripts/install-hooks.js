@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Claude Code 전역 설정에 hook을 "추가만" 한다. 기본은 바뀔 내용만 보여 주고, --apply를 줄 때만 쓴다.
 // 사용: node scripts/install-hooks.js [--apply] [--settings 파일] [--command "명령"]
-import { copyFileSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -56,11 +56,14 @@ function main(argv) {
 
   if (existsSync(settingsPath)) {
     const stamp = new Date().toISOString().slice(0, 10).replaceAll('-', '');
-    const backup = `${settingsPath}.bak-${stamp}`;
+    let backup = `${settingsPath}.bak-${stamp}`;
+    for (let n = 2; existsSync(backup); n++) backup = `${settingsPath}.bak-${stamp}-${n}`; // 같은 날 다시 실행해도 처음 백업을 덮어쓰지 않는다
     copyFileSync(settingsPath, backup);
     console.log(`백업: ${backup}`);
   }
-  writeFileSync(settingsPath, JSON.stringify(after, null, 2) + '\n');
+  const tmp = `${settingsPath}.tmp-${process.pid}`;
+  writeFileSync(tmp, JSON.stringify(after, null, 2) + '\n');
+  renameSync(tmp, settingsPath); // 쓰는 도중 중단돼도 설정 파일이 깨지지 않게
   console.log('적용했습니다. 새로 시작하는 Claude Code 세션부터 반영됩니다.');
 }
 

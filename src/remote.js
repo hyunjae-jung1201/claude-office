@@ -43,7 +43,7 @@ export function buildSshArgs(remote) {
 
 function toolEvents(tools, base, ctx, agent = {}) {
   if (ctx.tools.size > 1000) ctx.tools.clear();
-  return tools.map((t) => {
+  return tools.filter((t) => t && typeof t === 'object').map((t) => {
     const category = toolCategory(t.n);
     if (t.i) ctx.tools.set(t.i, category);
     if (USER_WAIT_TOOLS[t.n]) return { ...base, type: 'wait', waitKind: USER_WAIT_TOOLS[t.n], activity: activityOf(t.n, ''), ...agent };
@@ -81,19 +81,19 @@ export function projectionToEvents(p, ctx, now) {
       break;
     case 'prompt':
       if (NOT_A_PROMPT.test(p.p ?? '')) return out;
-      out.push({ ...base, type: 'prompt', promptText: str(p.p) ? maskSecrets(p.p).slice(0, 300) : undefined });
+      out.push({ ...base, type: 'prompt', promptText: str(p.p) ? maskSecrets(p.p.slice(0, 2000)).slice(0, 300) : undefined });
       break;
     case 'tool':
-      out.push(...toolEvents(p.tools, base, ctx));
+      if (Array.isArray(p.tools)) out.push(...toolEvents(p.tools, base, ctx));
       break;
     case 'result':
-      for (const id of p.ids) {
+      for (const id of Array.isArray(p.ids) ? p.ids : []) {
         out.push({ ...base, type: 'toolDone', category: ctx.tools.get(id) ?? 'write' });
         ctx.tools.delete(id);
       }
       break;
     case 'stop':
-      out.push({ ...base, type: 'stop', assistantText: str(p.a) ? maskSecrets(p.a).slice(0, 2000) : undefined });
+      out.push({ ...base, type: 'stop', assistantText: str(p.a) ? maskSecrets(p.a.slice(0, 8000)).slice(0, 2000) : undefined });
       break;
     case 'astart':
       if (str(p.a)) out.push({ ...base, type: 'agentStart', agentId: p.a, agentType: str(p.t) });
@@ -134,7 +134,7 @@ function runCollector({ label, launch, feed, decorate, onEvent, now, retryMs, lo
         delay = retryMs[0];
         log.log?.(`Claude Office: ${label} 연결됨`);
       }
-      for (const ev of projectionToEvents(p, ctx, now())) onEvent(decorate(ev));
+      try { for (const ev of projectionToEvents(p, ctx, now())) onEvent(decorate(ev)); } catch { /* 형식이 틀린 줄 하나가 연결 전체를 죽이지 않게 */ }
     });
     const onEnd = () => {
       if (child === null) return;

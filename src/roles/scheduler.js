@@ -54,6 +54,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     const selected = rolesFor(config, job.repoRoot, team).map((id) => roles.get(id)).filter(Boolean).filter((r) => matchesWhen(r, job.files));
     if (selected.length === 0) { safeEmit({ type: 'skipped', ...base, reason: 'no-roles' }); return; }
     if (store.counter.used() + selected.length > config.roles.dailyLimit) { safeEmit({ type: 'skipped', ...base, reason: 'limit' }); return; }
+    store.counter.add(selected.length); // 테스트를 기다리는 동안 다른 저장소 검토가 한도를 넘기지 않게 먼저 차감한다
 
     // 팀에 testCommand 가 있으면(이 PC 의 팀 폴더 안 변경만) 역할자 전에 테스트를 한 번 실행해 결과를 모두에게 준다
     // 원격 팀은 그 PC 에서 ssh 로 실행한다(원격 설정이 없으면 건너뜀)
@@ -68,9 +69,8 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
         bundle.tests = tests;
         safeEmit({ type: 'job', ...base, id: 'tests', status: tests.ok ? 'done' : 'failed', label: tests.ok ? '테스트 통과' : tests.timedOut ? '테스트 시간 초과' : `테스트 실패(${tests.exitCode ?? '-'})` });
       } else safeEmit({ type: 'job', ...base, id: 'tests', status: 'failed', label: '테스트 실행 실패' });
-      if (closed) return;
+      if (closed) { store.counter.add(-selected.length); return; } // 시작하지 못했으니 돌려준다
     }
-    store.counter.add(selected.length); // 프로세스를 시작하는 시점에 한도에서 차감한다(비용은 이미 나가는 것)
     const startedAt = now();
     safeEmit({ type: 'start', ...base, repoName: bundle.repoName, roles: selected.map((r) => ({ id: r.id, name: r.name, color: r.color })) });
 

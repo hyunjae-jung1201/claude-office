@@ -74,7 +74,7 @@ export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
       } catch { return 0; }
     },
     add(n) {
-      const next = { date: kstDate(now()), used: counter.used() + n };
+      const next = { date: kstDate(now()), used: Math.max(0, counter.used() + n) };
       writeFileSync(`${counterFile}.tmp`, JSON.stringify(next), { mode: 0o600 });
       renameSync(`${counterFile}.tmp`, counterFile);
     },

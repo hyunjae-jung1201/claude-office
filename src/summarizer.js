@@ -33,9 +33,9 @@ export function buildSpawn(prompt) {
 export function defaultRun(prompt) {
   return new Promise((resolve, reject) => {
     const { args, options } = buildSpawn(prompt);
-    const child = spawn('claude', args, options);
+    const child = spawn('claude', args, { ...options, timeout: TIMEOUT_MS + 2000, killSignal: 'SIGTERM' }); // 응답 대기가 끝난 뒤에도 남지 않게 프로세스를 끝낸다
     let out = '';
-    child.stdout.on('data', (c) => (out += c));
+    child.stdout.on('data', (c) => { if (out.length < 4000) out += c; });
     child.on('error', reject);
     child.on('close', (code) => (code === 0 ? resolve(out) : reject(new Error(`claude exited ${code}`))));
   });

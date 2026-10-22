@@ -31,7 +31,7 @@ After=network-online.target
 
 [Service]
 ExecStart=/bin/bash -o pipefail -c 'exec $node_bin $root/src/remote-tail.cjs | $ssh_cmd'
-Environment=PATH=$PATH
+Environment=\"PATH=$PATH\"
 Restart=always
 RestartSec=5
 

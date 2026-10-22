@@ -20,7 +20,7 @@ const RULES = [
   [/(\b[A-Za-z][A-Za-z0-9+.-]*:\/\/)(?:[^:\/\s@]*:[^@\s]+|[^\/\s@:]+)@/g, '$1***@'],
   // KEY=값, KEY: 값, "key": "값" (GITHUB_TOKEN, my_password 같은 접두사 포함)
   // 값이 식별자만으로 된 함수 호출이면 코드이므로 가리지 않는다. 따옴표 값, 괄호가 섞인 그 밖의 값(줄 끝까지), 일반 값은 가린다.
-  [new RegExp(`([A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(${SAFE_CALL}(?=\\s|$)|"[^"\\n]*"?|'[^'\\n]*'?|[^\\s"'(]*\\([^\\n]*|[^\\s"']+)`, 'gi'), (m, key, value) => (SAFE_CALL_ONLY.test(value) ? m : `${key}***`)],
+  [new RegExp(`((?<![A-Za-z0-9_-])[A-Za-z0-9_-]*${KEY_WORDS}[A-Za-z0-9_-]*["']?\\s*[=:]\\s*)(${SAFE_CALL}(?=\\s|$)|"[^"\\n]*"?|'[^'\\n]*'?|[^\\s"'(]*\\([^\\n]*|[^\\s"']+)`, 'gi'), (m, key, value) => (SAFE_CALL_ONLY.test(value) ? m : `${key}***`)],
   // --password 값, --token 값 (공백 구분 플래그)
   [new RegExp(`(--?${KEY_WORDS}\\s+)["']?[^\\s"']+["']?`, 'gi'), '$1***'],
   // mysql -pVALUE (값이 붙은 형태만, `mkdir -p dir` 은 그대로)

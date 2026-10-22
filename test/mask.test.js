@@ -175,3 +175,10 @@ test('공백·인자가 아주 많은 입력도 빠르게 처리한다 (정규�
   maskSecrets(('token = f(' + ' '.repeat(500) + 'x) ').repeat(100));
   assert.ok(Date.now() - t0 < 1000, `${Date.now() - t0}ms`);
 });
+
+test('긴 영숫자 한 덩어리도 선형 시간에 가린다(2차 증가 방지)', () => {
+  const t0 = Date.now();
+  maskSecrets('a'.repeat(300_000));
+  assert.ok(Date.now() - t0 < 1000);
+  assert.equal(maskSecrets('MY_API_KEY=abcdefghijkl'), 'MY_API_KEY=***');
+});

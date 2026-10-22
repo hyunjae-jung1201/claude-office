@@ -202,7 +202,7 @@ export async function startServer({
       for (const line of Buffer.concat(chunks).toString('utf8').split('\n')) {
         let p;
         try { p = JSON.parse(line); } catch { continue; }
-        for (const ev of projectionToEvents(p, ctx, now())) handleEvent({ ...ev, host: name, source: 'transcript' });
+        try { for (const ev of projectionToEvents(p, ctx, now())) handleEvent({ ...ev, host: name, source: 'transcript' }); } catch { /* 형식이 틀린 줄은 건너뛴다 */ }
       }
       res.writeHead(204).end();
     });

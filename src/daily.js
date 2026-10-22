@@ -53,8 +53,8 @@ export function createDailyLog({ dir, dataDir, now = Date.now, emit = () => {}, 
       dirty.add(project.name);
     } else if (ev.type === 'tool' && ev.toolName) {
       const t = teamOf(project);
-      t.tools[ev.toolName] = (t.tools[ev.toolName] ?? 0) + 1;
-      if (ev.filePath && (ev.filePath in t.files || Object.keys(t.files).length < FILES_KEPT)) t.files[ev.filePath] = (t.files[ev.filePath] ?? 0) + 1;
+      if (Object.hasOwn(t.tools, ev.toolName) || Object.keys(t.tools).length < 200) t.tools[ev.toolName] = (Object.hasOwn(t.tools, ev.toolName) ? t.tools[ev.toolName] : 0) + 1;
+      if (ev.filePath && (Object.hasOwn(t.files, ev.filePath) || Object.keys(t.files).length < FILES_KEPT)) t.files[ev.filePath] = (Object.hasOwn(t.files, ev.filePath) ? t.files[ev.filePath] : 0) + 1;
       t.last = now();
       dirty.add(project.name);
     }

@@ -127,3 +127,10 @@ test('buildSshArgs: review 를 켠 원격만 텍스트 수집(INCLUDE_TEXT)을 �
   assert.deepEqual(tail(buildSshArgs({ name: 'PC2', ssh: 'me@192.168.0.20', key: '/k' })), ['me@192.168.0.20', 'node', '-']);
   assert.deepEqual(tail(buildSshArgs({ name: 'PC2', ssh: 'me@192.168.0.20', key: '/k', review: true })), ['me@192.168.0.20', 'env', 'INCLUDE_TEXT=1', 'node', '-']);
 });
+
+test('tools 배열에 null 같은 잘못된 항목이 있어도 던지지 않는다', () => {
+  const ctx = { tools: new Map(), seen: new Set() };
+  assert.doesNotThrow(() => projectionToEvents({ k: 'tool', s: 'a', c: '/x', tools: [null, 5, { n: 'Read', i: 'i1' }] }, ctx, 1));
+  assert.doesNotThrow(() => projectionToEvents({ k: 'atool', s: 'a', c: '/x', a: 'ag', tools: [null] }, ctx, 1));
+  assert.doesNotThrow(() => projectionToEvents({ k: 'tool', s: 'a', c: '/x', tools: 'x' }, ctx, 1));
+});
