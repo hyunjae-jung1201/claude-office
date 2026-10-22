@@ -362,18 +362,8 @@ export function buildOffice(scene) {
     deskAccents.push(strip);
     const chairColors = ['#3f5a7a', '#5a6a4a', '#7a4f4f', '#4a4f6a', '#6a5a3f', '#4f6a6a'];
     chair(z.x + 0.58, 1.55, chairColors[i], (i % 3 - 1) * 0.12); // 팀장 의자: 책상 바로 앞
-    // 팀원(하위 에이전트) 책상 4개: 두 줄 × 두 칸. 안 쓰는 자리는 빈 책상으로 남아 있다.
-    for (let m = 0; m < 4; m++) {
-      const mx = z.x + 0.3 + 0.55 * (m % 2);
-      const my = 2.6 + 1.0 * Math.floor(m / 2);
-      box(mx - 0.24, my - 0.65, 0.48, 0.32, 0.04, deskTops[(i + m) % 6], 0.7, { r: 0.012 });
-      box(mx - 0.22, my - 0.63, 0.04, 0.28, 0.7, '#6d5a42', 0, { r: 0.008 });
-      box(mx + 0.18, my - 0.63, 0.04, 0.28, 0.7, '#6d5a42', 0, { r: 0.008 });
-      monitor(mx, my - 0.5, 0.74, wsScreens[(i + m + 1) % 3], 0.3, 0.2);
-      keyboard(mx - 0.13, my - 0.38, 0.74);
-      chair(mx, my, chairColors[(i + m + 1) % 6], ((i + m) % 3 - 1) * 0.15);
-    }
   }
+
   // ---------------------------------------------------------------- 문서실
   [13.75, 14.8, 15.85].forEach((x, i) => {
     box(x, 0.5, 0.92, 0.7, 0.045, '#c4a87a', 0.7, { r: 0.015 });

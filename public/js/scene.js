@@ -8,6 +8,7 @@ import { parseRosterKey } from './roster-model.js';
 import { roomActivity } from './activity.js';
 import { dayState, hourKST } from './daylight.js';
 import { propsFor } from './roleprops.js';
+import * as T from './textures.js';
 
 const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#8a94a6' };
 const WALK_SPEED = 2.8; // 타일/초
@@ -303,14 +304,49 @@ export function createScene(canvas, overlay, opts = {}) {
     entity.zzzObj.visible = sleeping;
   }
 
+  // ---- 팀원 책상: 하위 에이전트·검토자가 작업실에 앉을 때만 책상과 의자가 나타나고, 떠나면 사라진다(빈 책상이 늘어서 지저분해지지 않게)
+  const memberDesks = new Map(); // `${team}:${slot}` -> { group, scale, target }
+  let deskWanted = new Set();
+  function buildMemberDesk(team, slot) {
+    const seat = memberSeat(team, slot);
+    const g = new THREE.Group();
+    g.position.set(wx(seat.x), 0, wz(seat.y));
+    const mat = (c) => new THREE.MeshLambertMaterial({ color: c });
+    const add = (geo, m, x, y, z) => { const mesh = new THREE.Mesh(geo, m); mesh.position.set(x, y, z); mesh.castShadow = true; mesh.receiveShadow = true; g.add(mesh); return mesh; };
+    add(new THREE.BoxGeometry(0.48, 0.04, 0.32), mat('#dcc08f'), 0, 0.72, -0.49); // 책상
+    for (const sx of [-0.2, 0.2]) add(new THREE.BoxGeometry(0.04, 0.7, 0.28), mat('#6d5a42'), sx, 0.35, -0.49);
+    add(new THREE.BoxGeometry(0.34, 0.24, 0.03), mat('#20242f'), 0, 0.88, -0.5); // 모니터
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.2), new THREE.MeshBasicMaterial({ map: T.cached('ws-mini', () => T.codeScreen(95, '#7fe0c8')) }));
+    screen.position.set(0, 0.88, -0.482);
+    g.add(screen);
+    add(new THREE.BoxGeometry(0.26, 0.015, 0.09), mat('#3a3f4d'), 0, 0.745, -0.38); // 키보드
+    const chairColor = ['#3f5a7a', '#5a6a4a', '#7a4f4f', '#4a4f6a', '#6a5a3f', '#4f6a6a'][(team + slot) % 6];
+    add(new THREE.CylinderGeometry(0.2, 0.2, 0.03, 5), mat('#2a2f3d'), 0, 0.04, 0); // 의자
+    add(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 8), mat('#4a4f5d'), 0, 0.2, 0);
+    add(new THREE.BoxGeometry(0.42, 0.07, 0.4), mat(chairColor), 0, 0.4, 0);
+    add(new THREE.BoxGeometry(0.4, 0.4, 0.06), mat(chairColor), 0, 0.64, 0.19);
+    g.scale.setScalar(0.001);
+    g.visible = false;
+    scene.add(g);
+    return { group: g, scale: 0, target: 0 };
+  }
+  function syncMemberDesks() {
+    for (const key of deskWanted) {
+      if (!memberDesks.has(key)) { const [t, s] = key.split(':').map(Number); memberDesks.set(key, buildMemberDesk(t, s)); }
+    }
+    for (const [key, d] of memberDesks) d.target = deskWanted.has(key) ? 1 : 0;
+  }
+
   let act = roomActivity(null);
   function update(snapshot) {
     const now = performance.now();
     act = roomActivity(snapshot);
+    deskWanted = new Set();
     snapshot.teams.forEach((team, i) => {
       if (i >= TEAM_COUNT) return;
       try { updateTeam(team, i, now); } catch (err) { console.error(`team ${i} update failed`, err); } // 한 팀의 오류가 다른 팀을 멈추지 않게
     });
+    syncMemberDesks();
     firstSnapshot = false;
   }
 
@@ -369,6 +405,7 @@ export function createScene(canvas, overlay, opts = {}) {
         ent.slot = idx;
         staggerLabels(ent, idx);
         ent.goal = { ...memberTarget(m.status, i, idx, m.room), room: m.room };
+        if (m.room === 'work') deskWanted.add(`${i}:${idx}`); // 작업실에 앉는 팀원에게 책상이 나타난다
         setBubble(ent, m.label, m.status);
       });
       // (팀원 퇴근 처리는 역할자까지 본 뒤 아래에서 한 번에 한다)
@@ -391,7 +428,7 @@ export function createScene(canvas, overlay, opts = {}) {
         ent.goal = r.room
           ? { ...memberTarget(ent.status, i, slot, r.room), room: r.room }
           : r.status === 'running'
-            ? { ...memberSeat(i, slot), pose: 'sitType' }
+            ? (deskWanted.add(`${i}:${slot}`), { ...memberSeat(i, slot), pose: 'sitType' })
             : { ...meetingSpot(i, idx), pose: 'talk', room: 'planning' };
         setBubble(ent, r.label, ent.status, false, r.status === 'failed' ? '#e5484d' : r.color);
       });
@@ -609,6 +646,11 @@ export function createScene(canvas, overlay, opts = {}) {
     office.labScreen.material.color.set(tests === 'failed' ? '#ff6f5f' : tests === 'done' ? '#7dffb0' : tests === 'running' ? (Math.sin(clock * 6) > 0 ? '#ffd27a' : '#c99a3a') : '#8c96a6');
     office.briefScreen.material.color.setScalar(0.42 + 0.58 * roomLevel.briefing);
     office.responseLine.material.emissiveIntensity = 0.25 + roomLevel.response * (0.75 + 0.25 * Math.sin(clock * 3));
+    for (const d of memberDesks.values()) { // 책상이 나타나고 사라지는 애니메이션
+      d.scale += (d.target - d.scale) * Math.min(1, dt * 7);
+      d.group.visible = d.scale > 0.03;
+      d.group.scale.setScalar(Math.max(0.001, d.scale));
+    }
     dayTimer += dt;
     if (dayTimer > 5) { dayTimer = 0; updateDay(); }
 
