@@ -62,7 +62,8 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 다른 PC 에도 Claude Office 를 설치하고, 이 PC 의 작업을 그쪽 화면에서도 보게 할 수 있다. 이 PC 가 ssh 로 세션 기록을 **밀어 넣는** 방식이라 그쪽에서 이 PC 로 접속할 필요가 없다(키 권한도 그대로: 명령 실행만).
 1. 다른 PC 의 `config.json`: `"remotes": [{ "name": "PC1", "push": true }]` 와, 이 PC 의 프로젝트를 `"host": "PC1"` 을 붙여 팀으로 적는다.
 2. 이 PC 에서: `bash scripts/install-push-service.sh PC1 사용자@주소 ~/projects/claude-office` 로 미리보기 → `--apply` 로 설치.
-3. 다른 PC 서버는 `POST /ingest?remote=PC1`(루프백만)로 받아 그 PC 팀의 상태로 처리한다. 읽기 전용이며 파일·명령은 건드리지 않는다.
+3. **팀을 추가·이름 변경·삭제하면 다른 PC 설정도 맞춘다**: 이 PC 의 `config.json` 에 `"mirrors": [{ "name": "PC1", "ssh": "사용자@주소", "root": "/절대/경로/claude-office" }]` 를 적어 두고 `node scripts/sync-teams.js`(미리보기는 `--dry-run`). `/office add` 는 자동으로 실행한다. 다른 PC 자체 팀은 그대로 두고 이 PC 팀만 `host` 를 붙여 교체한 뒤 그쪽 서비스를 다시 시작한다.
+4. 다른 PC 서버는 `POST /ingest?remote=PC1`(루프백만)로 받아 그 PC 팀의 상태로 처리한다. 읽기 전용이며 파일·명령은 건드리지 않는다.
 
 ## 실행 중인 세션과 백그라운드 작업
 Claude Code가 `~/.claude/sessions/<pid>.json`에 적는 **세션 등록 정보**(프로세스가 살아 있는지, 상태)를 3초마다 읽는다(원격 PC는 SSH 스크립트가 같은 파일을 읽는다).

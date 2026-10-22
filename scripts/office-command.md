@@ -15,7 +15,7 @@ Claude Office를 다룬다. 사용자가 입력한 인자: `$ARGUMENTS`
 
 ## `add <폴더> [이름]`: 프로젝트 추가
 1. `node __ROOT__/scripts/office-add.js <폴더> [이름]` 를 실행한다. 최대 5개, 중복은 거절된다. 실패 메시지는 그대로 사용자에게 전달한다.
-2. 성공하면 `systemctl --user restart claude-office` 로 설정을 다시 읽게 하고 결과를 한 줄로 알린다.
+2. 성공하면 `systemctl --user restart claude-office` 로 설정을 다시 읽게 하고 결과를 한 줄로 알린다. (config.json 에 `mirrors` 가 있으면 office-add.js 가 다른 PC 설정에도 자동으로 맞춘다 — 출력의 `[PC1] …` 줄을 함께 알린다.)
 
 ## `list`: 지정된 프로젝트 보기
 `__ROOT__/config.json` 의 projects 이름과 경로를 표로 보여 준다.
