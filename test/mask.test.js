@@ -182,3 +182,11 @@ test('긴 영숫자 한 덩어리도 선형 시간에 가린다(2차 증가 방�
   assert.ok(Date.now() - t0 < 1000);
   assert.equal(maskSecrets('MY_API_KEY=abcdefghijkl'), 'MY_API_KEY=***');
 });
+
+test('점·덧셈 기호가 섞인 긴 덩어리도 선형 시간에 처리하고 URL 비밀번호는 가린다', () => {
+  const t0 = Date.now();
+  maskSecrets('a.'.repeat(100_000));
+  maskSecrets('a+'.repeat(100_000));
+  assert.ok(Date.now() - t0 < 1000);
+  assert.equal(maskSecrets('git clone https://user:pw1234@host/x.git'), 'git clone https://***@host/x.git');
+});

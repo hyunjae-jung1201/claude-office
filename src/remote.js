@@ -81,7 +81,7 @@ export function projectionToEvents(p, ctx, now) {
       break;
     case 'prompt':
       if (NOT_A_PROMPT.test(p.p ?? '')) return out;
-      out.push({ ...base, type: 'prompt', promptText: str(p.p) ? maskSecrets(p.p.slice(0, 100_000)).slice(0, 300) : undefined });
+      out.push({ ...base, type: 'prompt', promptText: str(p.p) ? maskSecrets(p.p.slice(0, 20_000)).slice(0, 300) : undefined });
       break;
     case 'tool':
       if (Array.isArray(p.tools)) out.push(...toolEvents(p.tools, base, ctx));
@@ -93,7 +93,7 @@ export function projectionToEvents(p, ctx, now) {
       }
       break;
     case 'stop':
-      out.push({ ...base, type: 'stop', assistantText: str(p.a) ? maskSecrets(p.a.slice(0, 100_000)).slice(0, 2000) : undefined });
+      out.push({ ...base, type: 'stop', assistantText: str(p.a) ? maskSecrets(p.a.slice(0, 20_000)).slice(0, 2000) : undefined });
       break;
     case 'astart':
       if (str(p.a)) out.push({ ...base, type: 'agentStart', agentId: p.a, agentType: str(p.t) });
