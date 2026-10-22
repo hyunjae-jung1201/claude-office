@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { TOKEN_HEADER, loadOrCreateToken, tokenMatches } from './token.js';
 import { readFile } from 'node:fs/promises';
 import { dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -38,6 +39,7 @@ const MIME = {
 
 export async function startServer({
   config,
+  token = null, // 있으면 /event·/ingest 는 x-office-token 헤더가 같아야 받는다(없으면 인증 없음: 테스트용)
   summarizer = null,
   now = Date.now,
   tickMs = 30_000,
@@ -248,6 +250,7 @@ export async function startServer({
     const url = new URL(req.url, 'http://localhost');
     const { pathname } = url;
     if (req.method === 'GET' && pathname === '/api/reviews') return serveReviews(url, res);
+    if (req.method === 'POST' && (pathname === '/event' || pathname === '/ingest') && token && !tokenMatches(token, req.headers[TOKEN_HEADER])) return res.writeHead(401).end();
     if (req.method === 'POST' && pathname === '/event') {
       if (req.headers.origin) return res.writeHead(403).end();
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
@@ -340,7 +343,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const reviewRun = process.env.CLAUDE_OFFICE_FAKE_ROLES ? (await import('./roles/fake.js')).fakeRun : runRole;
   const reviewStore = process.env.CLAUDE_OFFICE_REVIEW_DIR ? createReviewStore({ dir: process.env.CLAUDE_OFFICE_REVIEW_DIR }) : undefined;
   const localTail = config.localTranscripts === false ? null : startLocalTail;
-  const srv = await startServer({ config, summarizer: createSummarizer(), roles, reviewRun, reviewStore, localTail });
+  const srv = await startServer({ config, token: loadOrCreateToken(), summarizer: createSummarizer(), roles, reviewRun, reviewStore, localTail });
   console.log(`Claude Office: http://localhost:${srv.port}  (프로젝트 ${config.projects.length}개)`);
   for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => srv.close().then(() => process.exit(0)));
 }

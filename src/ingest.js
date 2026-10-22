@@ -4,6 +4,7 @@
 import http from 'node:http';
 import { readFileSync } from 'node:fs';
 import { createInterface } from 'node:readline';
+import { TOKEN_HEADER, readToken } from './token.js';
 
 const name = process.argv[2];
 if (!name) { console.error('사용: node src/ingest.js <원격이름>'); process.exit(2); }
@@ -30,7 +31,7 @@ function post(lines) {
   pending += 1;
   const done = () => { pending -= 1; if (ended && pending === 0) process.exit(0); };
   try {
-    const req = http.request(new URL(`/ingest?remote=${encodeURIComponent(name)}`, base), { method: 'POST', headers: { 'content-type': 'application/x-ndjson' }, timeout: 3000 }, (res) => { res.resume(); res.on('end', done); res.on('error', done); });
+    const req = http.request(new URL(`/ingest?remote=${encodeURIComponent(name)}`, base), { method: 'POST', headers: { 'content-type': 'application/x-ndjson', ...(readToken() ? { [TOKEN_HEADER]: readToken() } : {}) }, timeout: 3000 }, (res) => { res.resume(); res.on('end', done); res.on('error', done); });
     req.on('timeout', () => { req.destroy(); });
     req.on('error', () => { if (!warned) { warned = true; console.error('Claude Office 서버에 보내지 못했습니다(서버가 꺼져 있을 수 있음). 계속 시도합니다.'); } done(); });
     req.end(lines.join('\n'));

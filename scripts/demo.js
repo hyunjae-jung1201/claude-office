@@ -2,6 +2,7 @@
 // 화면 확인용 데모: 가짜 hook 이벤트를 서버로 보내 5개 팀의 모든 상태와 팀원 출퇴근을 재현한다.
 // 사용: node scripts/demo.js [서버주소] [config경로]   예) node scripts/demo.js http://127.0.0.1:9410
 import { readFileSync } from 'node:fs';
+import { TOKEN_HEADER, readToken } from '../src/token.js';
 
 const base = process.argv[2] ?? 'http://127.0.0.1:9410';
 const cfg = JSON.parse(readFileSync(process.argv[3] ?? new URL('../config.json', import.meta.url), 'utf8'));
@@ -11,7 +12,7 @@ const fast = process.env.DEMO_FAST === '1'; // 40초 대신 짧은 시간 사용
 async function send(team, name, extra = {}) {
   const res = await fetch(`${base}/event`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...(readToken() ? { [TOKEN_HEADER]: readToken() } : {}) },
     body: JSON.stringify({ session_id: `demo-${team}`, cwd: cfg.projects[team].path, hook_event_name: name, ...extra }),
   });
   if (res.status !== 204) console.error(`${name} → ${res.status}`);

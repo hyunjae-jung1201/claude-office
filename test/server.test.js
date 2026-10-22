@@ -709,3 +709,17 @@ test('ingest: tools 에 null 등 잘못된 항목이 있어도 서버가 죽지 
     c.close();
   });
 });
+
+test('인증 토큰이 설정되면 /event·/ingest 는 올바른 x-office-token 이 있어야 받고, 화면(GET)은 영향 없다', async () => {
+  await withServer({ token: 'secret-token-123', config: pushConfig, remoteFactory: noRemote }, async ({ port }) => {
+    const send = (path, headers) => fetch(`http://127.0.0.1:${port}${path}`, { method: 'POST', headers, body: path === '/event' ? JSON.stringify(hookPayload()) : '{}' });
+    const json = { 'content-type': 'application/json' };
+    const nd = { 'content-type': 'application/x-ndjson' };
+    assert.equal((await send('/event', json)).status, 401);
+    assert.equal((await send('/event', { ...json, 'x-office-token': 'wrong' })).status, 401);
+    assert.equal((await send('/event', { ...json, 'x-office-token': 'secret-token-123' })).status, 204);
+    assert.equal((await send('/ingest?remote=PC1', nd)).status, 401);
+    assert.equal((await send('/ingest?remote=PC1', { ...nd, 'x-office-token': 'secret-token-123' })).status, 204);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
+  });
+});
