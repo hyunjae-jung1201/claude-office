@@ -7,6 +7,7 @@ import { buildOffice, LAMPS, wx, wz } from './office.js';
 import { parseRosterKey } from './roster-model.js';
 import { roomActivity } from './activity.js';
 import { dayState, hourKST } from './daylight.js';
+import { propsFor } from './roleprops.js';
 
 const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#2fbf71', idle: '#8a94a6', off: '#8a94a6' };
 const WALK_SPEED = 2.8; // 타일/초
@@ -14,11 +15,36 @@ const CELEBRATE_MS = 4000;
 const MEMBER_SCALE = 0.82;
 const BUBBLE_LEVELS = [1.6, 2.05]; // 이웃 팀 말풍선이 겹치지 않도록 2단계로 번갈아 둔다(머리 바로 위가 1단계) 
 
+// 소품 모양(작은 도형 조합). 이름은 roleprops.js 에서 정한다.
+function addRoleProps({ propNames, part, m, head, body, armL, armR }) {
+  const basic = (c) => new THREE.MeshBasicMaterial({ color: c });
+  const make = {
+    tie: () => { body.add(part(new THREE.BoxGeometry(0.05, 0.17, 0.02), m('#b83a3a'), 0, 0.02, 0.175)); body.add(part(new THREE.BoxGeometry(0.07, 0.04, 0.025), m('#9a2f2f'), 0, 0.12, 0.175)); },
+    clipboard: () => { const b = part(new THREE.BoxGeometry(0.12, 0.16, 0.012), m('#8a5f3a'), 0, -0.36, 0.07); b.rotation.x = -0.4; b.add(part(new THREE.BoxGeometry(0.095, 0.13, 0.004), m('#f4efe2'), 0, 0, 0.008)); armL.add(b); },
+    headphones: () => { head.add(part(new THREE.TorusGeometry(0.19, 0.016, 8, 20, Math.PI), m('#2a2f3d'), 0, 0.01, 0)); for (const sx of [-0.19, 0.19]) { const c = part(new THREE.CylinderGeometry(0.05, 0.05, 0.045, 12), m('#e8637a'), sx, 0, 0); c.rotation.z = Math.PI / 2; head.add(c); } },
+    magnifier: () => { const g = new THREE.Group(); g.position.set(0, -0.4, 0.08); g.rotation.x = -0.5; g.add(part(new THREE.CylinderGeometry(0.008, 0.008, 0.12, 6), m('#3a3f4d'), 0, -0.05, 0)); g.add(part(new THREE.TorusGeometry(0.05, 0.009, 8, 16), m('#c9a24a'), 0, 0.04, 0)); const lens = part(new THREE.CircleGeometry(0.045, 14), new THREE.MeshBasicMaterial({ color: '#bfe6ff', transparent: true, opacity: 0.5 }), 0, 0.04, 0); g.add(lens); armR.add(g); },
+    helmet: () => { head.add(part(new THREE.SphereGeometry(0.205, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), m('#4a5160'), 0, 0.02, 0)); head.add(part(new THREE.BoxGeometry(0.1, 0.03, 0.05), m('#e5484d'), 0, 0.12, 0.17)); },
+    badge: () => { body.add(part(new THREE.BoxGeometry(0.06, 0.05, 0.012), m('#e5484d'), -0.08, 0.08, 0.172)); },
+    book: () => { const b = part(new THREE.BoxGeometry(0.11, 0.015, 0.15), m('#3f5a7a'), 0, -0.36, 0.07); b.rotation.x = -0.5; armL.add(b); },
+    stopwatch: () => { const c = part(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 14), m('#e8b44a'), 0.09, 0.05, 0.172); c.rotation.x = Math.PI / 2; body.add(c); body.add(part(new THREE.BoxGeometry(0.012, 0.03, 0.01), m('#2a2f3d'), 0.09, 0.05, 0.185)); },
+    scarf: () => { const t = part(new THREE.TorusGeometry(0.14, 0.035, 8, 16), m('#e8863a'), 0, 0.26, 0); t.rotation.x = Math.PI / 2; body.add(t); },
+    roundGlasses: () => { for (const sx of [-0.065, 0.065]) head.add(part(new THREE.TorusGeometry(0.05, 0.012, 8, 14), m('#3a86ff'), sx, 0, 0.16)); },
+    hardhat: () => { head.add(part(new THREE.SphereGeometry(0.205, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), m('#f2c230'), 0, 0.02, 0)); head.add(part(new THREE.BoxGeometry(0.3, 0.015, 0.1), m('#f2c230'), 0, 0.03, 0.15)); },
+    vest: () => { body.add(part(new THREE.BoxGeometry(0.34, 0.05, 0.01), basic('#e8863a'), 0, 0.02, 0.172)); body.add(part(new THREE.BoxGeometry(0.34, 0.015, 0.012), basic('#f4efe2'), 0, 0.02, 0.174)); },
+    pen: () => { const p = part(new THREE.CylinderGeometry(0.008, 0.008, 0.14, 6), m('#e8637a'), 0.17, 0.04, -0.01); p.rotation.z = -0.4; head.add(p); },
+    notebook: () => { const b = part(new THREE.BoxGeometry(0.1, 0.14, 0.012), m('#f4efe2'), 0, -0.36, 0.07); b.rotation.x = -0.4; b.add(part(new THREE.BoxGeometry(0.012, 0.14, 0.014), m('#c4553f'), -0.045, 0, 0)); armL.add(b); },
+    goggles: () => { head.add(part(new THREE.TorusGeometry(0.185, 0.012, 6, 20, Math.PI * 1.1), m('#2a2f3d'), 0, 0.03, 0)); for (const sx of [-0.06, 0.06]) head.add(part(new THREE.CylinderGeometry(0.04, 0.04, 0.02, 12), new THREE.MeshBasicMaterial({ color: '#9fe6ff', transparent: true, opacity: 0.6 }), sx, 0.02, 0.17)); },
+    flask: () => { const g = new THREE.Group(); g.position.set(0, -0.37, 0.07); g.add(part(new THREE.ConeGeometry(0.05, 0.1, 10), new THREE.MeshBasicMaterial({ color: '#35e0a1', transparent: true, opacity: 0.8 }), 0, 0, 0)); g.add(part(new THREE.CylinderGeometry(0.014, 0.014, 0.06, 8), m('#dfe9ee'), 0, 0.07, 0)); armR.add(g); },
+    cap: () => { head.add(part(new THREE.SphereGeometry(0.19, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.2), m('#13a58a'), 0, 0.03, 0)); head.add(part(new THREE.BoxGeometry(0.2, 0.012, 0.09), m('#0f8a72'), 0, 0.05, 0.15)); },
+  };
+  for (const name of propNames) make[name]?.();
+}
+
 const HAIR = ['#2a2236', '#5a3b2a', '#c9a24a', '#1c1c1c', '#8a4b3a', '#4a4a55'];
 const SKIN = ['#f2c7a5', '#e0ac85', '#c68e67', '#f6d6bd', '#a8734f', '#edbf9a'];
 
 // 팀장·역할자는 사람 모양(머리색·피부색·안경이 조금씩 다름), 부하 직원(kind='bot')은 팀장과 같은 색의 작은 로봇 모양
-function makeAvatar(shirt, variant = 0, kind = 'human') {
+function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
   const g = new THREE.Group();
   const m = (c) => new THREE.MeshLambertMaterial({ color: c });
   const shirtMat = m(shirt);
@@ -64,6 +90,8 @@ function makeAvatar(shirt, variant = 0, kind = 'human') {
       }
     }
   }
+  // 검토자(역할)별 소품: 한눈에 누가 누군지 보이게
+  if (kind === 'human') addRoleProps({ propNames: propsFor(roleId), part, m, head, body, armL, armR });
   // 커피잔: 마실 때만 보인다(오른손)
   const mug = part(new THREE.CylinderGeometry(0.035, 0.032, 0.07, 10), m('#f4efe2'), 0, -0.33, 0.06);
   mug.visible = false;
@@ -222,7 +250,8 @@ export function createScene(canvas, overlay, opts = {}) {
     // 하위 에이전트(부하 직원)는 팀장과 같은 색의 로봇, 팀장·역할자는 사람 모양
     const isBot = member && !String(id).startsWith('role:');
     const variant = isBot ? 0 : member ? [...String(id)].reduce((a, ch) => a + ch.charCodeAt(0), 0) : team;
-    const body = makeAvatar(color, variant, isBot ? 'bot' : 'human');
+    const roleId = member && String(id).startsWith('role:') ? String(id).slice(5) : null;
+    const body = makeAvatar(color, variant, isBot ? 'bot' : 'human', roleId);
     body.scale.setScalar(scale);
     group.add(body);
     group.position.set(wx(tile.x), 0, wz(tile.y));
