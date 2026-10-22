@@ -206,9 +206,9 @@ export function setLabel(state, sessionId, agentId, label) {
 }
 
 // 팀장이 지금 있을 방: 백그라운드 작업은 서버실, 쉬는 중은 지시 대기 구역(오래 쉬면 휴게실), 그 밖에는 하는 일의 종류
-function leaderRoom(s, background, now) {
+function leaderRoom(s, background, now, breakMs) {
   if (background) return 'server';
-  if (s.status === 'idle') return now - (s.idleAt ?? now) > BREAK_AFTER_MS ? 'lounge' : 'hall';
+  if (s.status === 'idle') return now - (s.idleAt ?? now) > breakMs ? 'lounge' : 'hall';
   return s.activity ?? DEFAULT_ROOM[s.status];
 }
 const memberRoom = (m) => m.activity ?? DEFAULT_ROOM[m.status];
@@ -236,7 +236,7 @@ export function snapshot(state, now) {
       color: p.color,
       status: background ? 'run' : latest.status,
       label: background ? BACKGROUND_LABEL : latest.label,
-      room: leaderRoom(latest, background, now),
+      room: leaderRoom(latest, background, now, (state.config.breakAfterMinutes ?? 5) * 60 * 1000),
       members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, room: memberRoom(m), startedAt: m.startedAt })),
       overflow: Math.max(0, all.length - maxMembers),
       finishedAt: latest.finishedAt,

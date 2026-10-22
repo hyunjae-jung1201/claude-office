@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
-const DEFAULTS = { port: 9410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30 };
+const DEFAULTS = { port: 9410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30, breakAfterMinutes: 5 };
 const MAX_PROJECTS = 5;
 const PALETTE = ['#e8637a', '#2a7f8f', '#8fb339', '#d9822b', '#6c63d9'];
 
@@ -81,6 +81,7 @@ export function loadConfig(path) {
   const raw = JSON.parse(readFileSync(path, 'utf8'));
   const remotes = validateRemotes(raw.remotes ?? []);
   const config = { ...DEFAULTS, ...raw, remotes, projects: validateProjects(raw.projects ?? [], remotes), roles: validateRolesConfig(raw.roles) };
+  if (!Number.isFinite(config.breakAfterMinutes) || config.breakAfterMinutes < 0) throw new Error('breakAfterMinutes는 0 이상의 숫자여야 합니다');
   // 화면은 팀당 팀원 4명까지만 자리를 배치한다
   if (!Number.isInteger(config.maxMembers) || config.maxMembers < 1 || config.maxMembers > 4) {
     throw new Error('maxMembers는 1~4 사이의 정수여야 합니다');

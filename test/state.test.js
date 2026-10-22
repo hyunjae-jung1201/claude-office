@@ -332,3 +332,10 @@ test('room: 팀원은 자기 도구의 activity, 없으면 책상(작업실)', (
   feed(st, ev('tool', 2000, { category: 'run', activity: 'lab', agentId: 'x' }));
   assert.equal(teamA(st, 2000).members[0].room, 'lab');
 });
+
+test('breakAfterMinutes 설정으로 휴게실로 가는 시간을 바꾼다(기본 5분)', () => {
+  const st = createState({ ...aliasConfig, breakAfterMinutes: 0.5 });
+  feed(st, ev('start', 0), ev('stop', 1000));
+  assert.equal(roomA(st, 1000 + 29_000), 'hall');
+  assert.equal(roomA(st, 1000 + 31_000), 'lounge');
+});

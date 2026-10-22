@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { FLOOR, ROOMS, ENTRANCE, targetFor, memberTarget, memberSeat, deskZone } from './layout.js';
+import { buildOffice, LAMPS, wx, wz } from './office.js';
 
 const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: '#f5a524', idle: '#8a94a6', off: '#8a94a6' };
 const WALK_SPEED = 2.8; // 타일/초
@@ -9,145 +10,6 @@ const CELEBRATE_MS = 4000;
 const MEMBER_SCALE = 0.82;
 const BUBBLE_LEVELS = [1.6, 2.05]; // 이웃 팀 말풍선이 겹치지 않도록 2단계로 번갈아 둔다(머리 바로 위가 1단계) 
 
-const wx = (x) => x - FLOOR.w / 2;
-const wz = (y) => y - FLOOR.d / 2;
-
-// ---------------------------------------------------------------- 사무실 건물
-function buildOffice(scene, labelLayer) {
-  const leds = [];
-  const mat = (c, extra = {}) => new THREE.MeshLambertMaterial({ color: c, ...extra });
-  const add = (mesh, { cast = true, receive = true } = {}) => {
-    mesh.castShadow = cast;
-    mesh.receiveShadow = receive;
-    scene.add(mesh);
-    return mesh;
-  };
-  // 타일 좌표(왼쪽 위 모서리 x,y + 크기 w,d)로 상자 배치, elev는 바닥에서의 높이
-  const box = (x, y, w, d, h, color, elev = 0, extra = {}) =>
-    add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat(color, extra)), {}), {}).position.set(wx(x + w / 2), elev + h / 2, wz(y + d / 2));
-
-  // 바닥 슬래브와 방 색
-  add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(FLOOR.w, 0.3, FLOOR.d), mat('#232a43')), {}), { cast: false }).position.set(0, -0.15, 0);
-  const tint = { library: '#2b3a60', work: '#244640', server: '#34294f', meeting: '#4b3c2c', lounge: '#25453b', hall: '#2a3149' };
-  for (const [name, r] of Object.entries(ROOMS)) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(r.w, r.d), mat(tint[name]));
-    m.rotation.x = -Math.PI / 2;
-    m.position.set(wx(r.x + r.w / 2), name === 'hall' ? 0.004 : 0.008, wz(r.y + r.d / 2));
-    m.receiveShadow = true;
-    scene.add(m);
-  }
-  // 바닥 격자
-  const grid = new THREE.GridHelper(Math.max(FLOOR.w, FLOOR.d), Math.max(FLOOR.w, FLOOR.d), '#aab7e8', '#aab7e8');
-  grid.material.opacity = 0.07;
-  grid.material.transparent = true;
-  grid.scale.set(FLOOR.w / Math.max(FLOOR.w, FLOOR.d), 1, FLOOR.d / Math.max(FLOOR.w, FLOOR.d));
-  grid.position.y = 0.012;
-  scene.add(grid);
-
-  // 뒷벽 두 면 + 창문
-  const H = 2.5;
-  add(new THREE.Mesh(new THREE.BoxGeometry(FLOOR.w + 0.2, H, 0.2), mat('#3b4569')), { cast: false }).position.set(-0.1, H / 2, -FLOOR.d / 2 - 0.1);
-  add(new THREE.Mesh(new THREE.BoxGeometry(0.2, H, FLOOR.d), mat('#30385c')), { cast: false }).position.set(-FLOOR.w / 2 - 0.1, H / 2, 0);
-  const glass = (w, h, px, py, pz, ry) => {
-    const g = new THREE.Mesh(new THREE.BoxGeometry(w, h, 0.06), new THREE.MeshLambertMaterial({ color: '#16254a', emissive: '#3b64c0', emissiveIntensity: 0.75 }));
-    g.position.set(px, py, pz);
-    g.rotation.y = ry;
-    scene.add(g);
-    const frame = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, h + 0.12, 0.04), mat('#5b6896'));
-    frame.position.set(px, py, pz - 0.02 * Math.cos(ry));
-    frame.rotation.y = ry;
-    scene.add(frame);
-  };
-  for (const cx of [5.2, 7.6, 10.0]) glass(1.5, 1.1, wx(cx), 1.45, -FLOOR.d / 2 + 0.03, 0);
-  for (const cy of [4.0, 6.4, 8.8]) glass(1.5, 1.1, -FLOOR.w / 2 + 0.03, 1.45, wz(cy), Math.PI / 2);
-
-  // 자료실: 책장과 책
-  box(0.4, 0.15, 3.2, 0.6, 2.0, '#b98450');
-  const bookColors = ['#4c8dff', '#f26b6b', '#f5a524', '#13a58a', '#8b5cf6', '#e8637a'];
-  for (let row = 0; row < 3; row++) {
-    for (let i = 0; i < 13; i++) {
-      const h = 0.34 + ((i * 7 + row * 3) % 5) * 0.04;
-      box(0.55 + i * 0.22, 0.7, 0.15, 0.1, h, bookColors[(i + row) % 6], 0.2 + row * 0.62);
-    }
-  }
-  // 서버실: 랙과 깜빡이는 LED
-  for (const y0 of [3.4, 4.9, 6.4, 7.9]) {
-    box(0.1, y0, 0.95, 1.3, 1.75, '#2a3150');
-    for (let j = 0; j < 5; j++) {
-      const on = (j + Math.round(y0)) % 3 ? '#35e0a1' : '#8b5cf6';
-      const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.07, 0.07), new THREE.MeshBasicMaterial({ color: on }));
-      led.position.set(wx(1.06), 0.35 + j * 0.3, wz(y0 + 0.3));
-      scene.add(led);
-      leds.push({ led, phase: j * 0.7 + y0 });
-      box(1.0, y0 + 0.5, 0.03, 0.7, 0.08, '#3a4470', 0.32 + j * 0.3);
-    }
-  }
-  // 작업실: 팀마다 책상, 모니터, 팀 색 표시, 의자 (색은 update에서 팀 색으로 갱신)
-  const deskAccents = [];
-  for (let i = 0; i < 5; i++) {
-    const z = deskZone(i);
-    box(z.x + 0.2, 0.5, 1.2, 0.8, 0.75, '#e1c597');
-    box(z.x + 0.55, 0.62, 0.5, 0.05, 0.36, '#26304d', 0.85);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.44, 0.3), new THREE.MeshBasicMaterial({ color: '#7fe0c8' }));
-    screen.position.set(wx(z.x + 0.8), 1.05, wz(0.62) + 0.03);
-    scene.add(screen);
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.04, 0.06), mat('#e8637a'));
-    strip.position.set(wx(z.x + 0.8), 0.77, wz(1.3) + 0.03);
-    scene.add(strip);
-    deskAccents.push(strip);
-    box(z.x + 0.55, 2.15, 0.5, 0.45, 0.4, '#7a8bb0');
-  }
-  // 회의실: 탁자와 의자
-  box(8.0, 7.3, 3.0, 1.5, 0.75, '#dbb27a');
-  box(8.9, 7.7, 1.2, 0.7, 0.02, '#ffffff', 0.76);
-  for (const cx of [8.4, 9.5, 10.6]) {
-    box(cx, 6.85, 0.4, 0.35, 0.42, '#7a8bb0');
-    box(cx, 9.05, 0.4, 0.35, 0.42, '#7a8bb0');
-  }
-  // 휴게실: 소파, 탁자, 화분
-  box(3.2, 9.0, 3.6, 0.95, 0.45, '#3d9b7d');
-  box(3.2, 9.0, 3.6, 0.28, 0.95, '#2f8268');
-  box(3.2, 9.0, 0.28, 0.95, 0.7, '#2f8268');
-  box(6.52, 9.0, 0.28, 0.95, 0.7, '#2f8268');
-  box(4.5, 7.7, 1.0, 0.8, 0.4, '#d8b98a');
-  box(3.2, 7.75, 0.8, 0.7, 0.28, '#e0a15a'); // 바닥 쿠션
-  box(5.9, 7.75, 0.8, 0.7, 0.28, '#e0a15a');
-  for (const [px, py] of [[3.2, 7.3], [11.4, 4.4]]) {
-    box(px, py, 0.42, 0.42, 0.32, '#b98450');
-    const bush = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10), mat('#4fb08f'));
-    bush.position.set(wx(px + 0.21), 0.62, wz(py + 0.21));
-    bush.castShadow = true;
-    scene.add(bush);
-  }
-
-  // 지시 대기 구역: 팀마다 벤치 하나(일이 없는 아바타가 앉아서 다음 지시를 기다린다)
-  for (let i = 0; i < 5; i++) {
-    const bx = 3.8 + 1.6 * i;
-    box(bx - 0.5, 4.78, 1.0, 0.5, 0.3, '#3c4b7c');
-    box(bx - 0.5, 4.74, 1.0, 0.1, 0.62, '#2f3b66');
-  }
-
-  // 방 이름표
-  const roomLabel = (text, x, y, elev = 0.05) => {
-    const el = document.createElement('div');
-    el.className = 'room';
-    el.textContent = text;
-    const o = new CSS2DObject(el);
-    o.position.set(wx(x), elev, wz(y));
-    scene.add(o);
-  };
-  // 벽에 붙은 방은 이름표를 벽 위쪽에 둬서 아바타·가구에 가려지지 않게 한다
-  roomLabel('자료실', 2.0, 0.1, 2.35);
-  roomLabel('작업실', 8.0, 0.1, 2.35);
-  roomLabel('서버실', 0.1, 6.5, 2.35);
-  roomLabel('회의실', 9.5, 9.6);
-  roomLabel('휴게실', 5.0, 7.0);
-  roomLabel('지시 대기 구역', 7.5, 5.7);
-
-  return { leds, deskAccents };
-}
-
-// ---------------------------------------------------------------- 아바타
 function makeAvatar(shirt, hair = '#2a2236') {
   const g = new THREE.Group();
   const m = (c) => new THREE.MeshLambertMaterial({ color: c });
@@ -198,7 +60,7 @@ export function createScene(canvas, overlay) {
   sun.position.set(-7, 14, 9);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -11, right: 11, top: 11, bottom: -11, near: 1, far: 40 });
+  Object.assign(sun.shadow.camera, { left: -16, right: 16, top: 16, bottom: -16, near: 1, far: 60 });
   sun.shadow.bias = -0.0006;
   scene.add(sun);
 
@@ -213,24 +75,24 @@ export function createScene(canvas, overlay) {
   controls.target.copy(target);
   controls.enablePan = false;
   controls.enableDamping = true;
-  controls.minZoom = 0.7;
-  controls.maxZoom = 2.6;
+  controls.minZoom = 0.6;
+  controls.maxZoom = 3.5;
   controls.minPolarAngle = 0.6;
   controls.maxPolarAngle = 1.25;
   controls.minAzimuthAngle = az - 0.9;
   controls.maxAzimuthAngle = az + 0.9;
-  camera.zoom = 1.22;
+  camera.zoom = 1.0;
   camera.updateProjectionMatrix();
   controls.update();
 
-  // 방마다 은은한 조명: 서버실 보라, 작업실 청록, 휴게실 따뜻한 색
-  for (const [color, x, y, intensity] of [['#8b5cf6', 1.5, 6.5, 14], ['#2bd4b0', 8, 2.2, 9], ['#ffb870', 5, 8.6, 9]]) {
+  // 방마다 은은한 조명: 서버실 보라, 작업실 청록, 빌드실 주황, 휴게실 따뜻한 색 …
+  for (const [color, x, y, intensity] of LAMPS) {
     const lamp = new THREE.PointLight(color, intensity, 9, 1.6);
     lamp.position.set(wx(x), 2.2, wz(y));
     scene.add(lamp);
   }
 
-  const office = buildOffice(scene, overlay);
+  const office = buildOffice(scene);
 
   // CSS2DRenderer.setSize가 overlay의 폭·높이를 px로 고정하므로, 크기는 항상 바깥 컨테이너를 기준으로 잰다.
   const host = overlay.parentElement;
@@ -240,7 +102,7 @@ export function createScene(canvas, overlay) {
     renderer.setSize(w, h, false);
     labelRenderer.setSize(w, h);
     const aspect = w / h;
-    const halfH = Math.max(8.4, 10.6 / aspect);
+    const halfH = Math.max(9.4, 12.6 / aspect); // 20×14 바닥이 한 화면에 들어오게
     camera.left = -halfH * aspect;
     camera.right = halfH * aspect;
     camera.top = halfH;
@@ -379,7 +241,7 @@ export function createScene(canvas, overlay) {
     {
       let leader = leaders[i];
       if (!leader) {
-        const start = targetFor(team.status, i);
+        const start = targetFor(team.status, i, team.room);
         leader = leaders[i] = makeEntity({ team: i, id: `L${i}`, tile: start, name: team.name, color: team.color, bubbleHeight: BUBBLE_LEVELS[i % BUBBLE_LEVELS.length] });
         office.deskAccents[i].material.color.set(team.color);
       }
@@ -391,7 +253,7 @@ export function createScene(canvas, overlay) {
       lastFinished[i] = team.finishedAt;
 
       const celebrating = now < leader.celebrateUntil;
-      if (!celebrating) leader.goal = targetFor(team.status, i);
+      if (!celebrating) leader.goal = { ...targetFor(team.status, i, team.room), room: team.room };
       setBubble(leader, celebrating ? '완료!' : team.label, team.status, celebrating);
 
       // 팀원
@@ -408,7 +270,7 @@ export function createScene(canvas, overlay) {
         ent.status = m.status;
         ent.slot = idx;
         staggerLabels(ent, idx);
-        ent.goal = memberTarget(m.status, i, idx);
+        ent.goal = { ...memberTarget(m.status, i, idx, m.room), room: m.room };
         setBubble(ent, m.label, m.status);
       });
       // (팀원 퇴근 처리는 역할자까지 본 뒤 아래에서 한 번에 한다)
@@ -490,14 +352,14 @@ export function createScene(canvas, overlay) {
       legL.rotation.x = legR.rotation.x = -1.45;
       armL.rotation.x = armR.rotation.x = -0.35;
       head.rotation.y = Math.sin(t * 0.7) * 0.25;
-      entity.body.position.y = 0.06;
+      entity.body.position.y = entity.goal.room === 'lounge' ? 0.2 : 0.06; // 휴게실 소파는 벤치보다 높다
       lift = Math.sin(t * 2) * 0.008;
     } else if (p === 'sleep') {
       // 소파에 앉아 고개를 떨구고 잔다: 다리를 앞으로, 엉덩이를 좌석 높이에 맞춘다
       legL.rotation.x = legR.rotation.x = -1.45;
       armL.rotation.x = armR.rotation.x = -0.25;
       head.rotation.x = 0.55 + Math.sin(t * 1.6) * 0.04;
-      entity.body.position.y = 0.17;
+      entity.body.position.y = entity.goal.room === 'sleep' ? 0.3 : 0.17; // 침대 매트리스 높이
     } else {
       armL.rotation.x = Math.sin(t * 2) * 0.05;
       armR.rotation.x = -Math.sin(t * 2) * 0.05;
@@ -557,6 +419,11 @@ export function createScene(canvas, overlay) {
       }
     }
     for (const { led, phase } of office.leds) led.visible = Math.sin(clock * 3 + phase) > -0.35;
+    for (const g of office.spinners) g.rotation.z += dt * 1.2; // 빌드실 톱니
+    for (const b of office.belts) { // 컨베이어 줄무늬가 흐른다
+      const p = (b.off + clock * 0.5) % b.len;
+      b.mesh.position.x = wx(b.x0 + p + 0.06);
+    }
 
     controls.update();
     renderer.render(scene, camera);
