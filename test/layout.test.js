@@ -65,8 +65,8 @@ test('꺼짐은 휴게실 침대에서 자고, 쉬는 중은 휴게실 소파에
 });
 
 test('방을 주지 않으면 상태별 기본 방', () => {
-  assert.deepEqual(['read', 'write', 'run', 'wait', 'idle', 'off'].map(roomFor), ['library', 'work', 'server', 'response', 'lounge', 'lounge']);
-  for (const [status, room] of [['read', 'library'], ['write', 'work'], ['run', 'server'], ['wait', 'response'], ['idle', 'lounge'], ['off', 'lounge']]) {
+  assert.deepEqual(['read', 'write', 'run', 'wait', 'idle', 'off'].map(roomFor), ['library', 'work', 'work', 'response', 'lounge', 'lounge']);
+  for (const [status, room] of [['read', 'library'], ['write', 'work'], ['run', 'work'], ['wait', 'response'], ['idle', 'lounge'], ['off', 'lounge']]) {
     assert.deepEqual(targetFor(status, 2), targetFor(status, 2, room));
   }
 });

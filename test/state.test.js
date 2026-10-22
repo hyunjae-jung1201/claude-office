@@ -288,7 +288,7 @@ test('room: 도구의 activity가 팀장의 방이 되고, 없으면 상태별 �
   feed(st, ev('tool', 3000, { category: 'write', activity: 'docs' }));
   assert.equal(roomA(st, 3000), 'docs');
   feed(st, ev('tool', 4000, { category: 'run' })); // activity 없음(예: 이전 형식 이벤트)
-  assert.equal(roomA(st, 4000), 'server');
+  assert.equal(roomA(st, 4000), 'work'); // 무슨 일인지 모르면 일반 작업실
   feed(st, ev('tool', 5000, { category: 'write' }));
   assert.equal(roomA(st, 5000), 'work');
   feed(st, ev('tool', 6000, { category: 'read' }));
@@ -419,4 +419,13 @@ test('하위 에이전트도 recent·since 를 갖고, 꺼진 팀은 빈 recent'
   assert.deepEqual(m.recent.map((r) => r.label), ['작업 시작 중', '파일 읽는 중', '로그인 함수 찾는 중']);
   assert.equal(m.since, 3000);
   assert.deepEqual(snapshot(st, 4000).teams.find((t) => t.name === 'B').recent, []);
+});
+
+test('승인 대기 뒤에 도구가 끝나면 서버실로 튀지 않고 그 도구의 방(toolActivity)에 머문다', () => {
+  const st = createState(config);
+  feed(st, ev('start', 1000), ev('tool', 2000, { category: 'write', toolName: 'Write', activity: 'docs' }),
+    ev('wait', 3000, { waitKind: 'approval', activity: 'response', toolActivity: 'docs' }), ev('toolDone', 4000, { category: 'write' }));
+  assert.equal(teamA(st, 4000).room, 'docs');
+  feed(st, ev('wait', 5000, { waitKind: 'approval', activity: 'response' }), ev('toolDone', 6000, { category: 'run' }));
+  assert.equal(teamA(st, 6000).room, 'work'); // 알 수 없으면 일반 작업실(서버실 아님)
 });

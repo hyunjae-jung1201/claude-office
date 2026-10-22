@@ -33,7 +33,7 @@ function editPayload(name, input) {
 
 function detail(input) {
   if (!input || typeof input !== 'object') return '';
-  const v = input.command || input.file_path || input.notebook_path || input.path || input.pattern || input.url || input.query || input.description;
+  const v = input.command || input.file_path || input.notebook_path || input.path || input.pattern || input.url || input.query || input.skill || input.description;
   return typeof v === 'string' ? v.slice(0, 400) : '';
 }
 

@@ -37,7 +37,7 @@ const MEMBER_MAX = 4;
 const DESK_W = ROOMS.work.w / TEAM_COUNT; // 작업실을 팀 수로 나눈 책상 폭
 
 // 상태만 알 때의 기본 방. 꺼짐은 휴게실에서 자고(침대), 쉬는 중은 휴게실에서 쉰다(소파).
-const STATUS_ROOM = { read: 'library', write: 'work', run: 'server', wait: 'response', idle: 'lounge', off: 'lounge' };
+const STATUS_ROOM = { read: 'library', write: 'work', run: 'work', wait: 'response', idle: 'lounge', off: 'lounge' };
 export function roomFor(status) {
   const r = STATUS_ROOM[status];
   if (!r) throw new Error(`unknown status: ${status}`);

@@ -28,7 +28,7 @@ export function maskDetail(v) {
 function detailOf(input) {
   if (!input || typeof input !== 'object') return undefined;
   return maskDetail(input.command ?? input.file_path ?? input.notebook_path ?? input.path ?? input.pattern
-    ?? input.url ?? input.query ?? input.description);
+    ?? input.url ?? input.query ?? input.skill ?? input.description);
 }
 
 const str = (v) => (typeof v === 'string' && v ? v : undefined);
@@ -45,6 +45,8 @@ const WRAPPERS = new Set(['sudo', 'time', 'nohup', 'env', 'command', 'exec', 'ni
 const DOC_KEYWORDS = /(?<![A-Za-z])(?:pptx?|docx?|xlsx?|pdf|pandoc|libreoffice|soffice|reportlab|openpyxl|pptxgenjs|python-pptx|python-docx|slides?|deck)(?![A-Za-z])|슬라이드|보고서|발표|문서/i;
 const DOC_REF = /\.(?:md|markdown|txt|rst|adoc|docx?|pptx?|xlsx?|pdf)(?=["'\s]|$)/i; // 명령 안에서 글·문서 파일을 가리키는 부분
 const EXPERIMENT = /(?<![A-Za-z])(?:train|training|eval|evaluate|infer|inference|bench|benchmark|experiment|validate|predict|sweep)(?![A-Za-z])/i;
+const DB_TOOLS = new Set(['sqlite3', 'mongosh', 'mongo', 'psql', 'mysql', 'duckdb']);
+const WIN_SERVER = /Get-Process|Stop-Process|Get-Service|Restart-Service|tasklist|taskkill|ipconfig|netstat/i;
 const SERVER_TOOLS = new Set(['ssh', 'sshpass', 'docker', 'docker-compose', 'kubectl', 'systemctl', 'service', 'journalctl', 'kill', 'pkill', 'killall', 'pgrep', 'ps', 'top', 'htop', 'nvidia-smi', 'lsof', 'netstat', 'ss', 'ping', 'nc', 'nohup', 'screen', 'tmux', 'adb', 'uvicorn', 'gunicorn', 'nginx', 'redis-cli', 'fuser', 'crontab', 'curl']);
 const SERVER_RUN = /\b(?:npm\s+(?:start|run\s+(?:dev|start|serve))|node\s+\S*server\S*|flask\s+run|python3?\s+-m\s+http\.server)\b/;
 const SHELL_READ = new Set(['ls', 'cat', 'head', 'tail', 'less', 'more', 'find', 'grep', 'egrep', 'rg', 'ag', 'wc', 'stat', 'file', 'tree', 'du', 'df', 'diff', 'cmp', 'sort', 'uniq', 'awk', 'sed', 'jq', 'readlink', 'realpath', 'basename', 'dirname', 'which', 'type', 'pwd']);
@@ -82,6 +84,8 @@ function segmentRoom(seg, full) {
     if (SERVER_RUN.test(rest)) return 'server';
     return 'work';
   }
+  if (DB_TOOLS.has(first)) return 'data';
+  if (/^(?:powershell|pwsh|cmd)(?:\.exe)?$/i.test(first)) return WIN_SERVER.test(rest) ? 'server' : 'work';
   if (SERVER_TOOLS.has(first) || SERVER_RUN.test(rest)) return first === 'curl' && /\s-[A-Za-z]*[Oo]\b|--output|--remote-name/.test(rest) ? 'data' : 'server';
   if (/^soffice$|^libreoffice$|^pandoc$/.test(first)) return 'docs';
   if (SHELL_READ.has(first)) return 'library';
@@ -99,14 +103,57 @@ function bashActivity(cmd) {
   return 'work';
 }
 
+// ---- 편집 도구: 고치는 파일의 종류로 방을 고른다(문서·테스트·빌드 설정·서버 설정·데이터·그 밖의 코드)
+const DOC_EDIT = /\.(?:md|markdown|txt|rst|adoc|docx?|pptx?|xlsx?|pdf)$|(?:^|\/)README[^/]*$/i;
+const TEST_FILE = /(?:^|\/)(?:tests?|__tests__|specs?)\/|[._-](?:test|spec)\.[A-Za-z0-9]+$|_test\.[A-Za-z0-9]+$|(?:^|\/)test_[^/]+\.py$/i;
+const BUILD_FILE = /(?:^|\/)(?:Makefile|CMakeLists\.txt|Dockerfile[^/]*|docker-compose[^/]*\.ya?ml|package(?:-lock)?\.json|pnpm-lock\.yaml|yarn\.lock|requirements[^/]*\.txt|pyproject\.toml|setup\.py|(?:build|settings)\.gradle(?:\.kts)?|pom\.xml|Cargo\.toml|go\.mod)$|(?:^|\/)\.github\/workflows\/[^/]+$/i;
+const SERVER_FILE = /\/nginx\/|\/systemd\/|\.(?:service|timer)$|(?:^|\/)(?:crontab|supervisord?\.conf)$|(?:^|\/)\.env[^/]*$/i;
+const DATA_FILE = /\.(?:csv|tsv|parquet|jsonl|sqlite3?|db)$/i;
+function editRoom(path) {
+  if (BUILD_FILE.test(path)) return 'build'; // requirements.txt 처럼 이름이 정해진 설정 파일이 먼저
+  if (DOC_EDIT.test(path)) return 'docs';
+  if (TEST_FILE.test(path)) return 'lab';
+  if (SERVER_FILE.test(path)) return 'server';
+  if (DATA_FILE.test(path)) return 'data';
+  return 'work';
+}
+
+// ---- 스킬: 이름으로 하는 일을 짐작한다
+function skillRoom(name) {
+  if (/execut|implement|subagent/i.test(name)) return 'work';
+  if (/plan|brainstorm|spec|design-doc/i.test(name)) return 'planning';
+  if (/docx|pptx|xlsx|pdf|humanize|(?:^|[:\-])docs?(?:$|[:\-])/i.test(name)) return 'docs';
+  if (/test|tdd|debug|verif/i.test(name)) return 'lab';
+  if (/review/i.test(name)) return 'library';
+  return 'work';
+}
+
+// ---- MCP 도구: 서버 이름·도구 이름으로 짐작한다
+const MCP_ROOMS = [
+  [/^mcp__(?:plugin_)?(?:playwright|mobile-mcp|jupyter|semgrep)/, 'lab'],
+  [/^mcp__(?:plugin_)?mongodb/, 'data'],
+  [/^mcp__(?:plugin_)?(?:atlassian|sequential-thinking)/, 'planning'],
+  [/^mcp__(?:plugin_)?github/, 'git'],
+  [/^mcp__ai-memory__/, 'library'],
+  [/^mcp__claude_ai_Claude_Docs__/, 'docs'],
+  [/^mcp__context7__|^mcp__claude_ai_(?:Gmail|Google_Calendar|Google_Drive)/, 'research'],
+  [/^mcp__plugin_desktop-commander_desktop-commander__(?:read_|list_directory|get_file_info|start_search|get_more_search_results|list_searches)/, 'library'],
+];
+
 export function activityOf(tool, detail) {
   const d = typeof detail === 'string' ? detail : '';
+  if (typeof tool === 'string' && tool.startsWith('mcp__')) return MCP_ROOMS.find(([re]) => re.test(tool))?.[1] ?? 'work';
   switch (tool) {
-    case 'Read': case 'Grep': case 'Glob': return 'library';
+    case 'Read': case 'Grep': case 'Glob': case 'LSP': return 'library';
     case 'WebSearch': case 'WebFetch': return 'research';
-    case 'Edit': case 'Write': case 'NotebookEdit': case 'MultiEdit': return DOC_FILE.test(d) ? 'docs' : 'work';
-    case 'TodoWrite': case 'EnterPlanMode': return 'planning';
-    case 'Agent': case 'Task': return 'briefing';
+    case 'Edit': case 'Write': case 'MultiEdit': return editRoom(d);
+    case 'NotebookEdit': return 'lab';
+    case 'TodoWrite': case 'EnterPlanMode': case 'CronCreate': case 'CronDelete': case 'CronList': case 'ScheduleWakeup': return 'planning';
+    case 'Agent': case 'Task': case 'SendMessage': case 'ListAgents': return 'briefing';
+    case 'EnterWorktree': case 'ExitWorktree': return 'git';
+    case 'Monitor': return 'server';
+    case 'Artifact': case 'ArtifactData': case 'ArtifactComments': return 'docs';
+    case 'Skill': return skillRoom(d);
     case 'AskUserQuestion': case 'ExitPlanMode': return 'response'; // 사용자의 응답을 기다린다
     case 'Bash': return bashActivity(d);
     default: return 'work';
@@ -116,7 +163,7 @@ export function activityOf(tool, detail) {
 // 분류용 원문(마스킹 전). 화면·LLM으로는 보내지 않고 방을 고르는 데만 쓴다.
 const rawDetailOf = (input) => {
   if (!input || typeof input !== 'object') return '';
-  const v = input.command ?? input.file_path ?? input.notebook_path ?? input.path ?? input.pattern ?? input.url ?? input.query ?? input.description;
+  const v = input.command ?? input.file_path ?? input.notebook_path ?? input.path ?? input.pattern ?? input.url ?? input.query ?? input.skill ?? input.description;
   return typeof v === 'string' ? v.slice(0, 2000) : '';
 };
 
@@ -186,7 +233,7 @@ export function normalizeEvent(payload, now) {
       };
     }
     case 'PermissionRequest':
-      return { ...base, type: 'wait', waitKind: 'approval', activity: 'response', detail: detailOf(payload.tool_input), ...agent() };
+      return { ...base, type: 'wait', waitKind: 'approval', activity: 'response', toolActivity: activityOf(str(payload.tool_name), rawDetailOf(payload.tool_input)), detail: detailOf(payload.tool_input), ...agent() };
     case 'Notification':
       return payload.notification_type === 'permission_prompt' ? { ...base, type: 'wait', waitKind: 'approval', activity: 'response' } : null;
     case 'SubagentStart':

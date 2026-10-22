@@ -149,7 +149,7 @@ test('activityOf: 도구와 입력으로 어느 방에서 하는 일인지 정�
   const cases = [
     ['Read', '/r/a.js', 'library'], ['Grep', 'foo', 'library'], ['Glob', '**/*.js', 'library'],
     ['WebSearch', 'node test runner', 'research'], ['WebFetch', 'https://x.dev', 'research'],
-    ['Edit', '/r/src/a.js', 'work'], ['Write', '/r/b.py', 'work'], ['NotebookEdit', '/r/n.ipynb', 'work'],
+    ['Edit', '/r/src/a.js', 'work'], ['Write', '/r/b.py', 'work'], ['NotebookEdit', '/r/n.ipynb', 'lab'],
     ['Edit', '/r/README.md', 'docs'], ['Write', '/r/docs/notes.txt', 'docs'], ['Edit', '/r/guide.rst', 'docs'],
     ['TodoWrite', '', 'planning'], ['EnterPlanMode', '', 'planning'],
     ['Agent', '조사', 'briefing'], ['Task', '조사', 'briefing'],
@@ -229,4 +229,59 @@ test('activityOf(Bash): 우선순위(git > 테스트 > 빌드 > 데이터 > 문�
   assert.equal(activityOf('Bash', "cat > /w/notes.md <<'EOF'\ngit add .\nnpm test\nssh host\nEOF"), 'docs'); // 본문의 git/npm/ssh 는 무시
   assert.equal(activityOf('Bash', 'cmd.exe /c gradlew assembleDebug'), 'build');
   assert.equal(activityOf('Bash', 'wget https://x/a.zip && unzip a.zip'), 'data');
+});
+
+// ---- 편집 대상 파일의 종류로도 방을 정한다
+test('activityOf(Edit/Write): 파일 종류별로 문서실·테스트 랩·빌드실·서버실·데이터 창고·작업실', () => {
+  const cases = [
+    ['Write', '/r/docs/guide.md', 'docs'], ['Edit', '/r/README', 'docs'], ['Write', '/r/out/report.docx', 'docs'], ['Write', '/r/out/deck.pptx', 'docs'],
+    ['Edit', '/r/test/a.test.js', 'lab'], ['Write', '/r/tests/test_calc.py', 'lab'], ['Edit', '/r/src/__tests__/x.js', 'lab'], ['Edit', '/r/calc_test.go', 'lab'], ['Write', '/r/src/foo.spec.ts', 'lab'],
+    ['Edit', '/r/package.json', 'build'], ['Edit', '/r/Makefile', 'build'], ['Write', '/r/Dockerfile', 'build'], ['Edit', '/r/.github/workflows/ci.yml', 'build'], ['Edit', '/r/requirements.txt', 'build'], ['Edit', '/r/build.gradle.kts', 'build'], ['Edit', '/r/CMakeLists.txt', 'build'],
+    ['Edit', '/etc/nginx/conf.d/a.conf', 'server'], ['Write', '/r/deploy/app.service', 'server'], ['Edit', '/r/.env', 'server'],
+    ['Write', '/r/data/train.csv', 'data'], ['Edit', '/r/a.sqlite3', 'data'], ['Write', '/r/rows.jsonl', 'data'],
+    ['Edit', '/r/src/main.py', 'work'], ['Write', '/r/web/index.html', 'work'], ['MultiEdit', '/r/lib/util.js', 'work'],
+  ];
+  for (const [tool, path, want] of cases) assert.equal(activityOf(tool, path), want, `${tool} ${path}`);
+});
+
+test('activityOf(Skill): 계획·설계 스킬은 기획실, 테스트·디버깅은 테스트 랩, 리뷰는 자료실, 실행·구현은 작업실', () => {
+  const cases = [
+    ['superpowers:brainstorming', 'planning'], ['superpowers:writing-plans', 'planning'], ['plan-review', 'planning'],
+    ['superpowers:systematic-debugging', 'lab'], ['superpowers:test-driven-development', 'lab'], ['verification-before-completion', 'lab'],
+    ['code-review', 'library'], ['superpowers:executing-plans', 'work'], ['frontend-design:frontend-design', 'work'], ['anthropic-skills:pptx', 'docs'], ['docx', 'docs'], ['whatever', 'work'],
+  ];
+  for (const [skill, want] of cases) assert.equal(activityOf('Skill', skill), want, skill);
+});
+
+test('activityOf(MCP·기타 도구): 하는 일의 성격으로 방을 정한다', () => {
+  const cases = [
+    ['mcp__playwright__browser_click', 'lab'], ['mcp__mobile-mcp__mobile_take_screenshot', 'lab'], ['mcp__jupyter__execute_cell', 'lab'], ['mcp__plugin_semgrep_guardian__get_semgrep_sast_findings', 'lab'],
+    ['mcp__plugin_mongodb_mongodb__find', 'data'], ['mcp__plugin_atlassian_atlassian__authenticate', 'planning'], ['mcp__sequential-thinking__sequentialthinking', 'planning'],
+    ['mcp__context7__query-docs', 'research'], ['mcp__claude_ai_Gmail__authenticate', 'research'], ['mcp__ai-memory__memory_query', 'library'],
+    ['mcp__claude_ai_Claude_Docs__create', 'docs'], ['mcp__plugin_desktop-commander_desktop-commander__read_file', 'library'], ['mcp__plugin_desktop-commander_desktop-commander__write_file', 'work'],
+    ['Monitor', 'server'], ['CronCreate', 'planning'], ['ScheduleWakeup', 'planning'], ['EnterWorktree', 'git'], ['SendMessage', 'briefing'], ['LSP', 'library'], ['Artifact', 'docs'], ['mcp__21st__authenticate', 'work'], ['TaskStop', 'work'],
+  ];
+  for (const [tool, want] of cases) assert.equal(activityOf(tool, ''), want, tool);
+});
+
+test('activityOf(Bash): DB 질의·Windows 래퍼 속 명령도 알맞은 방', () => {
+  assert.equal(activityOf('Bash', 'sqlite3 a.db "select 1"'), 'data');
+  assert.equal(activityOf('Bash', 'mongosh --eval "db.x.find()"'), 'data');
+  assert.equal(activityOf('Bash', 'psql -c "select 1"'), 'data');
+  assert.equal(activityOf('Bash', 'duckdb -c "select 1"'), 'data');
+  assert.equal(activityOf('Bash', '/mnt/c/Windows/System32/cmd.exe /c "gradlew assembleDebug"'), 'build');
+  assert.equal(activityOf('Bash', 'powershell.exe -Command "Get-Process"'), 'server');
+});
+
+test('이벤트: Skill 이름이 분류에 쓰이고(detail 에는 이름만), 원격 기록의 Skill 도 같다', () => {
+  const e = normalizeEvent({ session_id: 's', cwd: '/c', hook_event_name: 'PreToolUse', tool_name: 'Skill', tool_input: { skill: 'superpowers:brainstorming', args: '비밀 token=abcd1234efgh' } }, NOW);
+  assert.equal(e.activity, 'planning');
+  assert.ok(!String(e.detail).includes('abcd1234efgh'));
+});
+
+test('PermissionRequest 의 wait 이벤트는 승인 뒤에 할 도구의 방(toolActivity)을 함께 담는다', () => {
+  const e = normalizeEvent({ session_id: 's', cwd: '/c', hook_event_name: 'PermissionRequest', tool_name: 'Write', tool_input: { file_path: '/r/docs/guide.md' } }, NOW);
+  assert.deepEqual([e.type, e.waitKind, e.activity, e.toolActivity], ['wait', 'approval', 'response', 'docs']);
+  const b = normalizeEvent({ session_id: 's', cwd: '/c', hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'python3 make_ppt.py' } }, NOW);
+  assert.equal(b.toolActivity, 'docs');
 });

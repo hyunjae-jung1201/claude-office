@@ -17,7 +17,7 @@ const BACKGROUND_LABEL = '백그라운드 작업 중';
 export const ROLE_LINGER_MS = 15000; // 검토가 끝난 역할자가 화면에 남아 있는 시간(그동안 기획실 탁자에서 회의한다)
 const HISTORY_LIMIT = 20;
 export const RESPONSE_WAIT_MS = 5 * 60 * 1000; // 턴이 끝난 뒤 이 시간 동안은 응답 대기실에서 사용자의 응답을 기다리고, 지나면 휴게실로 간다
-const DEFAULT_ROOM = { read: 'library', write: 'work', run: 'server', wait: 'response', idle: 'lounge', off: 'lounge' };
+const DEFAULT_ROOM = { read: 'library', write: 'work', run: 'work', wait: 'response', idle: 'lounge', off: 'lounge' }; // 어떤 일인지 모를 때: 일반 작업은 작업실
 const RESPONSE_LABEL = '응답 기다리는 중';
 const LIMIT_NOTICE = '오늘 검토 한도에 도달했습니다';
 
@@ -137,8 +137,8 @@ function applyMemberEvent(s, ev) {
   const m = s.members.get(ev.agentId);
   if (!m) return;
   if (ev.type === 'tool') { setStatus(m, ev.category); m.activity = ev.activity ?? null; }
-  else if (ev.type === 'wait') { setStatus(m, 'wait'); m.activity = ev.activity ?? null; }
-  else if (ev.type === 'toolDone' && m.status === 'wait') setStatus(m, ev.category);
+  else if (ev.type === 'wait') { setStatus(m, 'wait'); m.activity = ev.activity ?? null; m.pendingActivity = ev.toolActivity ?? null; }
+  else if (ev.type === 'toolDone' && m.status === 'wait') { setStatus(m, ev.category); m.activity = m.pendingActivity ?? null; }
 }
 
 export function applyEvent(state, ev, now) {
@@ -211,9 +211,10 @@ function applyEventCore(state, ev, now) {
       break;
     case 'toolDone':
       s.openTools = Math.max(0, s.openTools - 1);
-      if (s.status === 'wait') { s.activity = null; setStatus(s, ev.category); }
+      if (s.status === 'wait') { s.activity = s.pendingActivity ?? null; setStatus(s, ev.category); }
       break;
     case 'wait':
+      s.pendingActivity = ev.toolActivity ?? null; // 승인되면 할 도구의 방(승인 뒤 서버실로 튀지 않게)
       s.activity = ev.activity ?? null;
       s.awaiting = false;
       setStatus(s, 'wait');

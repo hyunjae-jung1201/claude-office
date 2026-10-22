@@ -31,20 +31,21 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 
 | 방 | 언제 가나 |
 |---|---|
-| 자료실 | 파일 읽기·검색(Read/Grep/Glob) |
-| 리서치실 | 웹 검색·조회(WebSearch/WebFetch) |
-| 작업실 | 코드 편집(Edit/Write), 요청 파악 — 팀마다 책상 |
-| 문서실 | `.md`·`.txt`·`.rst`·README 편집 |
-| 기획실 | 할 일·계획 정리(TodoWrite, 계획 모드) |
-| 서버실 | 서버·인프라 명령(`ssh`·`docker`·`systemctl`·`kill`·`curl localhost`·`adb`…)과 응답이 끝난 뒤에도 도는 백그라운드 작업 |
-| 자료실(셸) | 읽기 전용 셸 명령(`ls`·`cat`·`grep`·`head`…) — 문서·PPT 를 만드는 스크립트나 글 파일에 쓰는 명령은 문서실, 그 밖의 파일·스크립트 작업은 작업실 |
-| 데이터 창고 | `wget`, `curl -O`, `scp`, `rsync`, `unzip`, `tar` 등 |
-| 테스트 랩 | `npm test`, `pytest`, `eslint`, `cargo test` 등 |
-| 빌드실 | `npm run build/install`, `pip install`, `make`, `docker build` 등 |
-| 형상관리실 | `git …`, `gh …` |
-| 브리핑룸 | 하위 에이전트에게 일을 맡기는 중 |
-| **응답 대기실** | **사용자의 응답이 필요할 때**: 승인 요청·질문·계획 승인을 기다리거나, 턴이 끝나 다음 지시를 기다리는 동안(5분, `responseWaitMinutes`). 이때 아바타에 **초록색**(링·느낌표)이 나타나고 왼쪽 목록의 줄도 초록색이 된다 |
-| 휴게실 | 일이 없을 때(응답 대기 시간이 지난 뒤 포함)의 휴식 — 소파. 꺼진 세션은 같은 방의 침대에서 잔다 |
+| 자료실 | 파일 읽기·검색(Read/Grep/Glob/LSP), 읽기 전용 셸 명령(`ls`·`cat`·`grep`·`head`·`sed -n`…), 기억 조회·코드 리뷰 스킬 |
+| 리서치실 | 웹 검색·조회(WebSearch/WebFetch), 문서 조회(context7)·메일·캘린더·드라이브 |
+| 작업실 | 일반 코드 편집, 요청 파악, 파일을 만지는 셸(`sed -i`·`cp`·`mv`·`mkdir`…)과 일반 스크립트 실행 — 팀마다 책상. 무슨 일인지 모르면 여기 |
+| 문서실 | 글·문서 편집(`.md`·`.txt`·`.docx`·`.pptx`·`.xlsx`·`.pdf`·README), **PPT·워드·PDF 를 만드는 스크립트**(`make_ppt.py`·`pandoc`·`soffice`…)와 글 파일에 쓰는 셸(`cat > a.md`·`>> log.md`), 문서 스킬·Artifact |
+| 기획실 | 할 일·계획(TodoWrite, 계획 모드, 계획·브레인스토밍 스킬), 예약(Cron/ScheduleWakeup), Jira(Atlassian)·sequential-thinking |
+| 서버실 | **서버·인프라 일만**: `ssh`·`docker`·`systemctl`·`journalctl`·`kill`·`ps`·`nvidia-smi`·`curl localhost`·`adb`·서버 실행(`npm start`·`uvicorn`), 서버·환경 설정 파일(`.env`·nginx·`.service`) 편집, 백그라운드 작업(Monitor), 응답이 끝난 뒤에도 도는 백그라운드 명령 |
+| 데이터 창고 | `wget`·`curl -O`·`scp`·`rsync`·`unzip`·`tar`, DB 질의(`sqlite3`·`mongosh`·`psql`·`duckdb`)·MongoDB 도구, `.csv`·`.parquet`·`.jsonl`·`.sqlite` 편집 |
+| 테스트 랩 | `npm test`·`pytest`·`eslint`, **학습·평가 스크립트**(`train.py`·`eval_*.py`), 테스트 파일 편집, 노트북, Playwright·모바일·Jupyter·Semgrep 도구, 테스트·디버깅 스킬 |
+| 빌드실 | `npm run build/install`·`pip install`·`make`·`docker build`·`gradlew`, 빌드 설정 파일(`package.json`·`Makefile`·`Dockerfile`·CI·`requirements.txt`) 편집 |
+| 형상관리실 | `git …`·`gh …`, GitHub 도구, 작업 트리 전환 |
+| 브리핑룸 | 하위 에이전트에게 일을 맡기는 중(Agent/Task/SendMessage) |
+| **응답 대기실** | **사용자의 응답이 필요할 때**: 승인 요청·질문·계획 승인을 기다리거나, 턴이 끝나 다음 지시를 기다리는 동안(5분, `responseWaitMinutes`). 이때 아바타에 **초록색**(링·느낌표)이 나타나고 왼쪽 목록의 줄도 초록색이 된다. 승인이 끝나면 원래 하던 일의 방으로 돌아간다 |
+| 휴게실 | 일이 없을 때(응답 대기 시간이 지난 뒤 포함)의 휴식 — 소파, 가끔 카페 카운터에서 커피. 꺼진 세션은 같은 방의 침대에서 잔다 |
+
+여러 명령이 섞이면 우선순위는 형상관리 > 테스트 > 빌드 > 데이터 > 문서 > 서버 > 작업 > 읽기다(`cd x && ls && git status` 는 형상관리실). `<<'EOF'` 본문(글·스크립트 내용)은 명령으로 세지 않는다.
 
 하위 에이전트(팀원)와 역할자는 맡은 일의 방으로 가서 일하고(역할자는 팀 책상), 끝나면 입구로 퇴근한다. 초록색은 "응답 필요"의 표시색이다.
 
