@@ -356,3 +356,31 @@ test('responseWaitMinutes 설정으로 응답 대기실에 머무는 시간을 �
   assert.equal(roomA(st, 1000 + 29_000), 'response');
   assert.equal(roomA(st, 1000 + 31_000), 'lounge');
 });
+
+// ---- 자동 작업 아바타(job): 테스터·기록원처럼 역할 검토 말고 서버가 하는 일도 방에서 일하는 아바타로 보인다
+test('job 이벤트: 방(room)이 있는 아바타가 running 으로 나타나고, 끝나면 문구가 바뀌어 잠시 남았다 사라진다', () => {
+  const st = createState(config);
+  applyReviewEvent(st, { type: 'job', team: 'A', id: 'tests', name: '테스터', color: '#d98324', room: 'lab', status: 'running', label: '테스트 실행 중' }, 1000);
+  const r = teamA(st, 1000).roles[0];
+  assert.deepEqual([r.id, r.name, r.room, r.status, r.label], ['tests', '테스터', 'lab', 'running', '테스트 실행 중']);
+  applyReviewEvent(st, { type: 'job', team: 'A', id: 'tests', status: 'done', label: '테스트 통과' }, 5000);
+  const d = teamA(st, 5000).roles[0];
+  assert.deepEqual([d.status, d.label, d.room], ['done', '테스트 통과', 'lab']);
+  assert.equal(teamA(st, 5000 + ROLE_LINGER_MS + 1).roles.length, 0);
+});
+
+test('job 아바타는 이어서 시작되는 역할자 검토(start)에도 사라지지 않는다', () => {
+  const st = createState(config);
+  applyReviewEvent(st, { type: 'job', team: 'A', id: 'tests', name: '테스터', color: '#d98324', room: 'lab', status: 'running', label: '테스트 실행 중' }, 1000);
+  applyReviewEvent(st, { type: 'start', repoRoot: '/w/a', repoName: 'a', team: 'A', roles: ROLES3 }, 1500);
+  assert.deepEqual(teamA(st, 1500).roles.map((r) => r.id), ['tests', 'pm', 'developer', 'qa']);
+  applyReviewEvent(st, { type: 'done', repoRoot: '/w/a', team: 'A', review: rev() }, 9000); // 검토가 끝나도 아직 도는 job 은 그대로
+  assert.equal(teamA(st, 9000).roles.find((r) => r.id === 'tests').status, 'running');
+});
+
+test('job 이벤트: 팀이 없거나 모르는 id 의 상태 갱신은 무시한다', () => {
+  const st = createState(config);
+  applyReviewEvent(st, { type: 'job', id: 'tests', name: 'x', status: 'running', label: 'x' }, 1000);
+  applyReviewEvent(st, { type: 'job', team: 'A', id: 'ghost', status: 'done', label: 'x' }, 1000);
+  assert.equal(teamA(st, 1000).roles.length, 0);
+});

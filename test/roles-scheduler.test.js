@@ -242,3 +242,52 @@ test('원격(host) job: 역할자는 이 PC 의 빈 임시 폴더에서 실행�
   assert.equal(events.find((e) => e.type === 'done').review.host, 'PC2');
   sched.close();
 });
+
+// ---- 테스트 실행(testCommand): 서버가 테스트를 돌린 결과를 역할자에게 주고, 테스터 아바타가 테스트 랩에서 일한다
+const withTests = (over = {}) => ({ ...cfg(), projects: [{ name: 'T', path: '/r/app', testCommand: ['npm', 'test'], ...over }] });
+const TESTS_OK = { command: 'npm test', ok: true, exitCode: 0, timedOut: false, durationMs: 1200, output: '3 passing' };
+
+test('testCommand 가 있는 팀: 역할자 전에 테스트를 한 번 실행하고, 결과가 프롬프트·보고서·job 이벤트에 반영된다', async () => {
+  const calls = [];
+  const prompts = [];
+  const events = [];
+  const store = fakeStore();
+  const sched = createScheduler({ config: withTests(), roles: ROLES, store, run: async ({ prompt }) => { prompts.push(prompt); return OK; }, buildBundle: async (j) => bundleOf(j), resolveTeam: () => 'T', emit: (e) => events.push(e),
+    runTests: async (o) => { calls.push(o); return TESTS_OK; } });
+  sched.submit(job());
+  await sched.idle();
+  assert.equal(calls.length, 1);
+  assert.deepEqual([calls[0].command, calls[0].cwd], [['npm', 'test'], '/r/app']);
+  assert.ok(prompts.every((p) => /## 테스트 실행 결과/.test(p) && /3 passing/.test(p)));
+  assert.deepEqual(store.saved[0].tests, TESTS_OK);
+  const jobs = events.filter((e) => e.type === 'job');
+  assert.deepEqual(jobs.map((e) => [e.status, e.id, e.room]), [['running', 'tests', 'lab'], ['done', 'tests', undefined]]);
+  assert.match(jobs[1].label, /통과/);
+  assert.ok(events.findIndex((e) => e.type === 'job') < events.findIndex((e) => e.type === 'start'));
+});
+
+test('테스트 실패: 보고서 판정이 최소 concern 이 되고 건수가 늘며, 테스터 아바타는 failed', async () => {
+  const events = [];
+  const store = fakeStore();
+  const sched = createScheduler({ config: withTests({ testTimeoutSeconds: 45 }), roles: ROLES, store, run: async () => OK, buildBundle: async (j) => bundleOf(j), resolveTeam: () => 'T', emit: (e) => events.push(e),
+    runTests: async (o) => ({ ...TESTS_OK, ok: false, exitCode: 2, _timeout: o.timeoutMs }) });
+  sched.submit(job());
+  await sched.idle();
+  const review = events.find((e) => e.type === 'done').review;
+  assert.deepEqual([review.verdict, review.concerns], ['concern', 1]);
+  assert.equal(review.tests.ok, false);
+  const last = events.filter((e) => e.type === 'job').at(-1);
+  assert.deepEqual([last.status], ['failed']);
+  assert.match(last.label, /실패/);
+  assert.equal(review.tests._timeout, 45_000);
+});
+
+test('원격 job·팀 폴더 밖 저장소·testCommand 없는 팀은 테스트를 실행하지 않는다', async () => {
+  for (const [config, j] of [[withTests(), job({ host: 'PC2', edits: [{ kind: 'edit', file: '/r/app/a.js', old: 'a', new: 'b' }] })], [withTests(), job({ repoRoot: '/other/repo', files: ['/other/repo/a.js'] })], [cfg(), job()]]) {
+    let called = 0;
+    const sched = createScheduler({ config, roles: ROLES, store: fakeStore(), run: async () => OK, buildBundle: async (x) => bundleOf(x), resolveTeam: () => 'T', emit: () => {}, runTests: async () => { called++; return TESTS_OK; } });
+    sched.submit(j);
+    await sched.idle();
+    assert.equal(called, 0);
+  }
+});

@@ -293,8 +293,10 @@ export function createScene(canvas, overlay) {
         ent.status = r.status === 'running' ? 'write' : 'idle';
         const slot = Math.min(3, team.members.length + idx);
         staggerLabels(ent, slot);
-        const seat = memberSeat(i, slot);
-        ent.goal = { ...seat, pose: r.status === 'running' ? 'type' : 'stand' };
+        // room 이 있는 job 아바타(테스터·기록원)는 그 방에서 일한다. 역할자 검토는 팀 책상에서.
+        ent.goal = r.room
+          ? { ...memberTarget(ent.status, i, slot, r.room), room: r.room }
+          : { ...memberSeat(i, slot), pose: r.status === 'running' ? 'type' : 'stand' };
         setBubble(ent, r.label, ent.status, false, r.status === 'failed' ? '#e5484d' : r.color);
       });
       for (const [key, ent] of members) {

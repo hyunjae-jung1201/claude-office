@@ -21,7 +21,7 @@ export function rosterRows(snapshot) {
     }
     for (const r of Array.isArray(t.roles) ? t.roles : []) {
       const status = r.status === 'running' ? 'write' : r.status === 'failed' ? 'failed' : 'idle';
-      rows.push({ key: `t${i}:r:${str(r.id)}`, kind: 'role', name: str(r.name) || str(r.id), color: str(r.color) || '#8a94a6', status, wait: false, text: str(r.label), place: '', badge: null });
+      rows.push({ key: `t${i}:r:${str(r.id)}`, kind: 'role', name: str(r.name) || str(r.id), color: str(r.color) || '#8a94a6', status, wait: false, text: str(r.label), place: ROOM_NAMES[r.room] ?? '', badge: null });
     }
   });
   return rows;

@@ -195,3 +195,11 @@ test('remotes[].review: 불리언만 받고, 기본은 끔', () => {
   assert.deepEqual(a.remotes.map((r) => r.review), [false, true]);
   assert.throws(() => loadConfig(cfgFile({ ...base, remotes: [{ name: 'PC2', ssh: 'u@h', review: 'yes' }] })), /review/);
 });
+
+test('projects[].testCommand / testTimeoutSeconds: 문자열 배열과 범위만 받는다', () => {
+  const ok = loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', testCommand: ['npm', 'test'], testTimeoutSeconds: 300 }] }));
+  assert.deepEqual([ok.projects[0].testCommand, ok.projects[0].testTimeoutSeconds], [['npm', 'test'], 300]);
+  assert.equal(loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a' }] })).projects[0].testCommand, undefined);
+  for (const bad of ['npm test', [], ['npm', ''], [1]]) assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', testCommand: bad }] })), /testCommand/);
+  for (const bad of [1, 99999, 'x']) assert.throws(() => loadConfig(cfgFile({ projects: [{ name: 'A', path: '/a', testCommand: ['npm', 'test'], testTimeoutSeconds: bad }] })), /testTimeoutSeconds/);
+});

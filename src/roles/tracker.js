@@ -52,7 +52,7 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
   }
 
   // 모인 파일을 저장소별로 나눠, 조건이 맞는 저장소마다 due 를 낸다. onlyPending 이면 보류 중인 저장소만.
-  async function evaluate(sessionId, s, reason, { onlyPending = false, ignoreCooldown = false } = {}) {
+  async function evaluate(sessionId, s, reason, { onlyPending = false, ignoreCooldown = false, ignoreMin = false, inPath = null } = {}) {
     // 원격 PC 의 파일은 이 PC 의 파일 시스템으로 저장소를 찾지 않는다(같은 경로의 다른 파일일 수 있다)
     const groups = s.host ? new Map() : await groupFiles([...s.files]);
     // git 저장소가 아니어도 팀 폴더 안이면 Claude 의 수정 기록으로 검토한다(editGroups). 둘 다 아니면 계속 쌓이지 않게 버린다
@@ -66,16 +66,17 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
       groups.get(root).push(f);
       editRoots.add(root);
     }
-    let fired = false;
+    let fired = 0;
     for (const [repoRoot, files] of groups) {
+      if (inPath && !inPath(repoRoot)) continue;
       if (isExcluded(repoRoot)) { for (const f of files) s.files.delete(f); if (editRoots.has(repoRoot)) s.edits = s.edits.filter((e) => !files.includes(e.file)); continue; }
       if (onlyPending && !s.pending.has(repoRoot)) continue;
-      if (files.length < settingsFor(repoRoot).minWrites) continue;
+      if (!ignoreMin && files.length < settingsFor(repoRoot).minWrites) continue;
       if (!ignoreCooldown && !cooledDown(repoRoot, s.host)) { s.pending.add(repoRoot); continue; }
       repoLast.set(lastKey(repoRoot, s.host), now());
       s.pending.delete(repoRoot);
       for (const f of files) s.files.delete(f);
-      fired = true;
+      fired++;
       const baseSha = s.bases.get(repoRoot) ?? undefined;
       s.bases.delete(repoRoot);
       const job = { repoRoot, ...(s.host ? { host: s.host } : {}), sessionId, files, requests: [...s.requests], lastResponse: s.lastResponse, reason, baseSha };
@@ -87,6 +88,7 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
       onDue(job);
     }
     if (fired) s.requests = [];
+    return fired;
     s.edits = s.edits.filter((e) => s.files.has(e.file)); // 검토가 끝났거나 버려진 파일의 수정 기록은 지운다
   }
 
@@ -135,6 +137,18 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
           break;
         default:
       }
+    },
+
+    // "지금 검토": 그 팀 폴더(projectPath, host)에 모여 있는 변경을 쿨다운·최소 수정 수와 상관없이 바로 검토한다. 시작한 검토 수를 돌려준다.
+    async reviewNow(projectPath, host) {
+      const root = String(projectPath).replace(/\/+$/, '');
+      const inPath = (r) => r === root || r.startsWith(root + '/');
+      let n = 0;
+      for (const [id, s] of [...sessions]) {
+        if ((s.host ?? null) !== (host ?? null) || s.files.size === 0) continue;
+        n += await evaluate(id, s, 'manual', { ignoreCooldown: true, ignoreMin: true, inPath });
+      }
+      return n;
     },
 
     // 쿨다운이 끝났고 세션이 조용한 보류 변경을 검토한다(사용자가 작업을 멈춰도 마지막 변경이 검토되도록)

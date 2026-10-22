@@ -266,3 +266,36 @@ test('buildPrompt: 원격(host) 수정 기록은 파일을 읽을 수 없다고 
 test('buildEditsBundle: host 를 번들에 싣는다', () => {
   assert.equal(buildEditsBundle({ repoRoot: '/r', host: 'PC2', requests: [], lastResponse: '', files: ['/r/a.py'], edits: [{ kind: 'edit', file: '/r/a.py', old: 'a', new: 'b' }] }).host, 'PC2');
 });
+
+import { dirtyFiles } from '../src/roles/context.js';
+test('dirtyFiles: 수정·새 파일·이름 바꾼 파일을 절대 경로로 돌려주고, 깨끗하면 빈 배열, git 이 아니면 null', async () => {
+  const { execFileSync } = await import('node:child_process');
+  const { mkdtempSync, writeFileSync, realpathSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'dirty-')));
+  const g = (...a) => execFileSync('git', ['-C', root, '-c', 'user.name=t', '-c', 'user.email=t@t', ...a], { encoding: 'utf8' });
+  g('init', '-q');
+  writeFileSync(join(root, 'a.js'), 'a\n'); writeFileSync(join(root, 'old name.js'), 'o\n');
+  g('add', '-A'); g('commit', '-qm', 'i');
+  assert.deepEqual(await dirtyFiles(root), []);
+  writeFileSync(join(root, 'a.js'), 'a2\n');
+  writeFileSync(join(root, 'new.js'), 'n\n');
+  g('mv', 'old name.js', 'renamed file.js');
+  assert.deepEqual((await dirtyFiles(root)).sort(), ['a.js', 'new.js', 'renamed file.js'].map((f) => join(root, f)).sort());
+  const plain = realpathSync(mkdtempSync(join(tmpdir(), 'plain-')));
+  assert.equal(await dirtyFiles(plain), null);
+});
+
+test('buildPrompt: 테스트 실행 결과가 있으면 명령·결과·출력을 싣고 직접 실행하지 말라고 안내한다', () => {
+  const tests = { command: 'npm test', ok: false, exitCode: 1, timedOut: false, durationMs: 4200, output: '1 failing\n  a.js:3 expected 2' };
+  const p = buildPrompt(ROLE, { ...bundle(), tests });
+  assert.match(p, /## 테스트 실행 결과/);
+  assert.match(p, /npm test/);
+  assert.match(p, /실패.*종료 코드 1/);
+  assert.match(p, /1 failing/);
+  assert.match(p, /실행하지 마라/);
+  assert.match(buildPrompt(ROLE, { ...bundle(), tests: { ...tests, ok: true, exitCode: 0, output: '' } }), /통과/);
+  assert.match(buildPrompt(ROLE, { ...bundle(), tests: { ...tests, timedOut: true, exitCode: null } }), /시간 초과/);
+  assert.ok(!/테스트 실행 결과/.test(buildPrompt(ROLE, bundle())));
+});

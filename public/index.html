@@ -81,6 +81,7 @@
   .rp-finding { display: flex; gap: 8px; flex-wrap: wrap; align-items: baseline; padding: 4px 0; border-top: 1px solid var(--line); }
   .rp-sev { font-size: 11px; font-weight: 800; padding: 1px 7px; border-radius: 999px; background: #34406a; }
   .rp-finding.major .rp-sev { background: #7a5a16; } .rp-finding.critical .rp-sev { background: #8a2b30; }
+  .rp-pre { margin: 6px 0 0; padding: 8px 10px; max-height: 160px; overflow: auto; background: rgba(0,0,0,.3); border-radius: 8px; font-size: 12px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; color: #c9d3f5; }
   .rp-file { color: #8fb2ff; font-size: 12px; } .rp-text { flex-basis: 100%; line-height: 1.5; }
 
   /* ---- 왼쪽 목록: 아바타 모습 · 이름 · 지금 하는 일 ---- */
@@ -124,6 +125,21 @@
   .ro.member .ro-name, .ro.role .ro-name { font-size: 13px; }
   .ro-text { font-size: 12.5px; color: #98a3c4; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .ro.member .ro-text, .ro.role .ro-text { font-size: 12px; }
+  .ro-go {
+    flex: none; margin-left: auto; font: inherit; font-size: 11px; font-weight: 700; color: #c9d3f5; background: rgba(143,178,255,.14);
+    border: 1px solid rgba(143,178,255,.35); border-radius: 999px; padding: 1px 9px; cursor: pointer; opacity: 0; transition: opacity .12s;
+  }
+  .ro:hover .ro-go, .ro:focus-within .ro-go, .ro-go:focus-visible { opacity: 1; }
+  .ro-go:hover { background: rgba(143,178,255,.3); }
+  .ro-go:focus-visible { outline: 2px solid #8fb2ff; outline-offset: 1px; }
+  .ro-go:disabled { opacity: .5; cursor: progress; }
+  @media (hover: none) { .ro-go { opacity: .85; } }
+  #toast {
+    position: fixed; left: calc(50% + var(--roster-w) / 2); bottom: 64px; transform: translateX(-50%); z-index: 9; max-width: min(520px, calc(100vw - 48px));
+    background: #232b4d; color: var(--ink); font-size: 13px; font-weight: 700; padding: 9px 16px; border-radius: 999px;
+    box-shadow: 0 0 0 1px var(--line), 0 8px 24px rgba(0,0,0,.5); pointer-events: none; opacity: 0; transition: opacity .18s;
+  }
+  #toast.show { opacity: 1; }
   .ro-badge { flex: none; font-size: 11px; font-weight: 800; }
   .ro-badge.ok { color: #4ad58a; } .ro-badge.concern { color: #f5a524; } .ro-badge.block { color: #ff6b6f; }
   .ro.off .blob { filter: grayscale(.85) brightness(.7); } .ro.off .ro-name { color: #8d99bd; }
@@ -201,6 +217,7 @@
     <div class="ro-meta"><span class="ro-count"></span><button class="ro-reset" type="button">전체 보기</button></div>
     <ul class="ro-list"></ul>
   </aside>
+  <div id="toast" role="status" aria-live="polite"></div>
   <div id="stage"><canvas id="c"></canvas><div id="overlay"></div></div>
   <header>
     <div class="brand">Claude Office</div>

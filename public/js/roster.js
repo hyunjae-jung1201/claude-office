@@ -36,12 +36,13 @@ function makeRow(row) {
   const body = el('span', 'ro-body');
   const top = el('span', 'ro-top');
   top.append(el('b', 'ro-name'), el('span', 'ro-badge'));
+  if (row.kind === 'team') { const go = el('button', 'ro-go', '검토'); go.type = 'button'; go.title = '지금 검토'; top.append(go); }
   body.append(top, el('span', 'ro-text'));
   li.append(blob, body);
   return li;
 }
 
-export function createRoster({ root, now = () => performance.now(), onHover = () => {}, onSelect = () => {}, onBadge = () => {}, onReset = () => {} }) {
+export function createRoster({ root, now = () => performance.now(), onHover = () => {}, onSelect = () => {}, onBadge = () => {}, onReset = () => {}, onReviewNow = () => {} }) {
   const list = root.querySelector('.ro-list');
   const search = root.querySelector('.ro-search input');
   const count = root.querySelector('.ro-count');
@@ -95,6 +96,7 @@ export function createRoster({ root, now = () => performance.now(), onHover = ()
   list.addEventListener('click', (e) => {
     const li = rowOf(e);
     if (!li) return;
+    if (e.target.closest('.ro-go')) { onReviewNow(li.querySelector('.ro-name').textContent); return; }
     if (e.target.closest('.ro-badge')?.textContent) onBadge(li.dataset.key); else onSelect(li.dataset.key);
   });
   list.addEventListener('keydown', (e) => {

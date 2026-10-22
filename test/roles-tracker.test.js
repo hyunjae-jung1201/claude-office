@@ -335,3 +335,30 @@ test('원격과 이 PC 의 같은 경로는 쿨다운·검토를 따로 센다',
   await t.tracker.onEvent({ ...t.ev('stop'), sessionId: 's2', host: 'PC2' });
   assert.deepEqual(t.due.map((j) => [j.host ?? null, j.repoRoot]), [[null, '/shared/p'], ['PC2', '/shared/p']]);
 });
+
+// ---- 지금 검토(reviewNow): 쿨다운·최소 수정 수를 무시하고 그 팀 폴더의 모인 변경을 바로 검토한다
+test('reviewNow: 쿨다운으로 보류된 변경을 바로 검토하고, 다른 폴더·다른 host 는 건드리지 않는다', async () => {
+  const t = setup(teamCfg({ minWrites: 3 }));
+  await t.tracker.onEvent(t.ev('tool', edited('/plain/proj/a.js', '1', '2')));
+  await t.tracker.onEvent(t.ev('stop'));
+  assert.equal(t.due.length, 0); // minWrites 3 이라 아직
+  assert.equal(await t.tracker.reviewNow('/elsewhere'), 0);
+  assert.equal(t.due.length, 0);
+  assert.equal(await t.tracker.reviewNow('/plain/proj', 'PC2'), 0); // host 가 다르다
+  assert.equal(await t.tracker.reviewNow('/plain/proj'), 1);
+  assert.deepEqual([t.due[0].reason, t.due[0].files], ['manual', ['/plain/proj/a.js']]);
+  assert.equal(await t.tracker.reviewNow('/plain/proj'), 0); // 이미 검토했다
+});
+
+test('reviewNow: 쿨다운 중이어도 실행하고, 하위 폴더 경계를 지킨다(/plain/proj vs /plain/proj2)', async () => {
+  const t = setup(teamCfg());
+  await t.tracker.onEvent(t.ev('tool', edited('/plain/proj/a.js')));
+  await t.tracker.onEvent(t.ev('stop'));
+  assert.equal(t.due.length, 1);
+  await t.tracker.onEvent(t.ev('tool', edited('/plain/proj/b.js')));
+  await t.tracker.onEvent(t.ev('stop')); // 쿨다운이라 보류
+  assert.equal(t.due.length, 1);
+  assert.equal(await t.tracker.reviewNow('/plain/proj2'), 0);
+  assert.equal(await t.tracker.reviewNow('/plain/proj'), 1);
+  assert.equal(t.due.length, 2);
+});

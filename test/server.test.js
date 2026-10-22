@@ -606,3 +606,37 @@ test('review 를 켠 원격 PC 의 팀 폴더 수정도 수정 기록으로 검�
     c.close();
   });
 });
+
+// ---- 지금 검토 (POST /api/review-now)
+const reviewNow = (port, body, headers = {}) => fetch(`http://127.0.0.1:${port}/api/review-now`, { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+
+test('지금 검토: git 저장소에 커밋 안 된 변경이 있으면 바로 역할자가 시작되고, 깨끗하면 변경 없음으로 답한다', async () => {
+  const repo = makeRepo();
+  await withServer(roleServer(repo), async ({ port }) => {
+    const clean = await (await reviewNow(port, { team: 'A' })).json();
+    assert.deepEqual([clean.started, clean.reason], [false, 'no-changes']);
+    writeFileSync(join(repo, 'a.js'), 'const a = 99;\n');
+    const c = await connect(port);
+    const r = await reviewNow(port, { team: 'A' }, { origin: `http://127.0.0.1:${port}` });
+    assert.equal(r.status, 200);
+    assert.equal((await r.json()).started, true);
+    const s = await c.waitFor((x) => x.reviews.length === 1 && teamA(x).badge);
+    assert.equal(s.reviews[0].repoName, repo.split('/').pop());
+    c.close();
+  });
+});
+
+test('지금 검토: 모르는 팀·잘못된 본문·다른 Origin·JSON 아님·역할자 꺼짐을 거부한다', async () => {
+  const repo = makeRepo();
+  await withServer(roleServer(repo), async ({ port }) => {
+    assert.equal((await reviewNow(port, { team: '없는팀' })).status, 404);
+    assert.equal((await reviewNow(port, '{bad')).status, 400);
+    assert.equal((await reviewNow(port, { team: 5 })).status, 400);
+    assert.equal((await reviewNow(port, { team: 'A' }, { origin: 'http://evil.example' })).status, 403);
+    const text = await fetch(`http://127.0.0.1:${port}/api/review-now`, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: '{"team":"A"}' });
+    assert.equal(text.status, 415);
+  });
+  await withServer({ config }, async ({ port }) => {
+    assert.equal((await reviewNow(port, { team: 'A' })).status, 409); // 역할자 기능이 꺼져 있다
+  });
+});

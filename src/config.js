@@ -36,6 +36,14 @@ function validateProjects(list, remotes = []) {
     paths.add(pathKey);
     const out = { name: p.name, path, color: p.color ?? PALETTE[i % PALETTE.length] };
     if (p.host) out.host = p.host;
+    if (p.testCommand !== undefined) {
+      if (!Array.isArray(p.testCommand) || p.testCommand.length === 0 || p.testCommand.some((a) => typeof a !== 'string' || !a)) throw new Error(`프로젝트 ${p.name}의 testCommand는 비어 있지 않은 문자열 배열이어야 합니다 (예: ["npm", "test"])`);
+      out.testCommand = [...p.testCommand];
+    }
+    if (p.testTimeoutSeconds !== undefined) {
+      if (!Number.isFinite(p.testTimeoutSeconds) || p.testTimeoutSeconds < 5 || p.testTimeoutSeconds > 1800) throw new Error(`프로젝트 ${p.name}의 testTimeoutSeconds는 5~1800 사이 숫자여야 합니다`);
+      out.testTimeoutSeconds = p.testTimeoutSeconds;
+    }
     if (p.roles !== undefined) {
       if (!Array.isArray(p.roles) || p.roles.some((r) => typeof r !== 'string' || !r)) throw new Error(`프로젝트 ${p.name}의 roles는 역할 id 목록이어야 합니다`);
       out.roles = [...p.roles];

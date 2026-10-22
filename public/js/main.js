@@ -8,6 +8,14 @@ const conn = document.getElementById('conn');
 const connText = conn.querySelector('span');
 const scene = createScene(canvas, overlay);
 const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
+let toastTimer = null;
+function toast(text) {
+  const el = document.getElementById('toast');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
 const rpBtn = document.getElementById('rp-btn');
 const roster = createRoster({
   root: document.getElementById('roster'),
@@ -15,6 +23,16 @@ const roster = createRoster({
   onSelect: (key) => scene.focus(key),
   onBadge: () => { if (document.getElementById('rp').hidden) rpBtn.click(); }, // 판정 배지를 누르면 보고서를 연다
   onReset: () => scene.resetView(),
+  onReviewNow: async (team) => {
+    try {
+      const r = await fetch('/api/review-now', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ team }) });
+      const j = await r.json().catch(() => ({}));
+      if (j.started) toast(`${team}: 검토를 시작했습니다`);
+      else if (j.reason === 'no-changes') toast(`${team}: 검토할 변경이 없습니다`);
+      else if (j.error === 'roles-disabled') toast('역할자 검토가 꺼져 있습니다');
+      else toast(`${team}: 검토를 시작하지 못했습니다`);
+    } catch { toast('서버에 연결하지 못했습니다'); }
+  },
 });
 window.__office = scene; // 화면 검증용
 window.__roster = roster;

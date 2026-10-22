@@ -25,6 +25,8 @@ export function createFeedbackBox({ now = Date.now, minSeverity = 'major' } = {}
           items.push(`- [${oneLine(r.roleName, 20)}/${f.severity}] ${oneLine(f.text, TEXT_LIMIT)}${where}`);
         }
       }
+      const t = review?.tests;
+      if (t && !t.ok) items.push(`- [테스트/critical] 테스트 실패: ${oneLine(t.command, 120)} (${t.timedOut ? '시간 초과' : `종료 코드 ${t.exitCode}`}) ${oneLine((t.output ?? '').slice(-300), 300)}`.trim());
       if (!items.length) return;
       const prev = pending.get(sessionId);
       const merged = [...(prev && now() - prev.at < TTL_MS ? prev.items : []), ...items].slice(-ITEMS_MAX);

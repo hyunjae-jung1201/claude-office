@@ -15,7 +15,7 @@ import { validateRoleIds } from './roles/loader.js';
 import { createReviewTracker } from './roles/tracker.js';
 import { createScheduler } from './roles/scheduler.js';
 import { createReviewStore } from './roles/store.js';
-import { groupFilesByRepo } from './roles/context.js';
+import { groupFilesByRepo, dirtyFiles } from './roles/context.js';
 import { createFeedbackBox } from './roles/feedback.js';
 import { runRole } from './roles/runner.js';
 
@@ -144,6 +144,38 @@ export async function startServer({
     req.on('error', () => res.writeHead(400).end());
   }
 
+  // "지금 검토": 그 팀에 모여 있는 변경을 바로 검토한다. 모인 변경이 없으면 팀 폴더가 git 저장소일 때 커밋 안 된 변경을 검토한다.
+  async function reviewNow(req, res) {
+    const chunks = [];
+    let size = 0;
+    let tooBig = false;
+    req.on('data', (c) => { size += c.length; if (size > 4096) tooBig = true; else chunks.push(c); });
+    req.on('end', async () => {
+      const send = (status, obj) => res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(obj));
+      if (tooBig) return send(413, { error: 'too-big' });
+      let team;
+      try { team = JSON.parse(Buffer.concat(chunks).toString('utf8'))?.team; } catch { return send(400, { error: 'bad-json' }); }
+      if (typeof team !== 'string' || !team) return send(400, { error: 'bad-team' });
+      if (!rolesOn) return send(409, { error: 'roles-disabled' });
+      const project = config.projects.find((p) => p.name === team);
+      if (!project) return send(404, { error: 'unknown-team' });
+      try {
+        if (await tracker.reviewNow(project.path, project.host) > 0) return send(200, { started: true, via: 'pending' });
+        const files = project.host ? null : await dirtyFiles(project.path);
+        if (!files?.length) return send(200, { started: false, reason: 'no-changes' });
+        let latest = null;
+        for (const [id, s] of state.sessions) if (s.project === team && (!latest || s.lastEventAt > latest.at)) latest = { id, at: s.lastEventAt };
+        const root = (await groupFilesByRepo(files)).keys().next().value;
+        if (!root) return send(200, { started: false, reason: 'no-changes' });
+        scheduler.submit({ repoRoot: root, team, sessionId: latest?.id ?? `manual:${team}`, files, requests: [], lastResponse: '', reason: 'manual' });
+        return send(200, { started: true, via: 'git' });
+      } catch {
+        return send(500, { error: 'failed' });
+      }
+    });
+    req.on('error', () => res.writeHead(400).end());
+  }
+
   // 보고서 상세: ?repo=<저장소 루트>(없으면 전체 최근 20건). 저장소가 화면 팀이 아니어도 볼 수 있다.
   function serveReviews(url, res) {
     const repo = url.searchParams.get('repo');
@@ -188,6 +220,11 @@ export async function startServer({
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
       return readBody(req, res);
     }
+    if (req.method === 'POST' && pathname === '/api/review-now') {
+      if (!originOk(req.headers.origin)) return res.writeHead(403).end();
+      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
+      return reviewNow(req, res);
+    }
     if (req.method === 'GET') return serveStatic(pathname, res);
     res.writeHead(404).end();
   });
@@ -219,7 +256,7 @@ export async function startServer({
     scheduler = createScheduler({
       config, roles, store, run: reviewRun, now,
       // 화면에 보일 팀: 그 세션이 속한 팀 → 저장소를 덮는 팀 → 없음(보고서 패널에만 남는다)
-      resolveTeam: (job) => teamOfSession(state, job.sessionId) ?? matchProject(config, job.repoRoot)?.name,
+      resolveTeam: (job) => job.team ?? teamOfSession(state, job.sessionId) ?? matchProject(config, job.repoRoot)?.name,
       emit: (e) => {
         if (e.type === 'done' && feedback) feedback.add(e.sessionId, e.review);
         applyReviewEvent(state, e, now());

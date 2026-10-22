@@ -47,6 +47,23 @@ export async function gitHead(repoRoot) {
   try { return (await git(repoRoot, ['rev-parse', '--verify', '-q', 'HEAD'])).trim() || undefined; } catch { return undefined; }
 }
 
+// 저장소의 커밋 안 된 변경 파일(수정·새 파일·이름 바꿈) 절대 경로. git 저장소가 아니면 null. "지금 검토"가 쓴다.
+export async function dirtyFiles(dir, { limit = 50 } = {}) {
+  let root;
+  try { root = realpathSync((await git(dir, ['rev-parse', '--show-toplevel'])).trim()); } catch { return null; }
+  let out;
+  try { out = await git(root, ['status', '--porcelain', '-z', '--untracked-files=normal']); } catch { return null; }
+  const parts = out.split('\0');
+  const files = [];
+  for (let i = 0; i < parts.length; i++) {
+    const e = parts[i];
+    if (e.length < 4) continue;
+    files.push(`${root}/${e.slice(3)}`);
+    if (e[0] === 'R' || e[0] === 'C') i++; // 이름 바꿈: 다음 항목은 옛 이름
+  }
+  return files.slice(0, limit);
+}
+
 // 파일들을 저장소 루트별로 묶는다. 저장소 밖·상대 경로·홈 폴더 자체가 저장소인 경우는 제외.
 export async function groupFilesByRepo(files, { homeDir = homedir() } = {}) {
   const out = new Map();
@@ -202,6 +219,10 @@ export function buildPrompt(role, bundle) {
   const change = editsNote + (bundle.truncated
     ? `변경이 너무 커서 diff 는 생략했다. 통계는 다음과 같고, 필요한 파일은 직접 읽어서 확인하라.\n${bundle.stats}`
     : `${bundle.stats ? bundle.stats + '\n' : ''}${bundle.diff || '(변경 내용 없음)'}`);
+  const t = bundle.tests;
+  const testsSection = t
+    ? `## 테스트 실행 결과\n서버가 이번 변경 직후 \`${clip(t.command, 200)}\` 를 이미 실행했다. 너는 실행하지 마라.\n결과: ${t.timedOut ? '시간 초과(강제 종료)' : t.ok ? '통과' : `실패(종료 코드 ${t.exitCode})`}, ${Math.round((t.durationMs ?? 0) / 100) / 10}초${t.output ? `\n출력 끝부분:\n${clip(t.output, 3000)}` : ''}`
+    : null;
   return [
     role.prompt,
     READ_ONLY_RULES,
@@ -210,6 +231,7 @@ export function buildPrompt(role, bundle) {
     `## Claude의 마지막 응답\n${clip(bundle.lastResponse, RESPONSE_LIMIT) || '(없음)'}`,
     `## 이번에 바뀐 파일\n${files}`,
     `## 변경 내용\n${change}${excludedNote}`,
+    ...(testsSection ? [testsSection] : []),
     OUTPUT_FORMAT,
   ].join('\n\n');
 }

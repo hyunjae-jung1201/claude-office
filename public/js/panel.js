@@ -29,6 +29,14 @@ export function createPanel({ button, panel, fetchJson = (url) => fetch(url).the
     detail.replaceChildren();
     if (!r || !Array.isArray(r.results)) { detail.append(el('div', 'rp-muted', '상세를 불러오지 못했습니다.')); return; }
     detail.append(el('div', 'rp-title', `${r.repoName} · ${kst(r.finishedAt)}`));
+    if (r.tests) {
+      const t = r.tests;
+      const box = el('div', `rp-role ${t.ok ? '' : 'block'}`);
+      box.append(el('div', 'rp-role-head', `${t.ok ? '✓' : '✕'} 테스트 ${t.timedOut ? '시간 초과' : t.ok ? '통과' : `실패 (종료 코드 ${t.exitCode})`}`));
+      box.append(el('div', 'rp-summary', `${t.command} · ${Math.round((t.durationMs ?? 0) / 100) / 10}초`));
+      if (!t.ok && t.output) box.append(el('pre', 'rp-pre', t.output));
+      detail.append(box);
+    }
     for (const res of r.results) {
       const [icon, label] = VERDICT[res.verdict] ?? VERDICT.concern;
       const box = el('div', `rp-role ${res.verdict}`);

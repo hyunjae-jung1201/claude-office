@@ -37,8 +37,27 @@ export function applyReviewEvent(state, ev, now) {
   const acts = ev.team ? state.roleActivity : null;
   switch (ev.type) {
     case 'start':
-      if (acts) acts.set(ev.team, new Map(ev.roles.map((r) => [r.id, { id: r.id, name: r.name, color: r.color, status: 'running', label: '검토 중', doneAt: 0 }])));
+      if (acts) {
+        // 테스터·기록원 같은 job 아바타는 역할자 검토가 시작돼도 그대로 둔다
+        const jobs = [...(acts.get(ev.team)?.entries() ?? [])].filter(([, e]) => e.job);
+        acts.set(ev.team, new Map([...jobs, ...ev.roles.map((r) => [r.id, { id: r.id, name: r.name, color: r.color, status: 'running', label: '검토 중', doneAt: 0 }])]));
+      }
       break;
+    case 'job': {
+      if (!acts || !ev.team) break;
+      let m = acts.get(ev.team);
+      if (!m) acts.set(ev.team, (m = new Map()));
+      let e = m.get(ev.id);
+      if (!e) {
+        if (!ev.name) break; // 모르는 job 의 상태 갱신
+        e = { id: ev.id, name: ev.name, color: ev.color ?? '#8a94a6', room: ev.room, job: true, status: 'running', label: '', doneAt: 0 };
+        m.set(ev.id, e);
+      }
+      e.status = ev.status ?? e.status;
+      e.label = String(ev.label ?? e.label).slice(0, 30);
+      e.doneAt = e.status === 'running' ? 0 : now;
+      break;
+    }
     case 'role': {
       const entry = acts?.get(ev.team)?.get(ev.roleId);
       if (!entry) break;
@@ -54,7 +73,7 @@ export function applyReviewEvent(state, ev, now) {
       state.history = [reviewSummary(r), ...state.history].slice(0, HISTORY_LIMIT);
       if (ev.team) {
         state.badges.set(ev.team, { verdict: r.verdict, concerns: r.concerns, at: now });
-        for (const e of acts.get(ev.team)?.values() ?? []) if (e.status === 'running') { e.status = 'done'; e.doneAt = now; }
+        for (const e of acts.get(ev.team)?.values() ?? []) if (e.status === 'running' && !e.job) { e.status = 'done'; e.doneAt = now; }
       }
       state.notice = null;
       break;
@@ -230,7 +249,7 @@ export function snapshot(state, now) {
     }
     const roleAct = state.roleActivity.get(p.name);
     const roles = roleAct
-      ? [...roleAct.values()].filter((r) => r.status === 'running' || now - r.doneAt <= ROLE_LINGER_MS).map(({ id, name, color, status, label }) => ({ id, name, color, status, label }))
+      ? [...roleAct.values()].filter((r) => r.status === 'running' || now - r.doneAt <= ROLE_LINGER_MS).map(({ id, name, color, status, label, room }) => ({ id, name, color, status, label, ...(room ? { room } : {}) }))
       : [];
     const badge = state.badges.get(p.name) ?? null;
     if (!latest) {

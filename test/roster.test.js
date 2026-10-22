@@ -49,3 +49,8 @@ test('parseRosterKey: 목록 줄의 key 를 팀·종류·id 로 푼다', async (
   assert.deepEqual(parseRosterKey('t1:m:a:b'), { team: 1, kind: 'member', id: 'a:b' });
   for (const bad of ['', 'x1', 't', 't1:x:y', null, undefined, 5]) assert.equal(parseRosterKey(bad), null);
 });
+
+test('job 아바타(room 있음)는 그 방 이름이 place 로 나오고, 실패는 failed 상태', () => {
+  const rows = rosterRows(snap([team({ roles: [{ id: 'tests', name: '테스터', color: '#d98324', status: 'running', label: '테스트 실행 중', room: 'lab' }, { id: 'rec', name: '기록원', color: '#c76bb0', status: 'failed', label: '기록 실패', room: 'docs' }] })]));
+  assert.deepEqual(rows.slice(1).map((r) => [r.name, r.place, r.status]), [['테스터', '테스트 랩', 'write'], ['기록원', '문서실', 'failed']]);
+});

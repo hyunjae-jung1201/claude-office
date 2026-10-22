@@ -56,3 +56,13 @@ test('텍스트는 한 줄로 정리·마스킹·길이 제한하고, 세션 수
   for (let i = 0; i < 300; i++) box.add(`x${i}`, review([res('QA', [F('major', 'm')])]));
   assert.ok(box.size() <= 200);
 });
+
+test('테스트가 실패했다면 의견에 critical 로 포함된다(통과·없음은 제외)', () => {
+  const box = createFeedbackBox({ now: () => 0 });
+  box.add('s1', { repoName: 'p', results: [], tests: { command: 'npm test', ok: false, exitCode: 1, timedOut: false, output: '1 failing token=abcd1234efgh' } });
+  const text = box.take('s1');
+  assert.match(text, /\[테스트\/critical\] 테스트 실패: npm test \(종료 코드 1\)/);
+  assert.ok(!text.includes('abcd1234efgh'));
+  box.add('s2', { repoName: 'p', results: [], tests: { command: 'npm test', ok: true, exitCode: 0, output: '' } });
+  assert.equal(box.size(), 0);
+});
