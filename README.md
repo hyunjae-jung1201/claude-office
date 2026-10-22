@@ -26,6 +26,30 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 ```
 브라우저에서 `http://localhost:9410` 을 열어 두면 된다. (포트 9410: Windows가 예약한 7317~7416 구간을 피하기 위함 — 그 안의 포트는 Windows 브라우저에서 안 열린다.) 새로 시작하는 Claude Code 세션부터 반영된다.
 
+## 사무실 방 16개
+하는 일의 종류(도구와 명령어)에 따라 아바타가 서로 다른 방으로 걸어가 일한다. 분류 기준은 `src/events.js`의 `activityOf`.
+
+| 방 | 언제 가나 |
+|---|---|
+| 자료실 | 파일 읽기·검색(Read/Grep/Glob), 요청 파악 |
+| 리서치실 | 웹 검색·조회(WebSearch/WebFetch) |
+| 작업실 | 코드 편집(Edit/Write) — 팀마다 책상 |
+| 문서실 | `.md`·`.txt`·`.rst`·README 편집 |
+| 기획실 | 할 일·계획 정리(TodoWrite, 계획 모드) |
+| 테스트 랩 | `npm test`, `pytest`, `eslint`, `cargo test` 등 |
+| 빌드실 | `npm run build/install`, `pip install`, `make`, `docker build` 등 |
+| 형상관리실 | `git …`, `gh …` |
+| 데이터 창고 | `wget`, `curl -O`, `scp`, `rsync`, `unzip`, `tar` 등 |
+| 서버실 | 그 밖의 셸 명령, 응답이 끝난 뒤에도 도는 백그라운드 작업 |
+| 회의실 | 승인 기다리는 중(권한 요청, 계획 승인) |
+| 상담실 | 사용자에게 질문하고 답을 기다리는 중 |
+| 브리핑룸 | 하위 에이전트에게 일을 맡기는 중 |
+| 지시 대기 구역 | 일이 없을 때 벤치에 앉아 대기 |
+| 휴게실 | 5분(`breakAfterMinutes`) 넘게 쉬면 소파·카페로 이동 |
+| 수면실 | Claude가 꺼져 있을 때 침대에서 수면 |
+
+하위 에이전트(팀원)와 역할자는 맡은 일의 방으로 가서 일하고(역할자는 팀 책상), 끝나면 입구로 퇴근한다.
+
 ## 사용
 - `/office` 화면 열기, `/office add <폴더> [이름]` 프로젝트 추가(최대 5개), `/office list`
 - 말풍선 색: 파랑 읽는 중 / 청록 코드 작성 / 보라 명령 실행 / 주황 승인 대기(느낌표 깜빡임) / 회색 쉬는 중
