@@ -62,15 +62,3 @@ test('필요한 이벤트가 모두 들어 있다', () => {
     assert.ok(HOOK_EVENTS.includes(e), e);
   }
 });
-
-test('--approvals: PermissionRequest 에 승인 훅(긴 timeout)을 추가하고, 이미 있으면 다시 넣지 않는다', async () => {
-  const { buildApprovalHookSettings } = await import('../scripts/install-hooks.js');
-  const before = { hooks: { PermissionRequest: [{ hooks: [{ type: 'command', command: 'node /x/hook.js', timeout: 2 }] }] }, other: 1 };
-  const after = buildApprovalHookSettings(before, 'node /x/approve-hook.js', 60);
-  const groups = after.hooks.PermissionRequest;
-  assert.equal(groups.length, 2);
-  assert.deepEqual(groups[0], before.hooks.PermissionRequest[0]); // 기존 항목 그대로
-  assert.deepEqual(groups[1].hooks[0], { type: 'command', command: 'node /x/approve-hook.js', timeout: 60 });
-  assert.equal(after.other, 1);
-  assert.deepEqual(buildApprovalHookSettings(after, 'node /x/approve-hook.js', 60), after); // 멱등
-});

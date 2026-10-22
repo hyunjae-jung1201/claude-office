@@ -2,7 +2,6 @@ import { createScene } from './scene.js';
 import { createPanel } from './panel.js';
 import { createRoster } from './roster.js';
 import { createCard } from './card.js';
-import { createApprovalPanel } from './approvals.js';
 
 const canvas = document.getElementById('c');
 const overlay = document.getElementById('overlay');
@@ -11,16 +10,6 @@ const connText = conn.querySelector('span');
 const hourParam = Number.parseFloat(new URLSearchParams(location.search).get('hour')); // ?hour=21 로 시각을 고정해 볼 수 있다
 const scene = createScene(canvas, overlay, { hour: hourParam });
 const card = createCard(document.getElementById('card'));
-const approvalPanel = createApprovalPanel({
-  root: document.getElementById('approvals'),
-  onDecide: async (id, decision) => {
-    try {
-      const r = await fetch('/api/approval', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ id, decision }) });
-      if (!r.ok) toast(r.status === 404 ? '이미 처리됐거나 시간이 지났습니다' : '승인을 처리하지 못했습니다');
-      return r.ok || r.status === 404;
-    } catch { toast('서버에 연결하지 못했습니다'); return false; }
-  },
-});
 const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
 let toastTimer = null;
 function toast(text) {
@@ -114,7 +103,6 @@ function connect() {
       panel.update(snap);
       roster.update(snap);
       card.refresh(roster.rows());
-      approvalPanel.update(Array.isArray(snap.approvals) ? snap.approvals : [], snap.teams);
     } catch (err) { console.error('bad snapshot', err); }
   };
   ws.onclose = () => {

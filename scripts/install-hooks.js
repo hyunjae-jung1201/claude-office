@@ -27,21 +27,12 @@ export function buildHookSettings(existing, command) {
   return out;
 }
 
-// PermissionRequest 에 승인 훅(사무실 화면에서 허용/거절)을 더한다. 기존 항목은 그대로 두고, 같은 명령이 이미 있으면 다시 넣지 않는다.
-export function buildApprovalHookSettings(existing, command, timeoutSeconds = 60) {
-  const out = structuredClone(existing ?? {});
-  out.hooks ??= {};
-  const groups = (out.hooks.PermissionRequest ??= []);
-  if (!groups.some((g) => hasCommand(g, command))) groups.push({ hooks: [{ type: 'command', command, timeout: timeoutSeconds }] });
-  return out;
-}
-
 export function describeChanges(before, after) {
   const lines = [];
   for (const event of HOOK_EVENTS) {
     const had = new Set((before.hooks?.[event] ?? []).flatMap((g) => (g.hooks ?? []).map((h) => h.command)));
     for (const g of after.hooks?.[event] ?? []) {
-      for (const h of g.hooks ?? []) if (!had.has(h.command)) lines.push(`+ ${event}: ${h.command}${h.timeout > 5 ? ` (timeout ${h.timeout}s)` : ''}`);
+      for (const h of g.hooks ?? []) if (!had.has(h.command)) lines.push(`+ ${event}: ${h.command}`);
     }
   }
   return lines;
@@ -54,8 +45,7 @@ function main(argv) {
   const command = arg('--command') ?? `node ${join(root, 'src', 'hook.js')}`;
 
   const before = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {};
-  let after = buildHookSettings(before, command);
-  if (argv.includes('--approvals')) after = buildApprovalHookSettings(after, `node ${join(root, 'src', 'approve-hook.js')}`, Number(arg('--approval-timeout')) || 60);
+  const after = buildHookSettings(before, command);
   const lines = describeChanges(before, after);
 
   if (lines.length === 0) return console.log(`변경 없음: ${settingsPath} 에 이미 설치돼 있습니다.`);

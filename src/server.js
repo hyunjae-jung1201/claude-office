@@ -17,7 +17,6 @@ import { createScheduler } from './roles/scheduler.js';
 import { createReviewStore } from './roles/store.js';
 import { groupFilesByRepo, dirtyFiles } from './roles/context.js';
 import { createFeedbackBox } from './roles/feedback.js';
-import { createApprovals } from './approvals.js';
 import { runRole } from './roles/runner.js';
 import { createDailyLog } from './daily.js';
 
@@ -64,14 +63,9 @@ export async function startServer({
   const clients = new Set();
   const seqs = new Map(); // 세션/에이전트별 최신 이벤트 번호: 늦게 끝난 요약이 최신 문구를 덮지 않게 한다
 
-  // 사무실 화면에서 승인·거절할 수 있는 대기(훅이 /approval 로 올려 두고 기다린다)
-  let broadcast = () => {};
-  const approvals = createApprovals({ now, waitMs: (config.approvals?.waitSeconds ?? 45) * 1000, onChange: () => broadcast() });
-  const fullSnapshot = () => ({ ...snapshot(state, now()), approvals: approvals.list() });
-
-  broadcast = () => {
+  const broadcast = () => {
     if (clients.size === 0) return;
-    const msg = JSON.stringify(fullSnapshot());
+    const msg = JSON.stringify(snapshot(state, now()));
     for (const ws of clients) if (ws.readyState === 1) ws.send(msg);
   };
 
@@ -96,8 +90,6 @@ export async function startServer({
       const last = hookSeen.get(ev.sessionId);
       if (last !== undefined && now() - last < HOOK_SESSION_MS) return;
     }
-    // 승인 대기 중인 세션에서 도구가 실행되거나 턴이 이어지면 이미 다른 곳(터미널)에서 답한 것이다
-    if (['tool', 'toolDone', 'stop', 'end', 'prompt'].includes(ev.type)) approvals.cancelSession(ev.sessionId);
     // 역할자 검토는 화면 팀에 안 맞는 세션(홈 폴더 등)도 보므로 가장 먼저 넘긴다
     tracker?.onEvent(ev).catch(() => {});
     if (ev.type === 'live' && ev.liveStatus === 'gone') {
@@ -217,50 +209,6 @@ export async function startServer({
     req.on('error', () => res.writeHead(400).end());
   }
 
-  // ---- 승인 대기: 훅(approve-hook.js)이 요청을 올려 두고 기다린다. 결정이 없으면 204(원래 승인 창이 쓰인다).
-  const APPROVAL_DETAIL = { Bash: (i) => i.command, Edit: (i) => i.file_path, Write: (i) => i.file_path, MultiEdit: (i) => i.file_path, NotebookEdit: (i) => i.notebook_path, WebFetch: (i) => i.url, Read: (i) => i.file_path };
-  function approvalHold(req, res) {
-    const chunks = [];
-    let size = 0;
-    let tooBig = false;
-    req.on('data', (c) => { size += c.length; if (size > 256 * 1024) tooBig = true; else chunks.push(c); });
-    req.on('end', () => {
-      const none = () => res.writeHead(204).end();
-      if (tooBig || !config.approvals?.enabled || clients.size === 0) return none(); // 기능 꺼짐·열려 있는 사무실 화면 없음: 기다리지 않는다
-      let p;
-      try { p = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return none(); }
-      const sessionId = typeof p?.session_id === 'string' ? p.session_id : null;
-      const cwd = typeof p?.cwd === 'string' ? p.cwd : null;
-      const tool = typeof p?.tool_name === 'string' ? p.tool_name : null;
-      if (!sessionId || !cwd || !tool) return none();
-      const project = matchProject(config, cwd, null, registry.nameOf(sessionId));
-      if (!project || project.approvals === false) return none();
-      const input = p.tool_input && typeof p.tool_input === 'object' ? p.tool_input : {};
-      const pick = APPROVAL_DETAIL[tool];
-      const detail = typeof pick?.(input) === 'string' ? pick(input) : JSON.stringify(input).slice(0, 400);
-      const { id, promise } = approvals.request({ sessionId, team: project.name, tool, detail });
-      res.on('close', () => approvals.cancel(id)); // 훅이 끝났거나(터미널에서 먼저 답함) 연결이 끊김
-      promise.then((r) => {
-        if (res.writableEnded || res.destroyed) return;
-        if (r) res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(r)); else none();
-      });
-    });
-    req.on('error', () => res.writeHead(400).end());
-  }
-  function approvalDecide(req, res) {
-    const chunks = [];
-    let size = 0;
-    req.on('data', (c) => { size += c.length; if (size <= 4096) chunks.push(c); });
-    req.on('end', () => {
-      const send = (status, obj) => res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(obj));
-      let b;
-      try { b = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return send(400, { error: 'bad-json' }); }
-      if (size > 4096 || typeof b?.id !== 'string' || !/^[0-9a-f]{32}$/.test(b.id) || !['allow', 'deny'].includes(b.decision)) return send(400, { error: 'bad-request' });
-      return approvals.decide(b.id, b.decision) ? send(200, { ok: true }) : send(404, { error: 'not-found' });
-    });
-    req.on('error', () => res.writeHead(400).end());
-  }
-
   // 보고서 상세: ?repo=<저장소 루트>(없으면 전체 최근 20건). 저장소가 화면 팀이 아니어도 볼 수 있다.
   function serveReviews(url, res) {
     const repo = url.searchParams.get('repo');
@@ -310,17 +258,6 @@ export async function startServer({
       if (!String(req.headers['content-type'] ?? '').startsWith('application/x-ndjson')) return res.writeHead(415).end();
       return ingest(req, res, url);
     }
-    if (req.method === 'POST' && pathname === '/approval') {
-      if (req.headers.origin) return res.writeHead(403).end();
-      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
-      return approvalHold(req, res);
-    }
-    if (req.method === 'POST' && pathname === '/api/approval') {
-      // 실행 권한을 다루므로 브라우저(같은 출처 Origin 을 보내는 쪽)에서만 받는다
-      if (!req.headers.origin || !originOk(req.headers.origin)) return res.writeHead(403).end();
-      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
-      return approvalDecide(req, res);
-    }
     if (req.method === 'POST' && pathname === '/api/review-now') {
       if (!originOk(req.headers.origin)) return res.writeHead(403).end();
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
@@ -335,7 +272,7 @@ export async function startServer({
     clients.add(ws);
     ws.on('close', () => clients.delete(ws));
     ws.on('error', () => clients.delete(ws));
-    ws.send(JSON.stringify(fullSnapshot()));
+    ws.send(JSON.stringify(snapshot(state, now())));
   });
 
   // 이 PC에서 실행 중인 세션: 등록 정보를 주기적으로 읽어 상태 변화·하트비트를 이벤트로 흘려 넣는다
@@ -384,7 +321,6 @@ export async function startServer({
       clearInterval(liveTimer);
       scheduler?.close();
       dailyLog?.close();
-      approvals.close();
       for (const r of remotes) r.stop();
       localCollector?.stop();
       for (const ws of clients) ws.terminate();
