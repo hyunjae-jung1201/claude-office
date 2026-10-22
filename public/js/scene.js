@@ -391,7 +391,7 @@ export function createScene(canvas, overlay, opts = {}) {
         ent.goal = r.room
           ? { ...memberTarget(ent.status, i, slot, r.room), room: r.room }
           : r.status === 'running'
-            ? { ...memberSeat(i, slot), pose: 'type' }
+            ? { ...memberSeat(i, slot), pose: 'sitType' }
             : { ...meetingSpot(i, idx), pose: 'talk', room: 'planning' };
         setBubble(ent, r.label, ent.status, false, r.status === 'failed' ? '#e5484d' : r.color);
       });
@@ -488,6 +488,16 @@ export function createScene(canvas, overlay, opts = {}) {
       armL.rotation.x = -0.25;
       head.rotation.x = -0.2 * sip;
       lift = Math.sin(t * 2) * 0.008;
+    } else if (p === 'sitType') {
+      // 작업실 의자에 앉아 타자: 다리를 앞으로 굽히고 엉덩이를 의자 높이에 맞춘다
+      legL.rotation.x = legR.rotation.x = -1.45;
+      armL.rotation.x = -1.15 + Math.sin(t * 17) * 0.14;
+      armR.rotation.x = -1.15 + Math.sin(t * 17 + 2) * 0.14;
+      head.rotation.x = 0.12 + Math.sin(t * 2) * 0.03 + Math.max(0, Math.sin(t * 0.8)) * 0.07;
+      head.rotation.y = Math.sin(t * 0.45) * 0.12;
+      entity.body.rotation.z = Math.sin(t * 1.3) * 0.018;
+      entity.body.position.y = 0.1; // 사무용 의자 높이(0.43)에 맞춘 앉은 자세
+      lift = Math.sin(t * 2) * 0.006;
     } else if (p === 'type') {
       armL.rotation.x = -1.15 + Math.sin(t * 17) * 0.14;
       armR.rotation.x = -1.15 + Math.sin(t * 17 + 2) * 0.14;
@@ -535,7 +545,7 @@ export function createScene(canvas, overlay, opts = {}) {
       const want = Math.atan2(dx, dy);
       entity.yaw += angleDiff(entity.yaw, want) * Math.min(1, dt * 12);
     } else {
-      let want = goal.pose === 'type' || goal.pose === 'drink' ? Math.PI : goal.pose === 'sleep' ? 0 : Math.PI / 4; // sit/stand는 카메라 쪽
+      let want = goal.pose === 'type' || goal.pose === 'sitType' || goal.pose === 'drink' ? Math.PI : goal.pose === 'sleep' ? 0 : Math.PI / 4; // sit/stand는 카메라 쪽
       if (goal.pose === 'stand' || goal.pose === 'sit' || goal.pose === 'talk') { // 가까이 있는 아바타 쪽으로 몸을 반쯤 돌린다(서로 얘기하는 것처럼)
         const nb = nearestOther(entity, 1.5);
         if (nb) want += angleDiff(want, Math.atan2(nb.pos.x - entity.pos.x, nb.pos.y - entity.pos.y)) * 0.55;

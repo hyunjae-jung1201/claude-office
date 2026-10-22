@@ -57,7 +57,8 @@ export function memberSeat(teamIndex, memberIndex) {
   checkTeam(teamIndex);
   if (!Number.isInteger(memberIndex) || memberIndex < 0 || memberIndex >= MEMBER_MAX) throw new RangeError(`memberIndex ${memberIndex}`);
   const z = deskZone(teamIndex);
-  return { x: z.x + 0.3 + 0.55 * (memberIndex % 2), y: 3.1 + 0.55 * Math.floor(memberIndex / 2) };
+  // 팀원 책상 두 줄(앉는 자리): 팀장 책상 뒤쪽 줄 아래로 y 2.6, 3.6
+  return { x: z.x + 0.3 + 0.55 * (memberIndex % 2), y: 2.6 + 1.0 * Math.floor(memberIndex / 2) };
 }
 
 // 방마다 팀 번호(0~4)별 서 있는/앉는 자리. 가장자리에서 충분히 떨어져 있고 팀끼리 겹치지 않는다.
@@ -68,7 +69,7 @@ const SPOTS = {
   research: row(3.75, 0.46, 2.2),
   work: (i) => {
     const z = deskZone(i);
-    return { x: z.x + z.w / 2, y: 2.0 };
+    return { x: z.x + z.w / 2, y: 1.55 }; // 팀장 책상 바로 앞 의자
   },
   docs: row(14.0, 0.5, 2.4),
   planning: row(17.2, 0.5, 2.4),
@@ -82,7 +83,7 @@ const SPOTS = {
   lounge: row(9.5, 0.95, 12.2), // 소파에 앉아 쉰다
 };
 const BEDS = row(15.1, 0.9, 12.0); // 휴게실 침대(꺼진 세션)
-const POSE = { work: 'type', docs: 'type', research: 'type', response: 'sit', lounge: 'sit' };
+const POSE = { work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit' }; // 작업실은 의자에 앉아 타자
 
 export function targetFor(status, teamIndex, room = roomFor(status)) {
   if (!SPOTS[room]) throw new Error(`unknown room: ${room}`);
@@ -98,7 +99,7 @@ const MEMBER_OFFSETS = [[0.3, 0.3], [-0.3, 0.3], [0.3, -0.3], [-0.3, -0.3]];
 
 // 팀원의 목표: 작업실이면 팀 책상 자리, 그 밖의 방에서는 팀장 자리 곁에 비켜 선다.
 export function memberTarget(status, teamIndex, memberIndex, room = roomFor(status)) {
-  if (room === 'work') return { ...memberSeat(teamIndex, memberIndex), pose: 'type' };
+  if (room === 'work') return { ...memberSeat(teamIndex, memberIndex), pose: 'sitType' };
   const base = targetFor(status, teamIndex, room);
   if (!MEMBER_OFFSETS[memberIndex]) throw new RangeError(`memberIndex ${memberIndex}`);
   const [dx, dy] = MEMBER_OFFSETS[memberIndex];

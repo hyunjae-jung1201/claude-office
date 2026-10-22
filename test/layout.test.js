@@ -50,8 +50,8 @@ test('팀장의 목표: 방마다 6팀 모두 방 안(가장자리에서 0.3 이
   }
 });
 
-test('포즈: 책상 일은 type, 앉는 곳(응답 대기실·휴게실)은 sit, 꺼짐은 sleep, 나머지는 stand', () => {
-  const want = { work: 'type', docs: 'type', research: 'type', response: 'sit', lounge: 'sit' };
+test('포즈: 작업실은 의자에 앉아 타자(sitType), 문서실·리서치실은 type, 앉는 곳(응답 대기실·휴게실)은 sit, 꺼짐은 sleep, 나머지는 stand', () => {
+  const want = { work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit' };
   for (const room of ROOM_IDS) for (const t of TEAMS) assert.equal(targetFor('read', t, room).pose, want[room] ?? 'stand', room);
 });
 
@@ -101,7 +101,7 @@ test('팀장 책상 자리는 팀 책상 구역 안이고, 팀원 4명의 자리
 
 test('팀원 목표: 작업실이면 책상 자리, 그 밖의 방에서는 해당 방 안에서 팀장·다른 팀원과 겹치지 않는다', () => {
   for (const t of TEAMS) {
-    for (let m = 0; m < 4; m++) assert.deepEqual(memberTarget('write', t, m), { ...memberSeat(t, m), pose: 'type' });
+    for (let m = 0; m < 4; m++) assert.deepEqual(memberTarget('write', t, m), { ...memberSeat(t, m), pose: 'sitType' });
     for (const room of ROOM_IDS.filter((r) => r !== 'work')) {
       const lead = targetFor('read', t, room);
       const pts = [0, 1, 2, 3].map((m) => memberTarget('read', t, m, room));
