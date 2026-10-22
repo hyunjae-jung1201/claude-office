@@ -16,13 +16,25 @@ function toast(text) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
 }
+let focusedKey = null;
+function resetView() { focusedKey = null; scene.resetView(); }
+// 확대된 동안만 화면 위에 "전체 보기" 버튼을 띄우고, Esc·화면 빈 곳 더블클릭으로도 돌아온다
+const viewBtn = document.getElementById('view-reset');
+scene.onViewChange((away) => { viewBtn.hidden = !away; if (!away) focusedKey = null; });
+viewBtn.addEventListener('click', resetView);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !viewBtn.hidden && !e.target.closest?.('input')) resetView(); });
+canvas.addEventListener('dblclick', resetView);
 const rpBtn = document.getElementById('rp-btn');
 const roster = createRoster({
   root: document.getElementById('roster'),
   onHover: (key) => scene.highlight(key),
-  onSelect: (key) => scene.focus(key),
+  // 같은 줄을 한 번 더 누르면 전체 화면으로 돌아온다
+  onSelect: (key) => {
+    if (focusedKey === key && scene.view().zoom > 1.05) resetView();
+    else if (scene.focus(key)) focusedKey = key;
+  },
   onBadge: () => { if (document.getElementById('rp').hidden) rpBtn.click(); }, // 판정 배지를 누르면 보고서를 연다
-  onReset: () => scene.resetView(),
+  onReset: () => resetView(),
   onReviewNow: async (team) => {
     try {
       const r = await fetch('/api/review-now', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ team }) });

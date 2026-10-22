@@ -471,7 +471,16 @@ export function createScene(canvas, overlay) {
     }
   }
 
+  // 카메라가 처음 화면에서 벗어났는지(확대·이동) 알려, 화면 위 "전체 보기" 버튼을 켜고 끈다
+  let away = false;
+  let viewListener = () => {};
+  function checkAway() {
+    const now = Math.abs(camera.zoom - homeZoom) > 0.05 || controls.target.distanceTo(homeTarget) > 0.2;
+    if (now !== away) { away = now; viewListener(away); }
+  }
+
   function stepView(dt) {
+    checkAway();
     if (hlEntity && !hovering && performance.now() > hlUntil) setHighlight(null);
     if (hlEntity?.hlRing?.visible) { hlEntity.hlRing.scale.setScalar(1 + Math.sin(clock * 6) * 0.1); }
     if (hlEntity && hlEntity.group.parent === null) setHighlight(null); // 퇴근해서 사라진 아바타
@@ -500,7 +509,10 @@ export function createScene(canvas, overlay) {
       focusAnim = { to: new THREE.Vector3(e.group.position.x, 0.4, e.group.position.z), zoom: Math.max(camera.zoom, 1.9) };
       return true;
     },
+    onViewChange(fn) { viewListener = fn; },
     resetView() { focusAnim = { to: homeTarget.clone(), zoom: homeZoom }; },
+    // 검증용: 현재 카메라 확대·중심
+    view: () => ({ zoom: Math.round(camera.zoom * 100) / 100, x: Math.round(controls.target.x * 100) / 100, z: Math.round(controls.target.z * 100) / 100, animating: Boolean(focusAnim) }),
     update(snapshot) {
       lastSnapshot = snapshot;
       update(snapshot);

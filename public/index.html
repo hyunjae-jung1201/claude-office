@@ -135,6 +135,14 @@
   .ro-go:focus-visible { outline: 2px solid #8fb2ff; outline-offset: 1px; }
   .ro-go:disabled { opacity: .5; cursor: progress; }
   @media (hover: none) { .ro-go { opacity: .85; } }
+  #view-reset {
+    position: fixed; top: 14px; left: calc(50% + var(--roster-w) / 2); transform: translateX(-50%); z-index: 8;
+    font: inherit; font-size: 13px; font-weight: 700; color: #1d2440; background: #ffd166; border: 0; border-radius: 999px; padding: 7px 16px;
+    cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.45);
+  }
+  #view-reset[hidden] { display: none; }
+  #view-reset kbd { margin-left: 6px; font: inherit; font-size: 11px; opacity: .65; border: 1px solid rgba(29,36,64,.4); border-radius: 4px; padding: 0 4px; }
+  #view-reset:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
   #toast {
     position: fixed; left: calc(50% + var(--roster-w) / 2); bottom: 64px; transform: translateX(-50%); z-index: 9; max-width: min(520px, calc(100vw - 48px));
     background: #232b4d; color: var(--ink); font-size: 13px; font-weight: 700; padding: 9px 16px; border-radius: 999px;
@@ -220,6 +228,7 @@
     <div class="ro-meta"><span class="ro-count"></span><button class="ro-reset" type="button">전체 보기</button></div>
     <ul class="ro-list"></ul>
   </aside>
+  <button id="view-reset" type="button" hidden>전체 보기 <kbd>Esc</kbd></button>
   <div id="toast" role="status" aria-live="polite"></div>
   <div id="stage"><canvas id="c"></canvas><div id="overlay"></div></div>
   <header>
