@@ -47,7 +47,7 @@ test('md가 아닌 파일은 무시하고, 폴더가 없으면 빈 목록', () =
 
 test('저장소의 roles/ 9개가 모두 로드된다', () => {
   const roles = loadRoles(fileURLToPath(new URL('../roles', import.meta.url)));
-  assert.deepEqual([...roles.keys()].sort(), ['accessibility', 'copy', 'developer', 'docs', 'embedded', 'performance', 'pm', 'qa', 'security']);
+  assert.deepEqual([...roles.keys()].sort(), ['accessibility', 'architect', 'copy', 'database', 'dependency', 'developer', 'devops', 'docs', 'embedded', 'mlreview', 'performance', 'pm', 'qa', 'release', 'security', 'ux']);
   assert.deepEqual(['pm', 'developer', 'qa', 'security', 'docs', 'performance', 'accessibility', 'embedded', 'copy'].map((id) => roles.get(id).when), ['always', 'code', 'always', 'code', 'docs', 'code', 'ui', 'code', 'docs']);
   for (const r of roles.values()) {
     assert.match(r.color, /^#[0-9a-f]{6}$/i);
@@ -84,5 +84,5 @@ test('when: ui 를 받아들이고, 동봉된 역할 파일이 모두 읽힌다'
   writeFileSync(join(dir, 'a11y.md'), '---\nname: 접근성\nwhen: ui\n---\n프롬프트');
   assert.equal(loadRoles(dir).get('a11y').when, 'ui');
   const shipped = loadRoles(new URL('../roles/', import.meta.url).pathname);
-  for (const id of ['pm', 'developer', 'qa', 'security', 'docs', 'performance', 'accessibility', 'embedded', 'copy']) assert.ok(shipped.has(id), id);
+  for (const id of ['pm', 'developer', 'qa', 'security', 'docs', 'performance', 'accessibility', 'embedded', 'copy', 'architect', 'database', 'devops', 'ux', 'dependency', 'release', 'mlreview']) assert.ok(shipped.has(id), id);
 });

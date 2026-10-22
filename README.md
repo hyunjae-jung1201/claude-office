@@ -71,7 +71,7 @@ Claude Code가 `~/.claude/sessions/<pid>.json`에 적는 **세션 등록 정보*
 - 상태가 `shell`(응답은 끝났지만 백그라운드 명령이 도는 중)이면 **서버실에서 "백그라운드 작업 중"**으로 보인다. (`busy`는 등록 정보가 오래 남는 경우가 있어 사용하지 않는다.)
 
 ## 역할자(PM·개발자·QA …) 자동 검토
-세션이 파일을 수정하고 응답을 끝내면 PM·개발자·QA 역할자가 읽기 전용 `claude -p`로 변경을 검토한다. 검토 중에는 역할자 아바타가 팀 책상에 나타나 일하고, 끝나면 퇴근하며 팀장 곁에 판정 배지(✓ 통과 / ⚠ 우려 n / ⛔ 중단 권고)가 남는다. 오른쪽 위 **보고서** 버튼에서 최근 검토와 지적 상세를 볼 수 있고, 파일은 `data/reviews/`에 저장된다. 역할은 `roles/<id>.md` 파일을 추가해 늘린다. 자세한 사용법·설정·한계는 `docs/roles-howto.md`, 읽기 전용 검증은 `docs/roles-verification.md`.
+세션이 파일을 수정하고 응답을 끝내면 PM·개발자·QA 역할자가 읽기 전용 `claude -p`로 변경을 검토한다. 검토 중에는 역할자 아바타가 팀 책상에 나타나 일하고, 끝나면 퇴근하며 팀장 곁에 판정 배지(✓ 통과 / ⚠ 우려 n / ⛔ 중단 권고)가 남는다. 오른쪽 위 **보고서** 버튼에서 최근 검토와 지적 상세를 볼 수 있고, 파일은 `data/reviews/`에 저장된다. 역할은 `roles/<id>.md` 파일을 추가해 늘린다. 기본으로 도는 것은 PM·개발자·QA 이고, 접근성·문구·문서·임베디드·성능·보안·아키텍트·데이터베이스·배포·운영(`devops`)·UX·의존성·릴리스·ML 검토(`mlreview`)는 `config.json` 의 `roles.default` 또는 팀별 `projects[].roles` 에 id 를 적어야 켜진다(켠 역할 수만큼 `claude` 실행이 늘어 일일 한도를 쓴다). 자세한 사용법·설정·한계는 `docs/roles-howto.md`, 읽기 전용 검증은 `docs/roles-verification.md`.
 - 화면 확인용: `CLAUDE_OFFICE_FAKE_ROLES=1 CLAUDE_OFFICE_REVIEW_DIR=/tmp/x node src/server.js` (가짜 역할자 결과, 실제 claude 호출 없음)
 
 ## 세션 이름으로 팀 찾기

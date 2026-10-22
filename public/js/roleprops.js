@@ -10,6 +10,13 @@ export const ROLE_PROPS = {
   accessibility: ['scarf', 'roundGlasses'],
   embedded: ['hardhat', 'vest'],
   copy: ['pen', 'notebook'],
+  architect: ['roundGlasses', 'clipboard'],
+  database: ['goggles', 'book'],
+  devops: ['hardhat', 'headphones'],
+  ux: ['scarf', 'pen'],
+  dependency: ['badge', 'magnifier'],
+  release: ['tie', 'stopwatch'],
+  mlreview: ['flask', 'roundGlasses'],
   tests: ['goggles', 'flask'], // 테스터(테스트 실행) 작업 아바타
   recorder: ['notebook', 'cap'], // 기록원(작업 일지) 작업 아바타
 };
