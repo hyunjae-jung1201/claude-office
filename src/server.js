@@ -8,7 +8,7 @@ import { normalizeEvent } from './events.js';
 import { createState, applyEvent, tick, snapshot, setLabel, applyReviewEvent, setReviewHistory, teamOfSession } from './state.js';
 import { ruleLabel } from './labels.js';
 import { createSummarizer } from './summarizer.js';
-import { startRemote, startLocalTail } from './remote.js';
+import { startRemote, startLocalTail, projectionToEvents } from './remote.js';
 import { createSessionRegistry } from './sessions.js';
 import { createLiveMonitor } from './live.js';
 import { validateRoleIds } from './roles/loader.js';
@@ -184,6 +184,31 @@ export async function startServer({
     req.on('error', () => res.writeHead(400).end());
   }
 
+  // 다른 PC 가 ssh 로 밀어 넣는 세션 기록 줄(remote-tail.cjs 출력)을 받아 그 원격(host)의 이벤트로 처리한다(remotes[].push)
+  const ingestCtx = new Map();
+  function ingest(req, res, url) {
+    const name = url.searchParams.get('remote');
+    if (!name) return res.writeHead(400).end();
+    const remote = config.remotes?.find((r) => r.name === name && r.push);
+    if (!remote) return res.writeHead(404).end();
+    let size = 0;
+    let tooBig = false;
+    const chunks = [];
+    req.on('data', (c) => { size += c.length; if (size > BODY_LIMIT) tooBig = true; else chunks.push(c); });
+    req.on('end', () => {
+      if (tooBig) return res.writeHead(413).end();
+      let ctx = ingestCtx.get(name);
+      if (!ctx) ingestCtx.set(name, (ctx = { tools: new Map(), seen: new Set() }));
+      for (const line of Buffer.concat(chunks).toString('utf8').split('\n')) {
+        let p;
+        try { p = JSON.parse(line); } catch { continue; }
+        for (const ev of projectionToEvents(p, ctx, now())) handleEvent({ ...ev, host: name, source: 'transcript' });
+      }
+      res.writeHead(204).end();
+    });
+    req.on('error', () => res.writeHead(400).end());
+  }
+
   // 보고서 상세: ?repo=<저장소 루트>(없으면 전체 최근 20건). 저장소가 화면 팀이 아니어도 볼 수 있다.
   function serveReviews(url, res) {
     const repo = url.searchParams.get('repo');
@@ -227,6 +252,11 @@ export async function startServer({
       if (req.headers.origin) return res.writeHead(403).end();
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
       return readBody(req, res);
+    }
+    if (req.method === 'POST' && pathname === '/ingest') {
+      if (req.headers.origin) return res.writeHead(403).end();
+      if (!String(req.headers['content-type'] ?? '').startsWith('application/x-ndjson')) return res.writeHead(415).end();
+      return ingest(req, res, url);
     }
     if (req.method === 'POST' && pathname === '/api/review-now') {
       if (!originOk(req.headers.origin)) return res.writeHead(403).end();
@@ -279,7 +309,7 @@ export async function startServer({
   pollLive();
 
   // 원격 PC: 읽기 전용으로 세션 기록을 받아 같은 이벤트로 흘려 넣는다
-  const remotes = (config.remotes ?? []).map((remote) => remoteFactory({ remote, onEvent: handleEvent }));
+  const remotes = (config.remotes ?? []).filter((r) => !r.push).map((remote) => remoteFactory({ remote, onEvent: handleEvent })); // push 원격은 /ingest 로 받는다
   const localCollector = localTail ? localTail({ onEvent: handleEvent }) : null;
 
   return {

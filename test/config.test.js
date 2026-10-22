@@ -212,3 +212,11 @@ test('dailyLog: 절대 경로 dir 과 주기(초)를 검증하고, 없으면 꺼
   assert.equal(loadConfig(cfgFile({ projects: [], dailyLog: { dir: '/x', intervalSeconds: 30 } })).dailyLog.intervalSeconds, 30);
   for (const bad of ['/x', { dir: 'relative' }, { dir: '/x', intervalSeconds: 1 }, { dir: '/x', intervalSeconds: 'a' }, { }]) assert.throws(() => loadConfig(cfgFile({ projects: [], dailyLog: bad })), /dailyLog/);
 });
+
+test('remotes[].push: 다른 PC 가 밀어 넣는 원격은 ssh 없이도 받고, ssh 도 push 도 없으면 거부', () => {
+  const c = loadConfig(cfgFile({ projects: [{ name: 'T', path: '/t', host: 'PC1' }], remotes: [{ name: 'PC1', push: true }] }));
+  assert.deepEqual([c.remotes[0].push, c.remotes[0].ssh], [true, undefined]);
+  assert.equal(loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC2', ssh: 'u@h' }] })).remotes[0].push, false);
+  assert.throws(() => loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC9' }] })), /ssh|push/);
+  assert.throws(() => loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC9', push: 'yes' }] })), /push/);
+});

@@ -661,3 +661,36 @@ test('dailyLog 를 켜면 팀의 요청·수정 파일이 자동기록.md 로 �
     c.close();
   });
 });
+
+// ---- 다른 PC 가 밀어 넣는 원격(remotes[].push): POST /ingest?remote=이름 (세션 기록 줄 묶음)
+const ingest = (port, remote, lines, headers = {}) => fetch(`http://127.0.0.1:${port}/ingest?remote=${encodeURIComponent(remote)}`, {
+  method: 'POST', headers: { 'content-type': 'application/x-ndjson', ...headers }, body: Array.isArray(lines) ? lines.map((l) => (typeof l === 'string' ? l : JSON.stringify(l))).join('\n') : lines,
+});
+const pushConfig = { ...config, remotes: [{ name: 'PC1', push: true }, { name: 'PC3', ssh: 'u@h', key: '/k' }], projects: [{ name: 'P', path: '/home/u/proj', host: 'PC1', color: '#e5b83a' }, ...config.projects] };
+const noRemote = () => ({ stop() {}, status: () => 'connected' });
+
+test('ingest: 밀려 온 세션 기록 줄이 host 가 같은 팀의 상태가 된다(도구 → 일하는 중)', async () => {
+  await withServer({ config: pushConfig, remoteFactory: noRemote }, async ({ port }) => {
+    const c = await connect(port);
+    const r = await ingest(port, 'PC1', [
+      { s: 'x1', c: '/home/u/proj/src', k: 'prompt', p: '요청' },
+      { s: 'x1', c: '/home/u/proj/src', k: 'tool', tools: [{ i: 't1', n: 'Bash', d: 'ssh host uptime' }] },
+    ]);
+    assert.equal(r.status, 204);
+    const s = await c.waitFor((x) => x.teams.find((t) => t.name === 'P').status === 'run');
+    assert.equal(s.teams.find((t) => t.name === 'P').room, 'server');
+    c.close();
+  });
+});
+
+test('ingest: 모르는 원격·ssh 로 읽는 원격·Origin·잘못된 Content-Type·너무 큰 본문은 거부하고, 깨진 줄은 무시한다', async () => {
+  await withServer({ config: pushConfig, remoteFactory: noRemote }, async ({ port }) => {
+    assert.equal((await ingest(port, 'NOPE', [])).status, 404);
+    assert.equal((await ingest(port, 'PC3', [])).status, 404); // push 가 아닌 원격
+    assert.equal((await ingest(port, 'PC1', [], { origin: 'http://evil.example' })).status, 403);
+    assert.equal((await ingest(port, 'PC1', '', { 'content-type': 'text/html' })).status, 415);
+    assert.equal((await ingest(port, 'PC1', 'x'.repeat(2 * 1024 * 1024))).status, 413);
+    assert.equal((await ingest(port, 'PC1', ['not json', '{"s":1}', { s: 'ok', c: '/home/u/proj', k: 'prompt', p: 'x' }])).status, 204); // 깨진 줄은 건너뜀
+    assert.equal((await fetch(`http://127.0.0.1:${port}/ingest`, { method: 'POST', headers: { 'content-type': 'application/x-ndjson' }, body: '' })).status, 400); // remote 값 없음
+  });
+});

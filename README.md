@@ -58,6 +58,12 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 - 한계: 승인을 눌러도 hook이 승인 완료 신호를 주지 않아서, 그 명령이 끝날 때까지 "승인 기다리는 중"으로 보인다.
 - Claude가 꺼져 있으면 휴게실에서 앉아서 잔다. 10분(`offAfterMinutes`) 동안 신호가 없어도 꺼진 것으로 본다.
 
+## 다른 PC 에서도 보기 (push 원격)
+다른 PC 에도 Claude Office 를 설치하고, 이 PC 의 작업을 그쪽 화면에서도 보게 할 수 있다. 이 PC 가 ssh 로 세션 기록을 **밀어 넣는** 방식이라 그쪽에서 이 PC 로 접속할 필요가 없다(키 권한도 그대로: 명령 실행만).
+1. 다른 PC 의 `config.json`: `"remotes": [{ "name": "PC1", "push": true }]` 와, 이 PC 의 프로젝트를 `"host": "PC1"` 을 붙여 팀으로 적는다.
+2. 이 PC 에서: `bash scripts/install-push-service.sh PC1 사용자@주소 ~/projects/claude-office` 로 미리보기 → `--apply` 로 설치.
+3. 다른 PC 서버는 `POST /ingest?remote=PC1`(루프백만)로 받아 그 PC 팀의 상태로 처리한다. 읽기 전용이며 파일·명령은 건드리지 않는다.
+
 ## 실행 중인 세션과 백그라운드 작업
 Claude Code가 `~/.claude/sessions/<pid>.json`에 적는 **세션 등록 정보**(프로세스가 살아 있는지, 상태)를 3초마다 읽는다(원격 PC는 SSH 스크립트가 같은 파일을 읽는다).
 - 프로세스가 살아 있으면 꺼진 것이 아니라 **지시 대기 구역에서 대기**로 보인다. 프로세스가 사라지면 휴게실에서 잔다.

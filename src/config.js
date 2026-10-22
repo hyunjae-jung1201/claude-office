@@ -11,11 +11,12 @@ function validateRemotes(list) {
   const names = new Set();
   return list.map((r, i) => {
     if (!r.name) throw new Error(`remotes[${i}]에 name이 없습니다`);
-    if (!r.ssh) throw new Error(`remotes[${i}]에 ssh(사용자@주소)가 없습니다`);
+    if (r.push !== undefined && typeof r.push !== 'boolean') throw new Error(`remotes[${i}].push는 true/false여야 합니다`);
+    if (!r.ssh && r.push !== true) throw new Error(`remotes[${i}]에 ssh(사용자@주소)가 없습니다(다른 PC 가 밀어 넣는 원격이면 push: true)`);
     if (names.has(r.name)) throw new Error(`remote 이름이 중복입니다: ${r.name}`);
     names.add(r.name);
     if (r.review !== undefined && typeof r.review !== 'boolean') throw new Error(`remotes[${i}].review는 true/false여야 합니다`);
-    return { name: r.name, ssh: r.ssh, key: r.key ?? '~/.ssh/claude_office_ed25519', review: r.review === true };
+    return { name: r.name, ...(r.ssh ? { ssh: r.ssh } : {}), key: r.key ?? '~/.ssh/claude_office_ed25519', review: r.review === true, push: r.push === true };
   });
 }
 
