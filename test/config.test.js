@@ -188,3 +188,10 @@ test('roles.deliver: session 을 받아들이고 deliverMinSeverity 를 검증�
   assert.deepEqual([c.roles.deliver, c.roles.deliverMinSeverity], ['session', 'minor']);
   assert.throws(() => loadConfig(cfgFile({ roles: { deliverMinSeverity: 'info' }, projects: [] })), /deliverMinSeverity/);
 });
+
+test('remotes[].review: 불리언만 받고, 기본은 끔', () => {
+  const base = { projects: [] };
+  const a = loadConfig(cfgFile({ ...base, remotes: [{ name: 'PC2', ssh: 'u@h' }, { name: 'PC3', ssh: 'u@h3', review: true }] }));
+  assert.deepEqual(a.remotes.map((r) => r.review), [false, true]);
+  assert.throws(() => loadConfig(cfgFile({ ...base, remotes: [{ name: 'PC2', ssh: 'u@h', review: 'yes' }] })), /review/);
+});

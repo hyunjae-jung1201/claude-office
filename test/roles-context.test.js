@@ -256,3 +256,13 @@ test('buildPrompt: edits 모드는 git이 아니라 Claude가 한 수정 기록�
   assert.match(p, /직접 읽어/);
   assert.ok(!/수정 기록/.test(buildPrompt(ROLE, bundle())));
 });
+
+test('buildPrompt: 원격(host) 수정 기록은 파일을 읽을 수 없다고 알린다', () => {
+  const p = buildPrompt(ROLE, { ...bundle(), mode: 'edits', host: 'PC2' });
+  assert.match(p, /다른 PC\(PC2\)/);
+  assert.match(p, /읽을 수 없/);
+  assert.ok(!/다른 PC/.test(buildPrompt(ROLE, { ...bundle(), mode: 'edits' })));
+});
+test('buildEditsBundle: host 를 번들에 싣는다', () => {
+  assert.equal(buildEditsBundle({ repoRoot: '/r', host: 'PC2', requests: [], lastResponse: '', files: ['/r/a.py'], edits: [{ kind: 'edit', file: '/r/a.py', old: 'a', new: 'b' }] }).host, 'PC2');
+});

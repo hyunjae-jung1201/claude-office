@@ -24,7 +24,7 @@ export function createPanel({ button, panel, fetchJson = (url) => fetch(url).the
   async function showDetail(item) {
     detail.replaceChildren(el('div', 'rp-muted', '불러오는 중…'));
     let reviews = [];
-    try { reviews = await fetchJson(`/api/reviews?repo=${encodeURIComponent(item.repoRoot)}`); } catch { /* 아래에서 처리 */ }
+    try { reviews = await fetchJson(`/api/reviews?repo=${encodeURIComponent(item.repoRoot)}${item.host ? `&host=${encodeURIComponent(item.host)}` : ''}`); } catch { /* 아래에서 처리 */ }
     const r = reviews.find((x) => x.id === item.id) ?? reviews[0];
     detail.replaceChildren();
     if (!r || !Array.isArray(r.results)) { detail.append(el('div', 'rp-muted', '상세를 불러오지 못했습니다.')); return; }

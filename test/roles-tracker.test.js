@@ -296,3 +296,42 @@ test('수정 내용이 세션당 100개를 넘으면 오래된 것부터 버린�
   assert.equal(due[0].edits.length, 100);
   assert.equal(due[0].edits.at(-1).new, 'n129');
 });
+
+// ---- 원격 PC 팀 검토(remotes[].review)
+const remoteCfg = (review = true, extra = {}) => ({ ...teamCfg(extra), remotes: [{ name: 'PC2', ssh: 'u@h', review }] });
+const rev = (setupRes, type, o = {}) => setupRes.ev(type, { host: 'PC2', cwd: '/remote/p', ...o });
+
+test('review 를 켠 원격의 팀 폴더 수정은 host 와 수정 기록이 담긴 job 이 된다 (이 PC의 파일 시스템은 보지 않는다)', async () => {
+  let called = 0;
+  const r = setup(remoteCfg(), { groupFiles: async () => { called++; return new Map(); } });
+  await r.tracker.onEvent(rev(r, 'prompt', { promptText: '값 바꿔줘' }));
+  await r.tracker.onEvent(rev(r, 'tool', edited('/remote/p/src/a.py', '1', '2')));
+  await r.tracker.onEvent(rev(r, 'stop', { assistantText: '바꿨습니다' }));
+  assert.equal(called, 0);
+  assert.equal(r.due.length, 1);
+  assert.deepEqual([r.due[0].host, r.due[0].repoRoot, r.due[0].files], ['PC2', '/remote/p', ['/remote/p/src/a.py']]);
+  assert.deepEqual(r.due[0].edits.map((e) => [e.old, e.new]), [['1', '2']]);
+  assert.deepEqual([r.due[0].requests, r.due[0].lastResponse], [['값 바꿔줘'], '바꿨습니다']);
+});
+
+test('review 를 끄면(기본) 원격 이벤트는 무시하고, 원격은 host 가 같은 팀 폴더만 인정한다', async () => {
+  const off = setup(remoteCfg(false));
+  await off.tracker.onEvent(rev(off, 'tool', edited('/remote/p/a.py')));
+  await off.tracker.onEvent(rev(off, 'stop'));
+  assert.equal(off.due.length, 0);
+  const on = setup(remoteCfg(true));
+  await on.tracker.onEvent(rev(on, 'tool', edited('/plain/proj/a.py'))); // 이 PC 팀 폴더 경로: 원격 파일이므로 해당 없음
+  await on.tracker.onEvent(rev(on, 'tool', edited('/else/b.py')));
+  await on.tracker.onEvent(rev(on, 'stop'));
+  assert.equal(on.due.length, 0);
+});
+
+test('원격과 이 PC 의 같은 경로는 쿨다운·검토를 따로 센다', async () => {
+  const cfg = { ...remoteCfg(), projects: [{ name: 'L', path: '/shared/p' }, { name: 'R', path: '/shared/p', host: 'PC2' }] };
+  const t = setup(cfg);
+  await t.tracker.onEvent({ ...t.ev('tool', edited('/shared/p/a.py')) });
+  await t.tracker.onEvent(t.ev('stop'));
+  await t.tracker.onEvent({ ...t.ev('tool', edited('/shared/p/a.py')), sessionId: 's2', host: 'PC2' });
+  await t.tracker.onEvent({ ...t.ev('stop'), sessionId: 's2', host: 'PC2' });
+  assert.deepEqual(t.due.map((j) => [j.host ?? null, j.repoRoot]), [[null, '/shared/p'], ['PC2', '/shared/p']]);
+});

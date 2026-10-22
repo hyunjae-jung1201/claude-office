@@ -9,7 +9,9 @@ const SESSION_TTL_MS = 6 * 60 * MIN; // 이보다 오래 조용하고 보류 중
 
 export function createReviewTracker({ config, now = Date.now, groupFiles, onDue, quietMs = 30_000, headOf = gitHead }) {
   const sessions = new Map();
-  const repoLast = new Map(); // 저장소 루트 -> 마지막 검토 시작 시각
+  const repoLast = new Map(); // 저장소 루트(원격은 host:경로) -> 마지막 검토 시작 시각
+  const lastKey = (repoRoot, host) => (host ? `${host}:${repoRoot}` : repoRoot);
+  const reviewableHost = (host) => config.remotes?.some((r) => r.name === host && r.review === true);
 
   const settingsFor = (repoRoot) => {
     let best = null;
@@ -24,16 +26,16 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
   };
   // 검토를 받고 싶지 않은 저장소(roles.excludePaths 아래)는 모은 파일도 버린다
   const isExcluded = (repoRoot) => (config.roles.excludePaths ?? []).some((p) => repoRoot === p || repoRoot.startsWith(p.replace(/\/+$/, '') + '/'));
-  const cooledDown = (repoRoot) => {
-    const last = repoLast.get(repoRoot);
+  const cooledDown = (repoRoot, host) => {
+    const last = repoLast.get(lastKey(repoRoot, host));
     return last === undefined || now() - last >= settingsFor(repoRoot).cooldownMs;
   };
 
   // git 저장소가 아닌 파일이 화면에 올린(이 PC의) 팀 폴더 안이면 그 폴더를 검토 단위로 삼는다. 가장 긴 경로가 우선.
-  const teamFolderOf = (file) => {
+  const teamFolderOf = (file, host) => {
     let best = null;
     for (const p of config.projects ?? []) {
-      if (p.host || typeof p.path !== 'string') continue;
+      if ((p.host ?? null) !== (host ?? null) || typeof p.path !== 'string') continue;
       const root = p.path.replace(/\/+$/, '');
       if (root && file.startsWith(root + '/') && (!best || root.length > best.length)) best = root;
     }
@@ -51,13 +53,14 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
 
   // 모인 파일을 저장소별로 나눠, 조건이 맞는 저장소마다 due 를 낸다. onlyPending 이면 보류 중인 저장소만.
   async function evaluate(sessionId, s, reason, { onlyPending = false, ignoreCooldown = false } = {}) {
-    const groups = await groupFiles([...s.files]);
+    // 원격 PC 의 파일은 이 PC 의 파일 시스템으로 저장소를 찾지 않는다(같은 경로의 다른 파일일 수 있다)
+    const groups = s.host ? new Map() : await groupFiles([...s.files]);
     // git 저장소가 아니어도 팀 폴더 안이면 Claude 의 수정 기록으로 검토한다(editGroups). 둘 다 아니면 계속 쌓이지 않게 버린다
     const inRepo = new Set([...groups.values()].flat());
     const editRoots = new Set();
     for (const f of [...s.files]) {
       if (inRepo.has(f)) continue;
-      const root = teamFolderOf(f);
+      const root = teamFolderOf(f, s.host);
       if (!root) { s.files.delete(f); continue; }
       if (!groups.has(root)) groups.set(root, []);
       groups.get(root).push(f);
@@ -68,14 +71,14 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
       if (isExcluded(repoRoot)) { for (const f of files) s.files.delete(f); if (editRoots.has(repoRoot)) s.edits = s.edits.filter((e) => !files.includes(e.file)); continue; }
       if (onlyPending && !s.pending.has(repoRoot)) continue;
       if (files.length < settingsFor(repoRoot).minWrites) continue;
-      if (!ignoreCooldown && !cooledDown(repoRoot)) { s.pending.add(repoRoot); continue; }
-      repoLast.set(repoRoot, now());
+      if (!ignoreCooldown && !cooledDown(repoRoot, s.host)) { s.pending.add(repoRoot); continue; }
+      repoLast.set(lastKey(repoRoot, s.host), now());
       s.pending.delete(repoRoot);
       for (const f of files) s.files.delete(f);
       fired = true;
       const baseSha = s.bases.get(repoRoot) ?? undefined;
       s.bases.delete(repoRoot);
-      const job = { repoRoot, sessionId, files, requests: [...s.requests], lastResponse: s.lastResponse, reason, baseSha };
+      const job = { repoRoot, ...(s.host ? { host: s.host } : {}), sessionId, files, requests: [...s.requests], lastResponse: s.lastResponse, reason, baseSha };
       if (editRoots.has(repoRoot)) {
         const mine = new Set(files);
         job.edits = s.edits.filter((e) => mine.has(e.file));
@@ -100,8 +103,10 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
   return {
     async onEvent(ev) {
       // live(세션 등록 정보 하트비트)는 사용자 활동이 아니다: 세션 상태를 만들지도, 마지막 활동 시각을 갱신하지도 않는다
-      if (!config.roles?.enabled || !ev || typeof ev !== 'object' || ev.host || !ev.sessionId || ev.type === 'live') return;
+      if (!config.roles?.enabled || !ev || typeof ev !== 'object' || !ev.sessionId || ev.type === 'live') return;
+      if (ev.host && !reviewableHost(ev.host)) return; // 원격은 review 를 켠 PC 만
       const s = sessionOf(ev);
+      if (ev.host) s.host = ev.host;
       s.lastActivity = now();
       switch (ev.type) {
         case 'prompt':
@@ -111,7 +116,7 @@ export function createReviewTracker({ config, now = Date.now, groupFiles, onDue,
           if (ev.filePath && EDIT_TOOLS.has(ev.toolName)) {
             s.files.add(ev.filePath);
             if (ev.edit) s.edits = [...s.edits, ev.edit].slice(-EDITS_MAX);
-            await recordBase(s, ev.filePath);
+            if (!s.host) await recordBase(s, ev.filePath);
           }
           break;
         case 'agentStart':

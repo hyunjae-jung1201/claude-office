@@ -14,7 +14,8 @@ function validateRemotes(list) {
     if (!r.ssh) throw new Error(`remotes[${i}]에 ssh(사용자@주소)가 없습니다`);
     if (names.has(r.name)) throw new Error(`remote 이름이 중복입니다: ${r.name}`);
     names.add(r.name);
-    return { name: r.name, ssh: r.ssh, key: r.key ?? '~/.ssh/claude_office_ed25519' };
+    if (r.review !== undefined && typeof r.review !== 'boolean') throw new Error(`remotes[${i}].review는 true/false여야 합니다`);
+    return { name: r.name, ssh: r.ssh, key: r.key ?? '~/.ssh/claude_office_ed25519', review: r.review === true };
   });
 }
 

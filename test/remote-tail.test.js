@@ -243,3 +243,28 @@ test('INCLUDE_TEXT=1이면 편집 도구의 수정 전·후 내용(e)을 담고,
     } finally { t.stop(); }
   }
 });
+
+// ---- 옛 버전 기록(stop_reason 이 null): 텍스트만 있는 마지막 줄을 잠시 기다렸다가 턴 끝으로 본다
+const assistantText = (text, stop_reason = null) => ({ type: 'assistant', sessionId: 'S1', cwd: '/home/me', timestamp: '2026-10-22T06:00:02Z', message: { stop_reason, content: [{ type: 'text', text }] } });
+
+test('stop_reason 이 null 인 옛 기록: 텍스트 줄 뒤에 더 줄이 없으면 stop, 도구 줄이 이어지면 stop 이 아니다', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'tail-'));
+  mkdirSync(join(root, '-home-me'));
+  const f = join(root, '-home-me', 'S1.jsonl');
+  writeFileSync(f, line({ type: 'user', sessionId: 'S1', cwd: '/home/me', message: { content: '시작' } }));
+  const t = startTail(root, { INCLUDE_TEXT: '1', STOP_QUIET_MS: '300' });
+  try {
+    await waitFor(() => t.out.find((o) => o.k === 'init'));
+    appendFileSync(f, line(assistantText('먼저 확인해 볼게요')));
+    appendFileSync(f, line(assistantTool('Read', { file_path: '/home/me/a.js' }, 'tuR')));
+    await sleep(900);
+    assert.equal(t.out.filter((o) => o.k === 'stop').length, 0); // 중간 설명이었다
+    appendFileSync(f, line(assistantText('끝났습니다')));
+    const stop = await waitFor(() => t.out.find((o) => o.k === 'stop'));
+    assert.equal(stop.a, '끝났습니다');
+    await sleep(700);
+    assert.equal(t.out.filter((o) => o.k === 'stop').length, 1); // 한 번만
+    appendFileSync(f, line(assistantText('다음 턴', 'end_turn')));
+    await waitFor(() => t.out.filter((o) => o.k === 'stop').length === 2); // 새 버전 기록은 바로
+  } finally { t.stop(); }
+});

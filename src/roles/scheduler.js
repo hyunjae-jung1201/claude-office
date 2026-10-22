@@ -1,6 +1,8 @@
 // 검토 실행 관리: 저장소별 중복 방지, 전체 동시 실행 제한, 일일 한도, 역할별 실행과 결과 저장.
 import { randomUUID } from 'node:crypto';
-import { basename, extname } from 'node:path';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { basename, extname, join } from 'node:path';
 import { aggregateVerdict, countConcerns, parseRoleOutput } from './parse.js';
 import { buildDiff, buildEditsBundle, buildPrompt } from './context.js';
 import { rolesFor } from './loader.js';
@@ -26,6 +28,9 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
   let active = 0;
   const waiters = [];
   let closed = false;
+  let scratch = null; // 원격 PC 검토용 빈 작업 폴더(읽을 파일이 없다)
+  const scratchDir = () => (scratch ??= mkdtempSync(join(tmpdir(), 'claude-office-remote-')));
+  const keyOf = (job) => (job.host ? `${job.host}:${job.repoRoot}` : job.repoRoot);
   const abort = new AbortController(); // close() 때 실행 중인 역할자를 끝낸다
 
   const acquire = () => new Promise((resolve) => {
@@ -60,7 +65,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
         safeEmit({ type: 'role', ...base, roleId: role.id, status: 'running' });
         let result;
         try {
-          result = parseRoleOutput(await run({ role, prompt: buildPrompt(role, bundle), repoRoot: job.repoRoot, signal: abort.signal }), role.id);
+          result = parseRoleOutput(await run({ role, prompt: buildPrompt(role, bundle), repoRoot: job.host ? scratchDir() : job.repoRoot, signal: abort.signal }), role.id);
         } catch (e) {
           result = { roleId: role.id, verdict: 'failed', summary: '', findings: [], error: String(e.message ?? e).slice(0, 200) };
         }
@@ -75,7 +80,7 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     if (closed) return; // 서버가 종료되는 중이면 결과를 버린다
     const finishedAt = now();
     const review = {
-      id: randomUUID().slice(0, 8), repoRoot: job.repoRoot, repoName: bundle.repoName, team, startedAt, finishedAt,
+      id: randomUUID().slice(0, 8), repoRoot: job.repoRoot, host: job.host, repoName: bundle.repoName, team, startedAt, finishedAt,
       verdict: aggregateVerdict(results), concerns: countConcerns(results), results, files: job.files,
     };
     store.save(review);
@@ -84,21 +89,21 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
 
   async function process(job) {
     if (closed) return;
-    if (running.has(job.repoRoot)) {
-      const prev = dirty.get(job.repoRoot);
-      dirty.set(job.repoRoot, prev ? { ...job, files: [...new Set([...prev.files, ...job.files])], baseSha: prev.baseSha ?? job.baseSha, ...(prev.edits || job.edits ? { edits: [...(prev.edits ?? []), ...(job.edits ?? [])].slice(-100) } : {}) } : job);
+    if (running.has(keyOf(job))) {
+      const prev = dirty.get(keyOf(job));
+      dirty.set(keyOf(job), prev ? { ...job, files: [...new Set([...prev.files, ...job.files])], baseSha: prev.baseSha ?? job.baseSha, ...(prev.edits || job.edits ? { edits: [...(prev.edits ?? []), ...(job.edits ?? [])].slice(-100) } : {}) } : job);
       return;
     }
-    running.add(job.repoRoot);
+    running.add(keyOf(job));
     const startedAt = now();
     try {
       await review(job);
     } catch { /* 한 검토의 예기치 못한 오류가 다른 검토를 막지 않게 */ } finally {
-      running.delete(job.repoRoot);
+      running.delete(keyOf(job));
     }
-    const again = dirty.get(job.repoRoot);
+    const again = dirty.get(keyOf(job));
     if (again && !closed) {
-      dirty.delete(job.repoRoot);
+      dirty.delete(keyOf(job));
       const cooldown = (config.roles.projects?.[job.repoRoot]?.cooldownMinutes ?? config.roles.cooldownMinutes) * MIN;
       const delay = Math.max(0, cooldown - (now() - startedAt));
       const p = new Promise((resolve) => {
@@ -121,7 +126,11 @@ export function createScheduler({ config, roles, store, run, buildBundle = defau
     async idle() {
       while (inflight.size) await Promise.all([...inflight]);
     },
-    close() { closed = true; abort.abort(); },
+    close() {
+      closed = true;
+      abort.abort();
+      if (scratch) { try { rmSync(scratch, { recursive: true, force: true }); } catch { /* 임시 폴더 정리 실패는 무시 */ } scratch = null; }
+    },
     stats: () => ({ running: running.size, queued: waiters.length, dailyUsed: store.counter.used(), limitReached: store.counter.used() >= config.roles.dailyLimit }),
   };
 }

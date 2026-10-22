@@ -10,6 +10,7 @@ const POLL_MS = Number(process.env.POLL_MS) || 1000;
 const RECENT_MS = 10 * 60 * 1000; // 이 시간 안에 수정된 세션만 "실행 중"으로 본다
 const TAIL_BYTES = 256 * 1024;
 const MAX_READ = 4 * 1024 * 1024;
+const STOP_QUIET_MS = Number(process.env.STOP_QUIET_MS) || 2000; // 옛 버전 기록: 텍스트 줄 뒤로 이 시간 동안 줄이 안 늘면 턴 끝으로 본다
 const INCLUDE_TEXT = process.env.INCLUDE_TEXT === '1'; // 이 PC(로컬)에서만: 요청 300자·마지막 응답 2000자를 함께 보낸다(원격 전송에는 쓰지 않는다)
 const AGENT_RECENT_MS = 30 * 1000; // 처음 볼 때 이 시간 안에 움직인 하위 에이전트만 "일하는 중"으로 본다
 const AGENT_IDLE_MS = 90 * 1000; // meta 에 finished 표시가 없어도 이 시간 동안 줄이 안 늘면 끝난 것으로 본다
@@ -66,6 +67,11 @@ function project(line, st, agent) {
       if (!INCLUDE_TEXT) return { k: 'stop' };
       const texts = m.content.filter((b) => b && b.type === 'text').map((b) => String(b.text || ''));
       return { k: 'stop', a: texts.join('\n').slice(0, 2000) };
+    }
+    // 옛 Claude Code 기록은 stop_reason 이 항상 null: 텍스트만 있는 줄은 "끝일지도" 후보로 두고, 이어지는 줄이 없을 때만 stop 으로 낸다
+    if (!agent && m.stop_reason == null) {
+      const text = m.content.filter((b) => b && b.type === 'text').map((b) => String(b.text || '')).join('\n');
+      if (text.trim()) return { k: 'maybe-stop', ...(INCLUDE_TEXT ? { a: text.slice(0, 2000) } : {}) };
     }
   }
   return null;
@@ -184,7 +190,20 @@ function readNew(file, stat, st) {
   st.rest = rest;
   for (const l of lines) {
     const p = project(l, st);
-    if (p && st.cwd) emit({ ...header(file, st), ...p });
+    if (!p) continue;
+    if (p.k === 'maybe-stop') { st.cand = { a: p.a, at: Date.now() }; continue; }
+    st.cand = null; // 이어지는 줄이 있으니 중간 설명이었다
+    if (st.cwd) emit({ ...header(file, st), ...p });
+  }
+}
+
+// 후보로 둔 마지막 텍스트 줄이 충분히 조용하면 턴 끝(stop)으로 낸다
+function flushCandidates() {
+  for (const [file, st] of files) {
+    if (!st.cand || Date.now() - st.cand.at < STOP_QUIET_MS) continue;
+    const { a } = st.cand;
+    st.cand = null;
+    if (st.cwd) emit({ ...header(file, st), k: 'stop', ...(a !== undefined ? { a } : {}) });
   }
 }
 
@@ -275,6 +294,7 @@ function scan() {
       readNew(file, stat, st);
     }
   }
+  flushCandidates();
   scanAgents(activeSids, firstScan);
   firstScan = false;
   emitLive();

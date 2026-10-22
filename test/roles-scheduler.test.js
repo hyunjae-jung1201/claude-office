@@ -225,3 +225,20 @@ test('close 하면 실행 중인 역할자에게 중단 신호(signal)가 간다
   release();
   await sched.idle();
 });
+
+test('원격(host) job: 역할자는 이 PC 의 빈 임시 폴더에서 실행되고(원격 파일 없음), 보고서에 host 가 남는다', async () => {
+  const calls = [];
+  const events = [];
+  const store = fakeStore();
+  const sched = createScheduler({ config: cfg(), roles: ROLES, store, run: async ({ prompt, repoRoot }) => { calls.push({ prompt, repoRoot }); return OK; }, emit: (e) => events.push(e) });
+  sched.submit({ repoRoot: '/home/hyeanjae/accident', host: 'PC2', sessionId: 's1', files: ['/home/hyeanjae/accident/a.py'], requests: ['고쳐줘'], lastResponse: '완료', reason: 'stop',
+    edits: [{ kind: 'edit', file: '/home/hyeanjae/accident/a.py', old: 'x = 1', new: 'x = 2' }] });
+  await sched.idle();
+  assert.equal(calls.length, 3);
+  assert.ok(calls.every((c) => c.repoRoot !== '/home/hyeanjae/accident' && c.repoRoot.includes('claude-office-remote')));
+  assert.match(calls[0].prompt, /다른 PC\(PC2\)/);
+  assert.match(calls[0].prompt, /\+x = 2/);
+  assert.equal(store.saved[0].host, 'PC2');
+  assert.equal(events.find((e) => e.type === 'done').review.host, 'PC2');
+  sched.close();
+});

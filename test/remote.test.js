@@ -121,3 +121,9 @@ test('세션 기록의 편집 도구 e → 이벤트의 edit (마스킹·검증)
   assert.deepEqual([ev[1].edit.kind, ev[1].edit.new], ['write', '내용']);
   assert.equal(ev[2].edit, undefined);
 });
+
+test('buildSshArgs: review 를 켠 원격만 텍스트 수집(INCLUDE_TEXT)을 요청한다', () => {
+  const tail = (a) => a.slice(a.indexOf('me@192.168.0.20'));
+  assert.deepEqual(tail(buildSshArgs({ name: 'PC2', ssh: 'me@192.168.0.20', key: '/k' })), ['me@192.168.0.20', 'node', '-']);
+  assert.deepEqual(tail(buildSshArgs({ name: 'PC2', ssh: 'me@192.168.0.20', key: '/k', review: true })), ['me@192.168.0.20', 'env', 'INCLUDE_TEXT=1', 'node', '-']);
+});

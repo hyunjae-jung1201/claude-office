@@ -166,10 +166,10 @@ export function buildEditsBundle(job, { limit = DIFF_LIMIT } = {}) {
   }
   if (hidden.size) diff += `\n# 설정 파일 변경(내용 제외): ${hidden.size}개\n`;
   diff = maskSecrets(diff);
-  const stats = maskSecrets([...counts].map(([r, n]) => ` ${r} | ${n ? `${n}회 수정` : '(수정 기록 없음, 직접 읽어 확인)'}\n`).join(''));
+  const stats = maskSecrets([...counts].map(([r, n]) => ` ${r} | ${n ? `${n}회 수정` : (job.host ? '(수정 기록 없음)' : '(수정 기록 없음, 직접 읽어 확인)')}\n`).join(''));
   const truncated = Buffer.byteLength(diff) > limit;
   return {
-    repoRoot: root, repoName: basename(root), requests: job.requests, lastResponse: job.lastResponse, files: job.files,
+    repoRoot: root, host: job.host, repoName: basename(root), requests: job.requests, lastResponse: job.lastResponse, files: job.files,
     diff: truncated ? '' : diff, truncated, stats, excluded: [...hidden].map((r) => maskSecrets(r)), mode: 'edits',
   };
 }
@@ -195,9 +195,10 @@ export function buildPrompt(role, bundle) {
   const excludedNote = bundle.excluded?.length
     ? `\n(보안상 비밀값이 들어 있을 수 있는 설정 파일 ${bundle.excluded.length}개의 변경 내용은 일부러 제외했다. 내용을 볼 수 없다는 것은 문제로 지적하지 마라.)`
     : '';
-  const editsNote = bundle.mode === 'edits'
-    ? '이 폴더는 git 저장소가 아니라서, 아래는 git diff 가 아니라 Claude 가 파일을 고칠 때 남긴 수정 기록(이전 → 이후)이다. 현재 파일과 다를 수 있으니 필요하면 직접 읽어서 확인하라.\n'
-    : '';
+  const editsNote = bundle.mode !== 'edits' ? ''
+    : bundle.host
+      ? `이 변경은 다른 PC(${clip(bundle.host, 40)})의 파일이라 이 PC 에서는 파일을 읽을 수 없다. 읽으려 하지 말고 아래 수정 기록(이전 → 이후)만으로 판단하라. 기록에 없는 부분은 단정하지 마라.\n`
+      : '이 폴더는 git 저장소가 아니라서, 아래는 git diff 가 아니라 Claude 가 파일을 고칠 때 남긴 수정 기록(이전 → 이후)이다. 현재 파일과 다를 수 있으니 필요하면 직접 읽어서 확인하라.\n';
   const change = editsNote + (bundle.truncated
     ? `변경이 너무 커서 diff 는 생략했다. 통계는 다음과 같고, 필요한 파일은 직접 읽어서 확인하라.\n${bundle.stats}`
     : `${bundle.stats ? bundle.stats + '\n' : ''}${bundle.diff || '(변경 내용 없음)'}`);

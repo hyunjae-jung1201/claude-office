@@ -28,7 +28,7 @@ export function createState(config) {
 export const teamOfSession = (state, sessionId) => state.sessions.get(sessionId)?.project;
 
 const reviewSummary = (r) => ({
-  id: r.id, repoRoot: r.repoRoot, repoName: r.repoName, team: r.team, verdict: r.verdict, concerns: r.concerns, at: r.finishedAt,
+  id: r.id, repoRoot: r.repoRoot, host: r.host, repoName: r.repoName, team: r.team, verdict: r.verdict, concerns: r.concerns, at: r.finishedAt,
   summary: r.results.find((x) => x.verdict !== 'ok')?.summary || '문제 없음',
 });
 

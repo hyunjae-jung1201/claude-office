@@ -581,3 +581,28 @@ test('deliver: report(기본)이면 지적이 있어도 세션에는 아무것�
     c.close();
   });
 });
+
+test('review 를 켠 원격 PC 의 팀 폴더 수정도 수정 기록으로 검토하고, 보고서는 host 로 조회한다', async () => {
+  let push;
+  const remoteFactory = ({ onEvent }) => { push = onEvent; return { stop() {}, status: () => 'connected' }; };
+  const prompts = [];
+  const opts = roleServer(null, { run: async ({ prompt }) => { prompts.push(prompt); return OK_JSON; } });
+  const cfg2 = { ...opts.config, remotes: [{ name: 'PC2', ssh: 'me@10.0.0.2', key: '/k', review: true }], projects: [{ name: 'R', path: '/home/r/accident', host: 'PC2', color: '#6c63d9' }] };
+  await withServer({ ...opts, config: cfg2, remoteFactory }, async ({ port }) => {
+    const c = await connect(port);
+    const base = { sessionId: 'rr1', cwd: '/home/r/accident', host: 'PC2', ts: Date.now() };
+    push({ ...base, type: 'prompt', promptText: '임계값 바꿔줘' });
+    push({ ...base, type: 'tool', category: 'write', toolName: 'Edit', filePath: '/home/r/accident/m.py', edit: { kind: 'edit', file: '/home/r/accident/m.py', old: 'T = 0.5', new: 'T = 0.7' } });
+    push({ ...base, type: 'stop', assistantText: '바꿨습니다' });
+    const s = await c.waitFor((x) => x.reviews.length === 1);
+    assert.equal(s.reviews[0].host, 'PC2');
+    await until(() => prompts.length >= 3);
+    assert.match(prompts[0], /다른 PC\(PC2\)/);
+    assert.match(prompts[0], /\+T = 0\.7/);
+    const api = await getJson(port, `/api/reviews?repo=${encodeURIComponent('/home/r/accident')}&host=PC2`);
+    assert.equal(api.body.length, 1);
+    assert.equal((await getJson(port, `/api/reviews?repo=${encodeURIComponent('/home/r/accident')}`)).body.length, 0);
+    assert.equal((await getJson(port, `/api/reviews?repo=/x&host=${'h'.repeat(80)}`)).status, 400);
+    c.close();
+  });
+});

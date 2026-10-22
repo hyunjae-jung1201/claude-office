@@ -148,7 +148,9 @@ export async function startServer({
   function serveReviews(url, res) {
     const repo = url.searchParams.get('repo');
     if (repo !== null && (repo.length > 500 || !repo.startsWith('/') || repo.includes('\0'))) return res.writeHead(400).end();
-    const data = !store ? [] : repo ? store.forRepo(repo, 20) : store.list(20);
+    const host = url.searchParams.get('host');
+    if (host !== null && (host.length > 50 || host.includes('\0'))) return res.writeHead(400).end();
+    const data = !store ? [] : repo ? store.forRepo(repo, 20, host || undefined) : store.list(20);
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(data));
   }
 

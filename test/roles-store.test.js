@@ -128,3 +128,12 @@ test('save 는 임시 파일을 남기지 않고, 쓰다 만 .tmp 파일은 목�
   assert.equal(s.forRepo('/a/app').length, 1);
   assert.equal(s.list().length, 1);
 });
+
+test('같은 경로라도 host 가 다르면 따로 저장·조회한다', () => {
+  const s = createReviewStore({ dir: tmp() });
+  s.save(review({ repoRoot: '/home/u/app', finishedAt: 1000, id: 'local1' }));
+  s.save(review({ repoRoot: '/home/u/app', host: 'PC2', finishedAt: 2000, id: 'remote1' }));
+  assert.deepEqual(s.forRepo('/home/u/app').map((r) => r.id), ['local1']);
+  assert.deepEqual(s.forRepo('/home/u/app', 20, 'PC2').map((r) => r.id), ['remote1']);
+  assert.equal(s.list().length, 2);
+});

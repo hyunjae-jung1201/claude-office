@@ -47,7 +47,8 @@ function renderLatestMd(reviews) {
 
 export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
   ensureDir(dir);
-  const repoDir = (repoRoot) => join(dir, `${basename(repoRoot).replace(/[^\w.-]+/g, '_').slice(0, 40) || 'repo'}-${createHash('sha1').update(repoRoot).digest('hex').slice(0, 8)}`);
+  // 같은 경로라도 다른 PC(host)의 것은 따로 둔다
+  const repoDir = (repoRoot, host) => join(dir, `${basename(repoRoot).replace(/[^\w.-]+/g, '_').slice(0, 40) || 'repo'}-${createHash('sha1').update(host ? `${host}:${repoRoot}` : repoRoot).digest('hex').slice(0, 8)}`);
   const filesOf = (d) => {
     try { return readdirSync(d).filter((f) => f.endsWith('.json')).sort().reverse(); } catch { return []; }
   };
@@ -59,8 +60,8 @@ export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
     } catch { return null; }
   };
 
-  function forRepo(repoRoot, limit = 20) {
-    const d = repoDir(repoRoot);
+  function forRepo(repoRoot, limit = 20, host) {
+    const d = repoDir(repoRoot, host);
     return filesOf(d).slice(0, limit).map((f) => read(d, f)).filter(Boolean);
   }
 
@@ -82,14 +83,14 @@ export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
   return {
     counter,
     forRepo,
-    latestFor: (repoRoot) => forRepo(repoRoot, 1)[0] ?? null,
+    latestFor: (repoRoot, host) => forRepo(repoRoot, 1, host)[0] ?? null,
     save(review) {
       const safe = { ...review, results: maskDeep(review.results), notes: review.notes ? maskDeep(review.notes) : undefined };
-      const d = repoDir(review.repoRoot);
+      const d = repoDir(review.repoRoot, review.host);
       ensureDir(d);
       writeAtomic(join(d, `${review.finishedAt}-${review.id}.json`), JSON.stringify(safe));
       for (const old of filesOf(d).slice(keep)) { try { unlinkSync(join(d, old)); } catch { /* 이미 없음 */ } }
-      const recent = forRepo(review.repoRoot, 30);
+      const recent = forRepo(review.repoRoot, 30, review.host);
       writeAtomic(join(d, 'latest.md'), renderLatestMd(recent));
     },
     list(limit = 20) {

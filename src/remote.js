@@ -28,6 +28,8 @@ export function buildSshArgs(remote) {
     '-o', 'ServerAliveCountMax=3',
     '-o', 'ConnectTimeout=10',
     remote.ssh,
+    // review: 이 원격의 수정 기록·요청 문장도 받아 이 PC 에서 역할자 검토에 쓴다(켠 원격만)
+    ...(remote.review === true ? ['env', 'INCLUDE_TEXT=1'] : []),
     'node', '-',
   ];
 }
