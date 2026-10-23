@@ -50,8 +50,8 @@ test('팀장의 목표: 방마다 6팀 모두 방 안(가장자리에서 0.3 이
   }
 });
 
-test('포즈: 작업실은 의자에 앉아 타자(sitType), 문서실·리서치실은 type, 앉는 곳(응답 대기실·휴게실)은 sit, 꺼짐은 sleep, 나머지는 stand', () => {
-  const want = { work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit' };
+test('포즈: 방마다 그 방의 일을 한다(작업실 sitType, 타자 type, 책 꺼내기 browse, 보드 쓰기 write, 시약 mix, 장비 tinker, 가리키기 point, 발표 present), 앉는 곳은 sit', () => {
+  const want = { work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit', library: 'browse', data: 'browse', planning: 'write', server: 'type', lab: 'mix', build: 'tinker', git: 'point', briefing: 'present' };
   for (const room of ROOM_IDS) for (const t of TEAMS) assert.equal(targetFor('read', t, room).pose, want[room] ?? 'stand', room);
 });
 
@@ -97,6 +97,13 @@ test('팀장 책상 자리는 팀 책상 구역 안이고, 팀원 4명의 자리
     }
   }
   for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) assert.ok(dist(all[i], all[j]) >= 0.5, `${i}/${j}`);
+});
+
+test('일하는 방은 일하는 대상 쪽(face)을 바라본다: 서버 랙은 왼쪽, 나머지는 뒷벽, 팀원도 같은 방향', () => {
+  assert.equal(targetFor('read', 0, 'server').face, -Math.PI / 2);
+  for (const room of ['library', 'data', 'planning', 'lab', 'build', 'git', 'briefing']) assert.equal(targetFor('read', 1, room).face, Math.PI, room);
+  assert.equal(targetFor('read', 1, 'lounge').face, undefined);
+  assert.equal(memberTarget('read', 1, 2, 'library').face, Math.PI);
 });
 
 test('팀원 목표: 작업실이면 책상 자리, 그 밖의 방에서는 해당 방 안에서 팀장·다른 팀원과 겹치지 않는다', () => {

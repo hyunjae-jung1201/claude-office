@@ -65,31 +65,38 @@ export function memberSeat(teamIndex, memberIndex) {
 const row = (x0, dx, y) => (i) => ({ x: x0 + dx * i, y });
 const grid = (x0, y0) => (i) => ({ x: x0 + 0.9 * (i % 3), y: y0 + 1.0 * Math.floor(i / 3) });
 const SPOTS = {
-  library: row(0.5, 0.5, 2.5),
+  library: row(0.5, 0.5, 1.15), // 책장 앞(뒷벽)
   research: row(3.75, 0.46, 2.2),
   work: (i) => {
     const z = deskZone(i);
     return { x: z.x + z.w / 2, y: 1.55 }; // 팀장 책상 바로 앞 의자
   },
   docs: row(14.0, 0.5, 2.4),
-  planning: row(17.2, 0.5, 2.4),
-  server: (i) => ({ x: 1.9, y: 5.9 + 0.55 * i }),
-  data: grid(3.9, 6.6),
-  lab: grid(7.1, 6.6),
-  build: grid(10.3, 6.6),
-  git: grid(13.5, 6.6),
-  briefing: row(16.5, 0.55, 7.4),
+  planning: row(17.2, 0.48, 0.75), // 칸반 보드 앞
+  server: (i) => ({ x: 1.5, y: 5.9 + 0.55 * i }), // 서버 랙 앞
+  data: row(3.8, 0.5, 6.35), // 서류 캐비닛 앞
+  lab: row(7.0, 0.5, 6.4), // 실험대 앞
+  build: row(10.25, 0.46, 6.8), // 컨베이어 앞
+  git: (i) => ({ x: 13.5 + 0.5 * (i % 3) + 0.25 * Math.floor(i / 3), y: 6.4 + 0.7 * Math.floor(i / 3) }), // 보드 앞(두 줄)
+  briefing: row(16.6, 0.6, 7.1), // 연단 앞
   response: row(1.2, 1.3, 11.5), // 벤치에 앉아 사용자의 응답을 기다린다
   lounge: row(9.5, 0.95, 12.2), // 소파에 앉아 쉰다
 };
 const BEDS = row(15.1, 0.9, 12.0); // 휴게실 침대(꺼진 세션)
-const POSE = { work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit' }; // 작업실은 의자에 앉아 타자
+// 방마다 하는 일(자세): 작업실·리서치·문서는 타자, 자료실·데이터 창고는 책/서류를 꺼내 읽고, 기획실은 보드에 쓰고, 서버실은 서서 콘솔을 치고,
+// 테스트 랩은 시약을 섞고, 빌드실은 장비를 손보고, 형상관리실은 보드를 가리키고, 브리핑룸은 발표한다.
+const POSE = {
+  work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit',
+  library: 'browse', data: 'browse', planning: 'write', server: 'type', lab: 'mix', build: 'tinker', git: 'point', briefing: 'present',
+};
+// 일하는 대상 쪽을 바라보는 방향(yaw). 뒷벽(-y) = Math.PI, 왼쪽(-x) = -Math.PI/2. 없으면 자세의 기본 방향.
+const FACE = { library: Math.PI, data: Math.PI, planning: Math.PI, server: -Math.PI / 2, lab: Math.PI, build: Math.PI, git: Math.PI, briefing: Math.PI };
 
 export function targetFor(status, teamIndex, room = roomFor(status)) {
   if (!SPOTS[room]) throw new Error(`unknown room: ${room}`);
   checkTeam(teamIndex);
   if (room === 'lounge' && status === 'off') return { ...BEDS(teamIndex), pose: 'sleep' };
-  return { ...SPOTS[room](teamIndex), pose: POSE[room] ?? 'stand' };
+  return { ...SPOTS[room](teamIndex), pose: POSE[room] ?? 'stand', ...(FACE[room] !== undefined ? { face: FACE[room] } : {}) };
 }
 
 // 팀원이 들어오고 나가는 입구(바닥 오른쪽 가장자리, 위쪽 복도 끝).
@@ -103,7 +110,7 @@ export function memberTarget(status, teamIndex, memberIndex, room = roomFor(stat
   const base = targetFor(status, teamIndex, room);
   if (!MEMBER_OFFSETS[memberIndex]) throw new RangeError(`memberIndex ${memberIndex}`);
   const [dx, dy] = MEMBER_OFFSETS[memberIndex];
-  return { x: base.x + dx, y: base.y + dy, pose: base.pose };
+  return { x: base.x + dx, y: base.y + dy, pose: base.pose, ...(base.face !== undefined ? { face: base.face } : {}) };
 }
 
 // ---- 칸막이 벽과 출입구: 가운데 줄·아랫줄 방의 윗변에 낮은 벽이 서 있고, 방마다 문(틈)이 하나 있다.

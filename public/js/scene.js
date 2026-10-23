@@ -129,8 +129,19 @@ function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
   const mug = part(new THREE.CylinderGeometry(0.035, 0.032, 0.07, 10), m('#f4efe2'), 0, -0.33, 0.06);
   mug.visible = false;
   armR.add(mug);
+  // 일하다 손에 드는 소품: 책(자료실·데이터 창고), 마커(기획실), 시험 플라스크(테스트 랩), 공구(빌드실). 평소엔 숨겨 둔다.
+  const book = part(new THREE.BoxGeometry(0.11, 0.15, 0.028), m('#8a4f3a'), 0, -0.37, 0.06);
+  book.add(part(new THREE.BoxGeometry(0.094, 0.134, 0.012), m('#f4efe2'), 0, 0, 0.01));
+  const pen = part(new THREE.CylinderGeometry(0.011, 0.011, 0.15, 6), m('#e8637a'), 0, -0.37, 0.05);
+  const flask = new THREE.Group();
+  flask.position.set(0, -0.37, 0.06);
+  flask.add(part(new THREE.ConeGeometry(0.05, 0.1, 10), new THREE.MeshBasicMaterial({ color: '#35e0a1', transparent: true, opacity: 0.8 }), 0, 0, 0));
+  flask.add(part(new THREE.CylinderGeometry(0.014, 0.014, 0.06, 8), m('#dfe9ee'), 0, 0.07, 0));
+  const tool = part(new THREE.BoxGeometry(0.028, 0.2, 0.028), m('#8b93a8'), 0, -0.4, 0.05);
+  tool.add(part(new THREE.BoxGeometry(0.09, 0.04, 0.034), m('#6b7280'), 0, 0.1, 0));
+  for (const o of [book, pen, flask, tool]) { o.visible = false; armR.add(o); }
   g.add(legL, legR, armL, armR, body, head);
-  g.userData = { legL, legR, armL, armR, body, head, shirtMat, mug };
+  g.userData = { legL, legR, armL, armR, body, head, shirtMat, mug, book, pen, flask, tool };
   return g;
 }
 
@@ -543,12 +554,13 @@ export function createScene(canvas, overlay, opts = {}) {
   }
 
   function pose(entity, dt, moving) {
-    const { legL, legR, armL, armR, body, head, mug } = entity.body.userData;
+    const { legL, legR, armL, armR, body, head, mug, book, pen, flask, tool } = entity.body.userData;
     const t = clock + entity.phase;
     const goal = goalOf(entity);
     const p = goal.pose;
     body.scale.y = 1 + (moving ? 0 : Math.sin(t * (p === 'sleep' ? 1.2 : 1.7)) * (p === 'sleep' ? 0.03 : 0.012)); // 숨 쉬는 몸통
     mug.visible = p === 'drink' && !moving;
+    book.visible = pen.visible = flask.visible = tool.visible = false;
     const celebrating = performance.now() < entity.celebrateUntil;
     let lift = 0;
     legL.rotation.x = legR.rotation.x = armL.rotation.x = armR.rotation.x = 0;
@@ -582,6 +594,58 @@ export function createScene(canvas, overlay, opts = {}) {
       armL.rotation.x = -0.25;
       head.rotation.x = -0.2 * sip;
       lift = Math.sin(t * 2) * 0.008;
+    } else if (p === 'browse') {
+      // 책장·캐비닛 앞: 위쪽 칸을 훑다가 책(서류)을 빼서 읽고, 다시 꽂는다(약 11초 주기, 아바타마다 어긋남)
+      const c = (t * 0.55) % 6;
+      const k = (a, b, x) => a + (b - a) * (x * x * (3 - 2 * x)); // 부드러운 보간
+      if (c < 1.2) { armR.rotation.x = k(-0.3, -2.25, c / 1.2); armL.rotation.x = -0.2; head.rotation.x = -0.15; head.rotation.y = Math.sin(t * 1.2) * 0.18; }
+      else if (c < 2.2) { armR.rotation.x = k(-2.25, -1.15, c - 1.2); armL.rotation.x = -0.2; head.rotation.x = k(-0.15, 0.3, c - 1.2); book.visible = c > 1.6; }
+      else if (c < 4.3) { // 읽는 중: 양손으로 들고 고개를 숙이며 가끔 넘긴다
+        armR.rotation.x = -1.2 + Math.sin(t * 1.5) * 0.03; armL.rotation.x = -1.0 + Math.max(0, Math.sin(t * 2.2)) * 0.12; head.rotation.x = 0.35; head.rotation.y = Math.sin(t * 0.9) * 0.08; book.visible = true;
+      } else if (c < 5.3) { armR.rotation.x = k(-1.15, -2.25, c - 4.3); armL.rotation.x = -0.2; head.rotation.x = k(0.3, -0.15, c - 4.3); book.visible = c < 4.95; }
+      else { armR.rotation.x = k(-2.25, -0.3, (c - 5.3) / 0.7); armL.rotation.x = -0.15; head.rotation.y = Math.sin(t * 1.4) * 0.3; }
+      lift = Math.sin(t * 2) * 0.008;
+    } else if (p === 'write') {
+      // 기획 보드에 마커로 쓴다: 팔을 들어 작게 휘갈기고, 가끔 한 걸음 물러난 듯 고개를 돌려 본다
+      const back = Math.max(0, Math.sin(t * 0.45));
+      armR.rotation.x = -1.95 + Math.sin(t * 5.5) * 0.07 - back * 0.25;
+      armR.rotation.z = Math.sin(t * 2.4) * 0.14;
+      armL.rotation.x = -0.35;
+      head.rotation.x = -0.05 + back * 0.05;
+      head.rotation.y = back * 0.3;
+      pen.visible = true;
+      lift = Math.sin(t * 2) * 0.008;
+    } else if (p === 'mix') {
+      // 실험대: 플라스크를 흔들어 섞고, 가끔 불빛에 비춰 본다
+      const look = Math.max(0, Math.sin(t * 0.7));
+      armR.rotation.x = -1.2 - look * 0.5 + Math.sin(t * 4) * 0.06;
+      armR.rotation.z = Math.sin(t * 4) * 0.12;
+      armL.rotation.x = -0.9;
+      head.rotation.x = 0.28 - look * 0.4;
+      flask.visible = true;
+      lift = Math.sin(t * 2) * 0.008;
+    } else if (p === 'tinker') {
+      // 빌드실: 몸을 숙여 장비를 공구로 두드리고 조인다
+      armR.rotation.x = -1.25 + Math.sin(t * 7) * 0.4;
+      armL.rotation.x = -1.0 + Math.sin(t * 3.5) * 0.05;
+      head.rotation.x = 0.3;
+      entity.body.rotation.x = 0.1 + Math.sin(t * 3.5) * 0.015;
+      tool.visible = true;
+    } else if (p === 'point') {
+      // 형상관리 보드: 한 손으로 가리키며 짚어 가고, 다른 손은 내려 둔다
+      armR.rotation.x = -1.75 + Math.sin(t * 2.2) * 0.1;
+      armR.rotation.z = Math.sin(t * 0.8) * 0.1;
+      armL.rotation.x = -0.15;
+      head.rotation.x = -0.1;
+      head.rotation.y = Math.sin(t * 0.6) * 0.18;
+      lift = Math.sin(t * 2) * 0.008;
+    } else if (p === 'present') {
+      // 브리핑: 보드와 청중을 번갈아 보며 양손으로 손짓한다
+      armR.rotation.x = -1.3 + Math.sin(t * 1.7) * 0.35;
+      armL.rotation.x = -0.55 + Math.sin(t * 1.2 + 1) * 0.25;
+      head.rotation.y = Math.sin(t * 0.5) * 0.4;
+      head.rotation.x = Math.sin(t * 1.1) * 0.05;
+      lift = Math.sin(t * 2) * 0.01;
     } else if (p === 'sitType') {
       // 작업실 의자에 앉아 타자: 다리를 앞으로 굽히고 엉덩이를 의자 높이에 맞춘다
       legL.rotation.x = legR.rotation.x = -1.45;
@@ -639,7 +703,7 @@ export function createScene(canvas, overlay, opts = {}) {
       const want = Math.atan2(dx, dy);
       entity.yaw += angleDiff(entity.yaw, want) * Math.min(1, dt * 12);
     } else {
-      let want = goal.pose === 'type' || goal.pose === 'sitType' || goal.pose === 'drink' ? Math.PI : goal.pose === 'sleep' ? 0 : Math.PI / 4; // sit/stand는 카메라 쪽
+      let want = goal.face ?? (goal.pose === 'type' || goal.pose === 'sitType' || goal.pose === 'drink' ? Math.PI : goal.pose === 'sleep' ? 0 : Math.PI / 4); // 일하는 대상 쪽, 없으면 sit/stand는 카메라 쪽
       if (goal.pose === 'stand' || goal.pose === 'sit' || goal.pose === 'talk') { // 가까이 있는 아바타 쪽으로 몸을 반쯤 돌린다(서로 얘기하는 것처럼)
         const nb = nearestOther(entity, 1.5);
         if (nb) want += angleDiff(want, Math.atan2(nb.pos.x - entity.pos.x, nb.pos.y - entity.pos.y)) * 0.55;
