@@ -139,6 +139,15 @@ export function freeSpotFor(room, preferredIndex, taken) {
   return best ? best.i : null;
 }
 
+// 팀원이 쓸 자리 고르기(scene.js 가 쓴다): 이번 스냅샷에서 팀장이 있는 방(leaderRooms, 팀 번호 순)과 다른 팀원이 잡은 자리(othersTaken)는 피하고,
+// 이미 잡은 자리(current)가 아직 비어 있으면 그대로 둔다. 자리가 모자라면 null.
+export function pickMemberSpot(room, teamIndex, { leaderRooms = [], othersTaken = new Set(), current = null } = {}) {
+  const taken = new Set(othersTaken);
+  leaderRooms.forEach((r, j) => { if (r === room) taken.add(j); });
+  if (current && current.room === room && current.idx != null && !taken.has(current.idx)) return current.idx;
+  return freeSpotFor(room, teamIndex, taken);
+}
+
 // ---- 칸막이 벽과 출입구: 가운데 줄·아랫줄 방의 윗변에 낮은 벽이 서 있고, 방마다 문(틈)이 하나 있다.
 // 아바타는 벽을 뚫지 않고 문 앞을 거쳐 이동한다(route).
 export const DOOR_W = 1.2;

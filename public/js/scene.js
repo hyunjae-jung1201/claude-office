@@ -6,7 +6,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route, meetingSpot, freeSpotFor } from './layout.js';
+import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route, meetingSpot, pickMemberSpot } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
 import { parseRosterKey, mixHex, ROLE_TEAM_MIX } from './roster-model.js';
 import { roomActivity } from './activity.js';
@@ -435,8 +435,10 @@ export function createScene(canvas, overlay, opts = {}) {
   }
 
   let act = roomActivity(null);
+  let snapLeaderRooms = []; // 이번 스냅샷에서 팀장이 있는 방(팀 번호 순): 팀장 자리 점유를 팀 갱신 순서와 상관없이 정확히 본다
   function update(snapshot) {
     const now = performance.now();
+    snapLeaderRooms = snapshot.teams.map((t) => (t && t.status !== 'off' ? t.room : null)); // 꺼진 팀장은 침대에서 자므로 자리를 쓰지 않는다
     act = roomActivity(snapshot);
     deskWanted = new Set();
     snapshot.teams.forEach((team, i) => {
@@ -490,11 +492,10 @@ export function createScene(canvas, overlay, opts = {}) {
       // 팀원 자리: 작업실이 아닌 방에서는 그 방의 비어 있는 자리(탁자 의자·작업대 앞)에 가서 가구 쪽을 보고 앉거나 선다.
       // 자리는 가구와 짝(layout.js)이라 팀장과 같은 방식으로 방향이 맞다. 자리가 모자라면 팀장 곁에 비켜 선다.
       const seatFor = (ent, status, room, slot) => {
-        if (room === 'work' || !room) return memberTarget(status, i, slot, room);
-        const taken = new Set();
-        for (const l of leaders) if (l && goalOf(l).room === room) taken.add(l.team);
-        for (const o of members.values()) if (o !== ent && !o.leaving && o.spotRoom === room && o.spotIdx != null) taken.add(o.spotIdx);
-        let idx = ent.spotRoom === room && ent.spotIdx != null && !taken.has(ent.spotIdx) ? ent.spotIdx : freeSpotFor(room, i, taken);
+        if (room === 'work' || !room) { ent.spotRoom = null; ent.spotIdx = null; return memberTarget(status, i, slot, room); } // 자리를 쓰지 않는 목적지: 예약을 푼다
+        const othersTaken = new Set();
+        for (const o of members.values()) if (o !== ent && !o.leaving && o.spotRoom === room && o.spotIdx != null) othersTaken.add(o.spotIdx);
+        const idx = pickMemberSpot(room, i, { leaderRooms: snapLeaderRooms, othersTaken, current: { room: ent.spotRoom, idx: ent.spotIdx } });
         if (idx == null) { ent.spotRoom = null; ent.spotIdx = null; return memberTarget(status, i, slot, room); }
         ent.spotRoom = room; ent.spotIdx = idx;
         return targetFor(status === 'off' ? 'idle' : status, idx, room);
@@ -537,8 +538,8 @@ export function createScene(canvas, overlay, opts = {}) {
         ent.goal = r.room
           ? { ...seatFor(ent, ent.status, r.room, slot), room: r.room }
           : r.status === 'running'
-            ? (deskWanted.add(`${i}:${slot}`), { ...memberSeat(i, slot), pose: 'sitType' })
-            : { ...meetingSpot(i, idx), pose: 'talk', room: 'planning' };
+            ? (ent.spotRoom = ent.spotIdx = null, deskWanted.add(`${i}:${slot}`), { ...memberSeat(i, slot), pose: 'sitType' })
+            : (ent.spotRoom = ent.spotIdx = null, { ...meetingSpot(i, idx), pose: 'talk', room: 'planning' });
         setBubble(ent, r.label, ent.status, false, r.status === 'failed' ? '#e5484d' : r.color);
       });
       for (const [key, ent] of members) {

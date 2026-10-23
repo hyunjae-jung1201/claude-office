@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROOMS, ROOM_NAMES, FLOOR, ENTRANCE, targetFor, memberSeat, memberTarget, deskZone, roomFor, freeSpotFor, researchSeats, docsSeats, RESEARCH_TABLES, DOCS_TABLE } from '../public/js/layout.js';
+import { ROOMS, ROOM_NAMES, FLOOR, ENTRANCE, targetFor, memberSeat, memberTarget, deskZone, roomFor, freeSpotFor, pickMemberSpot, researchSeats, docsSeats, RESEARCH_TABLES, DOCS_TABLE } from '../public/js/layout.js';
 
 const TEAMS = [0, 1, 2, 3, 4, 5];
 const ROOM_IDS = ['library', 'research', 'work', 'docs', 'planning', 'server', 'data', 'lab', 'build', 'git', 'briefing', 'response', 'lounge'];
@@ -229,4 +229,14 @@ test('freeSpotFor: 비어 있는 자리 중 팀장 자리에서 가장 가까운
   assert.equal(freeSpotFor('research', 0, new Set([0])), 2); // 같은 탁자에서 가장 가까운 의자(남쪽)
   assert.equal(freeSpotFor('lab', 2, new Set([0, 1, 2, 3, 4, 5])), null);
   assert.throws(() => freeSpotFor('moon', 0, new Set()));
+});
+
+test('pickMemberSpot: 이번 스냅샷의 팀장 자리·다른 팀원 자리를 피하고, 비어 있으면 잡은 자리를 유지하며, 다른 방의 옛 예약은 무시한다', () => {
+  const leaderRooms = ['docs', null, 'docs', 'lounge', null, null]; // 팀 0·2 의 팀장이 문서실
+  assert.equal(pickMemberSpot('docs', 0, { leaderRooms }), 1); // 0·2 는 팀장 자리 → 가장 가까운 빈 자리 1
+  assert.equal(pickMemberSpot('docs', 0, { leaderRooms, othersTaken: new Set([1]) }), 3); // 1 도 찼으면 건너편
+  assert.equal(pickMemberSpot('docs', 0, { leaderRooms, current: { room: 'docs', idx: 4 } }), 4); // 비어 있는 잡은 자리는 유지
+  assert.equal(pickMemberSpot('docs', 0, { leaderRooms, current: { room: 'docs', idx: 2 } }), 1); // 그 자리를 팀장이 차지했으면 새로 고른다
+  assert.equal(pickMemberSpot('docs', 0, { leaderRooms, current: { room: 'research', idx: 4 } }), 1); // 다른 방의 옛 예약은 무시
+  assert.equal(pickMemberSpot('lab', 1, { leaderRooms: ['lab', 'lab', 'lab', 'lab', 'lab', 'lab'] }), null); // 모두 팀장 자리면 없음
 });
