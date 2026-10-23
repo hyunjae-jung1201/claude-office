@@ -152,7 +152,7 @@ export function activityOf(tool, detail) {
     case 'TodoWrite': case 'EnterPlanMode': case 'CronCreate': case 'CronDelete': case 'CronList': case 'ScheduleWakeup': return 'planning';
     case 'Agent': case 'Task': case 'SendMessage': case 'ListAgents': return 'briefing';
     case 'EnterWorktree': case 'ExitWorktree': return 'git';
-    case 'Monitor': return 'server';
+    case 'Monitor': return 'lab'; // 끝난 작업의 오류를 지켜보는 일은 서버 관리가 아니라 검증
     case 'Artifact': case 'ArtifactData': case 'ArtifactComments': return 'docs';
     case 'Skill': return skillRoom(d);
     case 'AskUserQuestion': case 'ExitPlanMode': return 'response'; // 사용자의 응답을 기다린다

@@ -259,7 +259,7 @@ test('activityOf(MCP·기타 도구): 하는 일의 성격으로 방을 정한�
     ['mcp__plugin_mongodb_mongodb__find', 'data'], ['mcp__plugin_atlassian_atlassian__authenticate', 'planning'], ['mcp__sequential-thinking__sequentialthinking', 'planning'],
     ['mcp__context7__query-docs', 'research'], ['mcp__claude_ai_Gmail__authenticate', 'research'], ['mcp__ai-memory__memory_query', 'library'],
     ['mcp__claude_ai_Claude_Docs__create', 'docs'], ['mcp__plugin_desktop-commander_desktop-commander__read_file', 'library'], ['mcp__plugin_desktop-commander_desktop-commander__write_file', 'work'],
-    ['Monitor', 'server'], ['CronCreate', 'planning'], ['ScheduleWakeup', 'planning'], ['EnterWorktree', 'git'], ['SendMessage', 'briefing'], ['LSP', 'library'], ['Artifact', 'docs'], ['mcp__21st__authenticate', 'work'], ['TaskStop', 'work'],
+    ['Monitor', 'lab'], ['CronCreate', 'planning'], ['ScheduleWakeup', 'planning'], ['EnterWorktree', 'git'], ['SendMessage', 'briefing'], ['LSP', 'library'], ['Artifact', 'docs'], ['mcp__21st__authenticate', 'work'], ['TaskStop', 'work'],
   ];
   for (const [tool, want] of cases) assert.equal(activityOf(tool, ''), want, tool);
 });

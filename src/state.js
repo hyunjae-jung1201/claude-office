@@ -256,9 +256,9 @@ export function setLabel(state, sessionId, agentId, label, at = Date.now()) {
   record(target, at);
 }
 
-// 팀장이 지금 있을 방: 백그라운드 작업은 서버실, 쉬는 중은 지시 대기 구역(오래 쉬면 휴게실), 그 밖에는 하는 일의 종류
+// 팀장이 지금 있을 방: 백그라운드 작업(끝난 작업 감시)은 테스트 랩, 쉬는 중은 지시 대기 구역(오래 쉬면 휴게실), 그 밖에는 하는 일의 종류
 function leaderRoom(s, background, now, waitMs) {
-  if (background) return 'server';
+  if (background) return 'lab'; // 끝난 작업이 오류 없이 도는지 지켜보는 중: 검증하는 방(테스트 랩)
   if (s.status === 'idle') return s.awaiting && now - (s.idleAt ?? now) <= waitMs ? 'response' : 'lounge';
   return s.activity ?? DEFAULT_ROOM[s.status];
 }

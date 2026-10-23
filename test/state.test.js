@@ -163,7 +163,7 @@ test('live: 세션 이름이 맞으면 세션을 만들고, idle이면 꺼짐이
   assert.deepEqual([t.status, t.label], ['idle', '다음 지시 기다리는 중']);
 });
 
-test('live shell + 응답 끝남(idle) → 서버실에서 "백그라운드 작업 중", live idle이면 다시 대기', () => {
+test('live shell + 응답 끝남(idle) → 테스트 랩에서 "백그라운드 작업 중", live idle이면 다시 대기', () => {
   const st = createState(aliasConfig);
   feed(st, live('idle', { ts: 0 }), ev('start', 1), ev('stop', 2));
   feed(st, live('shell', { ts: 3000 }));
@@ -326,7 +326,7 @@ test('room: 질문으로 끝난 턴은 응답 대기실, 5분이 지나면 휴�
   assert.equal(roomA(st, 2_001_000), 'response');
 });
 
-test('room: 지시를 기다리기만 하는 세션(시작 직후·등록 정보만 있는 세션)은 휴게실, 꺼짐도 휴게실(침대), 백그라운드 작업은 서버실', () => {
+test('room: 지시를 기다리기만 하는 세션(시작 직후·등록 정보만 있는 세션)은 휴게실, 꺼짐도 휴게실(침대), 백그라운드 작업은 테스트 랩', () => {
   const st = createState(aliasConfig);
   feed(st, live('idle', { ts: 0 }));
   assert.equal(roomA(st, 10), 'lounge');
@@ -334,7 +334,7 @@ test('room: 지시를 기다리기만 하는 세션(시작 직후·등록 정보
   const bg = createState(aliasConfig);
   feed(bg, ev('start', 0), ev('stop', 1));
   feed(bg, { sessionId: 's1', cwd: '/w/a', type: 'live', liveStatus: 'shell', ts: 5 });
-  assert.equal(roomA(bg, 10), 'server');
+  assert.equal(roomA(bg, 10), 'lab');
 });
 
 test('room: 하위 에이전트가 남아 있는 동안의 stop은 응답을 기다리는 것이 아니다', () => {

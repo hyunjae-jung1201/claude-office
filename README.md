@@ -36,9 +36,9 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 | 작업실 | 일반 코드 편집, 요청 파악, 파일을 만지는 셸(`sed -i`·`cp`·`mv`·`mkdir`…)과 일반 스크립트 실행 — 팀마다 책상. 무슨 일인지 모르면 여기 |
 | 문서실 | 글·문서 편집(`.md`·`.txt`·`.docx`·`.pptx`·`.xlsx`·`.pdf`·README), **PPT·워드·PDF 를 만드는 스크립트**(`make_ppt.py`·`pandoc`·`soffice`…)와 글 파일에 쓰는 셸(`cat > a.md`·`>> log.md`), 문서 스킬·Artifact |
 | 기획실 | 할 일·계획(TodoWrite, 계획 모드, 계획·브레인스토밍 스킬), 예약(Cron/ScheduleWakeup), Jira(Atlassian)·sequential-thinking |
-| 서버실 | **서버·인프라 일만**: `ssh`·`docker`·`systemctl`·`journalctl`·`kill`·`ps`·`nvidia-smi`·`curl localhost`·`adb`·서버 실행(`npm start`·`uvicorn`), 서버·환경 설정 파일(`.env`·nginx·`.service`) 편집, 백그라운드 작업(Monitor), 응답이 끝난 뒤에도 도는 백그라운드 명령 |
+| 서버실 | **서버·인프라 일만**: `ssh`·`docker`·`systemctl`·`journalctl`·`kill`·`ps`·`nvidia-smi`·`curl localhost`·`adb`·서버 실행(`npm start`·`uvicorn`), 서버·환경 설정 파일(`.env`·nginx·`.service`) 편집 |
 | 데이터 창고 | `wget`·`curl -O`·`scp`·`rsync`·`unzip`·`tar`, DB 질의(`sqlite3`·`mongosh`·`psql`·`duckdb`)·MongoDB 도구, `.csv`·`.parquet`·`.jsonl`·`.sqlite` 편집 |
-| 테스트 랩 | `npm test`·`pytest`·`eslint`, **학습·평가 스크립트**(`train.py`·`eval_*.py`), 테스트 파일 편집, 노트북, Playwright·모바일·Jupyter·Semgrep 도구, 테스트·디버깅 스킬 |
+| 테스트 랩 | `npm test`·`pytest`·`eslint`, 끝난 작업을 지켜보는 `Monitor`·백그라운드 명령, **학습·평가 스크립트**(`train.py`·`eval_*.py`), 테스트 파일 편집, 노트북, Playwright·모바일·Jupyter·Semgrep 도구, 테스트·디버깅 스킬 |
 | 빌드실 | `npm run build/install`·`pip install`·`make`·`docker build`·`gradlew`, 빌드 설정 파일(`package.json`·`Makefile`·`Dockerfile`·CI·`requirements.txt`) 편집 |
 | 형상관리실 | `git …`·`gh …`, GitHub 도구, 작업 트리 전환 |
 | 브리핑룸 | 하위 에이전트에게 일을 맡기는 중(Agent/Task/SendMessage) |
@@ -68,7 +68,7 @@ sed "s#__ROOT__#$PWD#g" scripts/office-command.md > ~/.claude/commands/office.md
 ## 실행 중인 세션과 백그라운드 작업
 Claude Code가 `~/.claude/sessions/<pid>.json`에 적는 **세션 등록 정보**(프로세스가 살아 있는지, 상태)를 3초마다 읽는다(원격 PC는 SSH 스크립트가 같은 파일을 읽는다).
 - 프로세스가 살아 있으면 꺼진 것이 아니라 **지시 대기 구역에서 대기**로 보인다. 프로세스가 사라지면 휴게실에서 잔다.
-- 상태가 `shell`(응답은 끝났지만 백그라운드 명령이 도는 중)이면 **서버실에서 "백그라운드 작업 중"**으로 보인다. (`busy`는 등록 정보가 오래 남는 경우가 있어 사용하지 않는다.)
+- 상태가 `shell`(응답은 끝났지만 백그라운드 명령이 도는 중)이면 **테스트 랩에서 "백그라운드 작업 중"**으로 보인다(끝난 작업이 오류 없이 도는지 지켜보는 일이라 검증하는 방). `Monitor` 도구도 테스트 랩이다. (`busy`는 등록 정보가 오래 남는 경우가 있어 사용하지 않는다.)
 
 ## 역할자(PM·개발자·QA …) 자동 검토
 세션이 파일을 수정하고 응답을 끝내면 PM·개발자·QA 역할자가 읽기 전용 `claude -p`로 변경을 검토한다. 검토 중에는 역할자 아바타가 팀 책상에 나타나 일하고, 끝나면 퇴근하며 팀장 곁에 판정 배지(✓ 통과 / ⚠ 우려 n / ⛔ 중단 권고)가 남는다. 오른쪽 위 **보고서** 버튼에서 최근 검토와 지적 상세를 볼 수 있고, 파일은 `data/reviews/`에 저장된다. 역할은 `roles/<id>.md` 파일을 추가해 늘린다. 기본으로 도는 것은 PM·개발자·QA 이고, 접근성·문구·문서·임베디드·성능·보안·아키텍트·데이터베이스·배포·운영(`devops`)·UX·의존성·릴리스·ML 검토(`mlreview`)는 `config.json` 의 `roles.default` 또는 팀별 `projects[].roles` 에 id 를 적어야 켜진다(켠 역할 수만큼 `claude` 실행이 늘어 일일 한도를 쓴다). 자세한 사용법·설정·한계는 `docs/roles-howto.md`, 읽기 전용 검증은 `docs/roles-verification.md`.
