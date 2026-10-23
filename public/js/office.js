@@ -209,7 +209,7 @@ export function buildOffice(scene) {
     work: () => T.cached('f-wood-work', () => T.planks('#b99565', 33)),
     docs: () => T.cached('f-wood-docs', () => T.planks('#a47a4c', 34)),
     planning: () => T.cached('f-carpet-warm', () => T.carpet('#8a6f5f', 35)),
-    server: () => T.cached('f-raised', () => T.raisedFloor('#3b3e50')),
+    server: () => T.cached('f-raised', () => T.raisedFloor('#8d94a8')),
     data: () => T.cached('f-concrete-a', () => T.concrete('#6a6e78', 36)),
     lab: () => T.cached('f-tiles', () => T.tiles('#dfe5e1', '#9aa8a2')),
     build: () => T.cached('f-concrete-b', () => T.concrete('#7a766c', 37)),
@@ -408,19 +408,25 @@ export function buildOffice(scene) {
 
   // ---------------------------------------------------------------- 서버실
   for (const y0 of [5.5, 6.7, 7.9]) {
-    box(0.1, y0, 0.95, 1.05, 1.85, '#232838', 0, { r: 0.03 });
-    box(0.95, y0 + 0.05, 0.05, 0.95, 1.75, '#2f3547', 0.05, { r: 0.01 });
+    box(0.1, y0, 0.95, 1.05, 1.85, '#4d586f', 0, { r: 0.03 }); // 랙 몸체(밝은 강철색)
+    box(0.95, y0 + 0.05, 0.05, 0.95, 1.75, '#6b7792', 0.05, { r: 0.01 }); // 앞문
+    box(0.99, y0 + 0.03, 0.02, 0.99, 0.05, '#e8b44a', 0.02, { r: 0.002 }); // 바닥 경고띠
+    box(0.99, y0 + 0.2, 0.025, 0.6, 0.03, '#35e0a1', 1.8, { r: 0.002, material: glow('#35e0a1', 0.9) }); // 랙 상단 상태 표시줄
     for (let j = 0; j < 6; j++) {
       const on = (j + Math.round(y0)) % 3 ? '#35e0a1' : '#7a8cff';
       const led = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.05, 0.05), new THREE.MeshBasicMaterial({ color: on }));
       led.position.set(wx(1.01), 0.3 + j * 0.27, wz(y0 + 0.22));
       scene.add(led);
       leds.push({ led, phase: j * 0.7 + y0 });
-      box(1.0, y0 + 0.36, 0.03, 0.55, 0.06, '#1a1e2b', 0.27 + j * 0.27, { r: 0.004 });
-      for (let k = 0; k < 4; k++) box(1.03, y0 + 0.4 + k * 0.13, 0.012, 0.02, 0.04, '#4a5068', 0.275 + j * 0.27, { r: 0.002 });
+      box(1.0, y0 + 0.36, 0.03, 0.55, 0.06, '#2f394f', 0.27 + j * 0.27, { r: 0.004 });
+      for (let k = 0; k < 4; k++) box(1.03, y0 + 0.4 + k * 0.13, 0.012, 0.02, 0.04, (j + k) % 2 ? '#7fb6ff' : '#9aa6bd', 0.275 + j * 0.27, { r: 0.002, material: (j + k) % 2 ? glow('#7fb6ff', 0.8) : undefined });
     }
     for (let k = 0; k < 3; k++) cyl(0.2, y0 + 0.2 + k * 0.3, 0.018, 1.0, ['#e8b44a', '#4c8dff', '#e8637a'][k], 1.85, { seg: 6 }).rotation.x = 0.1; // 늘어진 케이블
   }
+  // 랙 위 케이블 트레이와 바닥 찬 통로 표시(랙 줄이 한눈에 보이게)
+  box(0.12, 5.5, 0.4, 3.45, 0.035, '#aab3c6', 1.92, { r: 0.006, metal: 0.4 });
+  for (let y = 5.6; y < 8.9; y += 0.4) box(0.12, y, 0.4, 0.03, 0.03, '#8b93a8', 1.945, { r: 0.002 });
+  box(1.52, 5.5, 0.05, 3.45, 0.012, '#5aa9ff', 0, { r: 0.002, material: glow('#5aa9ff', 0.8) });
   // 랙 앞 서비스 선반(허리 높이): 서서 노트북으로 콘솔 작업을 한다
   box(1.08, 5.7, 0.36, 3.1, 0.04, '#aeb4bf', 0.84, { r: 0.01, metal: 0.4 });
   for (const y of [5.75, 7.15, 8.7]) box(1.12, y, 0.05, 0.05, 0.84, '#8b93a8', 0, { r: 0.008, metal: 0.4 });
@@ -690,5 +696,5 @@ export function buildOffice(scene) {
 
 // 방별 은은한 조명: 따뜻한 전구색을 기본으로, 기계가 있는 방만 차가운 빛
 export const LAMPS = [
-  ['#aab4e8', 1.6, 7.2, 10], ['#ffcf94', 9.5, 2.0, 12], ['#ffe1b8', 3.5, 2.0, 8], ['#e6f2f8', 9.5, 7.1, 8], ['#ffd2a0', 4.0, 11.3, 8], ['#ffd2a0', 14.0, 11.5, 10], ['#ffc49a', 17.8, 6.0, 9],
+  ['#dbe6ff', 1.7, 7.0, 24], ['#cfe0ff', 2.6, 5.9, 12], ['#ffcf94', 9.5, 2.0, 12], ['#ffe1b8', 3.5, 2.0, 8], ['#e6f2f8', 9.5, 7.1, 8], ['#ffd2a0', 4.0, 11.3, 8], ['#ffd2a0', 14.0, 11.5, 10], ['#ffc49a', 17.8, 6.0, 9],
 ];
