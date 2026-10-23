@@ -59,7 +59,7 @@ function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
     mesh.castShadow = true;
     return mesh;
   };
-  const skin = alien ? '#8fdcae' : SKIN[variant % SKIN.length];
+  const skin = alien ? '#5fe3a2' : SKIN[variant % SKIN.length];
   const skinMat = m(skin);
   const trouser = m(alien ? '#56627c' : ['#2b3350', '#3a3f4a', '#4a4036', '#26303a', '#454a55', '#33384a'][variant % 6]);
   const shoeMat = m('#1d1f26');
@@ -85,12 +85,19 @@ function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
   const armL = arm(-0.215);
   const armR = arm(0.215);
   const head = new THREE.Group();
-  head.position.set(0, alien ? 1.08 : 1.02, 0);
+  head.position.set(0, alien ? 1.22 : 1.02, 0);
+  if (alien) head.scale.setScalar(1.55); // 멀리서도 사람과 구별되도록 머리를 크게
   let body;
   if (alien) {
     // 가는 몸통(가슴에 팀 색 패널), 긴 목, 커다란 달걀형 머리, 검고 큰 눈, 더듬이
     body = part(new RoundedBoxGeometry(0.3, 0.46, 0.2, 2, 0.06), shirtMat, 0, 0.62, 0);
     body.add(part(new THREE.BoxGeometry(0.11, 0.11, 0.02), new THREE.MeshBasicMaterial({ color: shirt }), 0, 0.06, 0.105));
+    // 발밑에 빛나는 호버 패드: 걸어 다니는 사람들 사이에서 한눈에 띈다
+    const padMat = new THREE.MeshBasicMaterial({ color: '#7dffd0', transparent: true, opacity: 0.85 });
+    g.add(part(new THREE.CylinderGeometry(0.34, 0.34, 0.025, 24), padMat, 0, 0.015, 0));
+    const ring = part(new THREE.TorusGeometry(0.4, 0.018, 6, 28), new THREE.MeshBasicMaterial({ color: '#b8fff0', transparent: true, opacity: 0.55 }), 0, 0.03, 0);
+    ring.rotation.x = Math.PI / 2;
+    g.add(ring);
     body.add(part(new THREE.CylinderGeometry(0.032, 0.042, 0.13, 8), skinMat, 0, 0.29, 0));
     const skull = part(new THREE.SphereGeometry(0.19, 22, 16), skinMat, 0, 0.05, 0);
     skull.scale.set(0.98, 1.2, 0.92);
