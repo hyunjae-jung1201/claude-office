@@ -385,7 +385,7 @@ export function buildOffice(scene) {
     const tex = new THREE.CanvasTexture(c);
     tex.colorSpace = THREE.SRGBColorSpace;
     box(3.75, 0.32, 1.35, 0.05, 0.9, '#cfd4de', 0.62, { r: 0.012, metal: 0.3 });
-    flat(4.42, 0.36, 1.25, 0.78, 1.07, new THREE.MeshBasicMaterial({ map: tex }), 0);
+    flat(4.42, 0.385, 1.25, 0.78, 1.07, new THREE.MeshBasicMaterial({ map: tex }), 0); // 뒤판(y 0.32~0.37)보다 앞면 바깥에 둔다
     for (const x of [3.82, 5.0]) { box(x, 0.28, 0.06, 0.2, 0.62, '#8b93a8', 0, { r: 0.01, metal: 0.4 }); cyl(x + 0.03, 0.3, 0.035, 0.04, '#2a2f3d', 0); }
   }
 
@@ -438,7 +438,7 @@ export function buildOffice(scene) {
   box(14.45, 3.3, 1.2, 0.45, 0.05, '#2d3340', 0.9, { r: 0.01 });
   box(14.6, 3.38, 0.35, 0.3, 0.06, '#f4efe2', 0.95, { r: 0.004 });
   box(15.2, 3.5, 0.4, 0.04, 0.12, '#1b2a48', 0.9, { r: 0.004, material: glow('#7fb6ff', 0.55) }); // 조작 화면
-  for (let k = 0; k < 4; k++) box(14.5, 3.3 + 0.0, 0.5, 0.45, 0.02, k % 2 ? '#fff9e8' : '#ffffff', 0.0 + 0.02 + k * 0.02, { r: 0.002 }); // 바닥에 쌓인 종이
+  for (let k = 0; k < 4; k++) box(15.85 + k * 0.01, 3.5, 0.4, 0.3, 0.02, k % 2 ? '#fff9e8' : '#ffffff', k * 0.02, { r: 0.002, rot: k * 0.05 }); // 복합기 옆 바닥에 쌓인 종이(복합기 몸통 바깥)
   box(13.62, 3.0, 0.5, 0.35, 0.34, '#c9a56a', 0, { r: 0.015 }); // 종이 상자
   box(13.66, 3.04, 0.42, 0.27, 0.05, '#f4efe2', 0.34, { r: 0.004 });
   box(16.4, 3.1, 0.4, 0.45, 0.95, '#8a93a0', 0, { r: 0.02, metal: 0.3 }); // 서류함
