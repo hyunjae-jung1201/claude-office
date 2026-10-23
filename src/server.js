@@ -93,7 +93,7 @@ export async function startServer({
       if (last !== undefined && now() - last < HOOK_SESSION_MS) return;
     }
     // 역할자 검토는 화면 팀에 안 맞는 세션(홈 폴더 등)도 보므로 가장 먼저 넘긴다
-    tracker?.onEvent(ev).catch(() => {});
+    if (!ev.ai) tracker?.onEvent(ev).catch(() => {}); // 다른 AI 도구(Codex 등)의 세션은 역할자 검토 대상이 아니다
     if (ev.type === 'live' && ev.liveStatus === 'gone') {
       applyEvent(state, ev, ev.ts);
       broadcast();
@@ -103,7 +103,7 @@ export async function startServer({
     ev.sessionName ??= ev.host ? undefined : registry.nameOf(ev.sessionId);
     const project = matchProject(config, ev.cwd, ev.host, ev.sessionName);
     if (!project) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
-    dailyLog?.record(project, ev);
+    if (!ev.ai) dailyLog?.record(project, ev);
     applyEvent(state, ev, ev.ts);
     const key = `${ev.sessionId}|${ev.agentId ?? ''}`;
     // 말풍선을 바꾸는 이벤트만 번호를 올린다(toolDone은 제외: 요약이 도구 종료 뒤에 도착해도 보이게)
@@ -147,7 +147,7 @@ export async function startServer({
       hookSeen.set(ev.sessionId, now());
       handleEvent(ev);
       // 역할자 의견 전달(deliver: session): 같은 세션의 다음 프롬프트에만 한 번 붙인다
-      const note = ev.type === 'prompt' ? feedback?.take(ev.sessionId) : undefined;
+      const note = ev.type === 'prompt' && !ev.ai ? feedback?.take(ev.sessionId) : undefined;
       if (note) return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ hookSpecificOutput: { hookEventName: 'UserPromptSubmit', additionalContext: note } }));
       res.writeHead(204).end();
     });

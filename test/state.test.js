@@ -434,3 +434,19 @@ test('승인 대기 뒤에 도구가 끝나면 서버실로 튀지 않고 그 �
   feed(st, ev('wait', 5000, { waitKind: 'approval', activity: 'response' }), ev('toolDone', 6000, { category: 'run' }));
   assert.equal(teamA(st, 6000).room, 'work'); // 알 수 없으면 일반 작업실(서버실 아님)
 });
+
+// ---- 다른 AI 도구(Codex 등): 팀장이 아니라 외계인 팀원으로 보인다
+test('ai 세션은 팀장이 되지 않고 ai 표시가 붙은 팀원으로 나온다. Claude 세션이 없어도 팀원은 보인다', () => {
+  const st = createState(config);
+  feed(st, ev('prompt', 1000, { sessionId: 'cx-1234567890', ai: 'codex' }), ev('tool', 2000, { sessionId: 'cx-1234567890', ai: 'codex', category: 'run', activity: 'lab' }));
+  let t = teamA(st, 2000);
+  assert.equal(t.status, 'off'); // 팀장(Claude)은 없다
+  assert.equal(t.members.length, 1);
+  assert.deepEqual([t.members[0].type, t.members[0].ai, t.members[0].status, t.members[0].room], ['Codex', 'codex', 'run', 'lab']);
+  feed(st, ev('prompt', 3000), ev('tool', 4000, { category: 'read', activity: 'library' })); // Claude 세션이 생겨도
+  t = teamA(st, 4000);
+  assert.deepEqual([t.status, t.room], ['read', 'library']); // 팀장은 Claude
+  assert.equal(t.members.filter((m) => m.ai === 'codex').length, 1);
+  feed(st, ev('stop', 5000, { sessionId: 'cx-1234567890', ai: 'codex' }));
+  assert.equal(teamA(st, 5000).members.find((m) => m.ai).room, 'lounge'); // 끝나면 휴게실에서 쉰다
+});

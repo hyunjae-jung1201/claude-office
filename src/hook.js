@@ -53,7 +53,11 @@ process.stdin.on('end', () => {
     );
     req.on('timeout', () => { req.destroy(); done(); });
     req.on('error', done);
-    req.end(input);
+    // 다른 AI 도구(Codex 등)가 부른 hook 이면 도구 이름을 함께 보낸다(CLAUDE_OFFICE_AI=codex)
+    let body = input;
+    const ai = process.env.CLAUDE_OFFICE_AI;
+    if (ai) { try { body = JSON.stringify({ ...JSON.parse(input), office_ai: ai }); } catch { /* 본문이 JSON 이 아니면 그대로 */ } }
+    req.end(body);
     setTimeout(done, 1200).unref();
   } catch {
     done();

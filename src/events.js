@@ -194,14 +194,49 @@ export function editRecord(tool, input) {
 
 const maskedText = (v, limit) => (str(v) ? maskSecrets(v.slice(0, limit * 2)).slice(0, limit) : undefined);
 
+// 다른 AI 도구(Codex 등)의 hook 신호: hook.js 가 환경변수로 도구 이름을 실어 보낸다(office_ai). 알려진 도구만 받는다.
+const KNOWN_AI = new Set(['codex']);
+const CODEX_SHELL = new Set(['exec_command', 'shell', 'local_shell', 'container.exec', 'bash', 'exec']);
+const CODEX_READ = new Set(['read_file', 'view', 'open', 'list_dir', 'cat']);
+const CODEX_PATCH = new Set(['apply_patch', 'patch']);
+
+// ["bash", "-lc", "git status"] 같은 셸 래퍼는 안쪽 명령만 본다
+const shellWrapped = (argv) => {
+  const i = argv.findIndex((a) => /^-[a-z]*c$/.test(a));
+  return (i > 0 ? argv.slice(i + 1) : argv).join(' ');
+};
+
+// Codex 의 도구 이름·입력을 이 프로그램이 아는 형태(Bash·Edit·Read)로 맞춘다. 모르는 도구는 그대로 둔다.
+export function adaptCodexPayload(payload) {
+  const name = str(payload.tool_name);
+  if (!name) return payload;
+  const input = payload.tool_input;
+  const text = typeof input === 'string' ? input : JSON.stringify(input ?? {});
+  if (CODEX_SHELL.has(name)) {
+    const cmd = (input && typeof input === 'object' && (Array.isArray(input.command) ? shellWrapped(input.command) : input.cmd ?? input.command)) || /"cmd"\s*:\s*"((?:[^"\\]|\\.)*)"/.exec(text)?.[1] || '';
+    return { ...payload, tool_name: 'Bash', tool_input: { command: String(cmd) } };
+  }
+  if (CODEX_PATCH.has(name)) {
+    const file = /\*\*\* (?:Update|Add|Delete) File:\s*(\S[^\n]*)/.exec(text)?.[1]?.trim();
+    return { ...payload, tool_name: 'Edit', tool_input: { file_path: file ?? '' } };
+  }
+  if (CODEX_READ.has(name)) {
+    const path = input && typeof input === 'object' ? input.path ?? input.file_path ?? input.dir ?? '' : '';
+    return { ...payload, tool_name: 'Read', tool_input: { file_path: String(path) } };
+  }
+  return payload;
+}
+
 export function normalizeEvent(payload, now) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
+  const ai = KNOWN_AI.has(payload.office_ai) ? payload.office_ai : undefined;
+  if (ai === 'codex') payload = adaptCodexPayload(payload);
   const sessionId = str(payload.session_id);
   const cwd = str(payload.cwd);
   const name = str(payload.hook_event_name);
   if (!sessionId || !cwd || !name) return null;
 
-  const base = { sessionId, cwd, ts: now };
+  const base = { sessionId, cwd, ts: now, ...(ai ? { ai } : {}) };
   const agent = () => {
     const agentId = str(payload.agent_id);
     return agentId ? { agentId, agentType: str(payload.agent_type) } : {};

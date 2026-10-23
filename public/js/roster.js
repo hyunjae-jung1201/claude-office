@@ -17,7 +17,7 @@ function makeRow(row) {
   const li = el('li', `ro ${row.kind}`);
   const blob = el('span', 'blob');
   const k = parseRosterKey(row.key) ?? { team: 0, kind: 'team' };
-  blob.append(portrait({ kind: row.kind, variant: variantFor({ team: k.team, kind: row.kind, id: k.id }), color: row.teamColor ?? row.color }), el('i', 'st'));
+  blob.append(portrait({ kind: row.ai ? 'alien' : row.kind, variant: variantFor({ team: k.team, kind: row.kind, id: k.id }), color: row.teamColor ?? row.color }), el('i', 'st'));
   const body = el('span', 'ro-body');
   const top = el('span', 'ro-top');
   top.append(el('b', 'ro-name'), el('span', 'ro-badge'));

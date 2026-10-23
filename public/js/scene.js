@@ -51,16 +51,17 @@ function addRoleProps({ propNames, part, m, head, body, armL, armR }) {
 function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
   const g = new THREE.Group();
   const m = (c) => new THREE.MeshLambertMaterial({ color: c });
-  const shirtMat = m(shirt);
+  const alien = kind === 'alien'; // 다른 AI 도구(Codex 등): 사람과 완전히 다른 외계인
+  const shirtMat = m(alien ? '#6f7e9c' : shirt);
   const part = (geo, material, x, y, z) => {
     const mesh = new THREE.Mesh(geo, material);
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     return mesh;
   };
-  const skin = SKIN[variant % SKIN.length];
+  const skin = alien ? '#8fdcae' : SKIN[variant % SKIN.length];
   const skinMat = m(skin);
-  const trouser = m(['#2b3350', '#3a3f4a', '#4a4036', '#26303a', '#454a55', '#33384a'][variant % 6]);
+  const trouser = m(alien ? '#56627c' : ['#2b3350', '#3a3f4a', '#4a4036', '#26303a', '#454a55', '#33384a'][variant % 6]);
   const shoeMat = m('#1d1f26');
   // 다리: 바지 + 신발(앞으로 살짝 나온다). 피벗은 엉덩이.
   const leg = (x) => {
@@ -84,9 +85,30 @@ function makeAvatar(shirt, variant = 0, kind = 'human', roleId = null) {
   const armL = arm(-0.215);
   const armR = arm(0.215);
   const head = new THREE.Group();
-  head.position.set(0, 1.02, 0);
+  head.position.set(0, alien ? 1.08 : 1.02, 0);
   let body;
-  if (kind === 'bot') {
+  if (alien) {
+    // 가는 몸통(가슴에 팀 색 패널), 긴 목, 커다란 달걀형 머리, 검고 큰 눈, 더듬이
+    body = part(new RoundedBoxGeometry(0.3, 0.46, 0.2, 2, 0.06), shirtMat, 0, 0.62, 0);
+    body.add(part(new THREE.BoxGeometry(0.11, 0.11, 0.02), new THREE.MeshBasicMaterial({ color: shirt }), 0, 0.06, 0.105));
+    body.add(part(new THREE.CylinderGeometry(0.032, 0.042, 0.13, 8), skinMat, 0, 0.29, 0));
+    const skull = part(new THREE.SphereGeometry(0.19, 22, 16), skinMat, 0, 0.05, 0);
+    skull.scale.set(0.98, 1.2, 0.92);
+    head.add(skull);
+    const eyeMat = m('#0b0e14');
+    for (const sx of [-0.085, 0.085]) {
+      const eye = part(new THREE.SphereGeometry(0.06, 12, 10), eyeMat, sx, 0.03, 0.15);
+      eye.scale.set(1.0, 1.5, 0.42);
+      eye.rotation.z = sx > 0 ? -0.4 : 0.4;
+      head.add(eye);
+      head.add(part(new THREE.SphereGeometry(0.012, 6, 6), new THREE.MeshBasicMaterial({ color: '#d8fff0' }), sx + (sx > 0 ? -0.015 : 0.015), 0.07, 0.172));
+      const stalk = part(new THREE.CylinderGeometry(0.008, 0.008, 0.15, 6), m('#6fb98e'), sx * 0.55, 0.3, 0);
+      stalk.rotation.z = sx > 0 ? -0.35 : 0.35;
+      head.add(stalk, part(new THREE.SphereGeometry(0.025, 8, 8), new THREE.MeshBasicMaterial({ color: '#9dffd0' }), sx * 1.12, 0.385, 0));
+    }
+    for (const sx of [-0.012, 0.012]) head.add(part(new THREE.BoxGeometry(0.006, 0.014, 0.01), eyeMat, sx, -0.06, 0.172));
+    head.add(part(new THREE.BoxGeometry(0.05, 0.006, 0.01), eyeMat, 0, -0.11, 0.16));
+  } else if (kind === 'bot') {
     head.position.set(0, 1.0, 0);
     body = part(new RoundedBoxGeometry(0.36, 0.38, 0.26, 1, 0.05), shirtMat, 0, 0.62, 0);
     const lighter = m(new THREE.Color(shirt).offsetHSL(0, 0, 0.08));
@@ -314,13 +336,13 @@ export function createScene(canvas, overlay, opts = {}) {
     entity.group.add(entity.zzzObj);
   }
 
-  function makeEntity({ team, member, id, tile, scale = 1, name, color, bubbleHeight }) {
+  function makeEntity({ team, member, id, tile, scale = 1, name, color, bubbleHeight, ai }) {
     const group = new THREE.Group();
     // 하위 에이전트(부하 직원)는 팀장과 같은 색의 로봇, 팀장·역할자는 사람 모양
-    const isBot = member && !String(id).startsWith('role:');
+    const isBot = member && !ai && !String(id).startsWith('role:');
     const variant = isBot ? 0 : variantFor({ team, kind: member ? 'member' : 'team', id });
     const roleId = member && String(id).startsWith('role:') ? String(id).slice(5) : null;
-    const body = makeAvatar(color, variant, isBot ? 'bot' : 'human', roleId);
+    const body = makeAvatar(color, variant, ai ? 'alien' : isBot ? 'bot' : 'human', roleId);
     body.scale.setScalar(scale);
     group.add(body);
     group.position.set(wx(tile.x), 0, wz(tile.y));
@@ -465,7 +487,7 @@ export function createScene(canvas, overlay, opts = {}) {
         seen.add(key);
         let ent = members.get(key);
         if (!ent) {
-          ent = makeEntity({ team: i, member: true, id: m.id, tile: ENTRANCE, scale: MEMBER_SCALE, name: m.type, color: team.color, bubbleHeight: 1.3 });
+          ent = makeEntity({ team: i, member: true, id: m.id, tile: ENTRANCE, scale: MEMBER_SCALE, name: m.type, color: team.color, bubbleHeight: 1.3, ai: m.ai });
           members.set(key, ent);
         }
         ent.leaving = false;

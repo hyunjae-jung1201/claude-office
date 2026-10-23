@@ -100,9 +100,11 @@ function sessionFor(state, ev, project) {
     s = {
       sessionId: ev.sessionId,
       project: project.name,
+      ai: ev.ai ?? null, // Claude 가 아닌 AI 도구('codex' 등)의 세션이면 그 이름: 팀장이 아니라 외계인 팀원으로 보인다
       status: 'idle',
       label: DEFAULT_LABEL.idle,
       lastEventAt: ev.ts,
+      startedAt: ev.ts,
       busySince: null,
       openTools: 0,
       activity: null,
@@ -263,23 +265,29 @@ function leaderRoom(s, background, now, waitMs) {
   return s.activity ?? DEFAULT_ROOM[s.status];
 }
 const memberRoom = (m) => m.activity ?? DEFAULT_ROOM[m.status];
+const AI_NAMES = { codex: 'Codex' };
+const publicMember = (m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, room: memberRoom(m), startedAt: m.startedAt, ...(m.ai ? { ai: m.ai } : {}), ...trail(m) });
 
 export function snapshot(state, now) {
   const { projects, maxMembers } = state.config;
   const teams = projects.map((p) => {
     let latest = null;
+    const others = []; // 다른 AI 도구의 세션
     for (const s of state.sessions.values()) {
-      if (s.project === p.name && (!latest || s.lastEventAt > latest.lastEventAt)) latest = s;
+      if (s.project !== p.name) continue;
+      if (s.ai) { others.push(s); continue; }
+      if (!latest || s.lastEventAt > latest.lastEventAt) latest = s;
     }
+    const aiMembers = others.map((s) => ({ id: `ai:${s.ai}:${String(s.sessionId).slice(0, 8)}`, type: AI_NAMES[s.ai] ?? s.ai, ai: s.ai, status: s.status, label: s.label, activity: s.status === 'idle' ? 'lounge' : s.activity, startedAt: s.startedAt ?? s.lastEventAt, hist: s.hist, since: s.since }));
     const roleAct = state.roleActivity.get(p.name);
     const roles = roleAct
       ? [...roleAct.values()].filter((r) => r.status === 'running' || now - r.doneAt <= ROLE_LINGER_MS).map(({ id, name, color, status, label, room }) => ({ id, name, color, status, label, ...(room ? { room } : {}) }))
       : [];
     const badge = state.badges.get(p.name) ?? null;
     if (!latest) {
-      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'lounge', members: [], overflow: 0, finishedAt: null, roles, badge, recent: [], since: null };
+      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'lounge', members: aiMembers.slice(0, maxMembers).map(publicMember), overflow: Math.max(0, aiMembers.length - maxMembers), finishedAt: null, roles, badge, recent: [], since: null };
     }
-    const all = [...latest.members.values()].sort((a, b) => a.startedAt - b.startedAt);
+    const all = [...latest.members.values(), ...aiMembers].sort((a, b) => a.startedAt - b.startedAt);
     // 응답은 끝났지만 백그라운드 명령이 도는 중이면 서버실에서 일하는 것으로 보여 준다
     const background = latest.live === 'shell' && latest.status === 'idle';
     const room = leaderRoom(latest, background, now, (state.config.responseWaitMinutes ?? 5) * 60 * 1000);
@@ -289,7 +297,7 @@ export function snapshot(state, now) {
       status: background ? 'run' : latest.status,
       label: background ? BACKGROUND_LABEL : room === 'response' && latest.status === 'idle' ? RESPONSE_LABEL : latest.label,
       room,
-      members: all.slice(0, maxMembers).map((m) => ({ id: m.id, type: m.type, status: m.status, label: m.label, room: memberRoom(m), startedAt: m.startedAt, ...trail(m) })),
+      members: all.slice(0, maxMembers).map(publicMember),
       overflow: Math.max(0, all.length - maxMembers),
       finishedAt: latest.finishedAt,
       roles,

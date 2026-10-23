@@ -51,7 +51,7 @@ export function rosterRows(snapshot) {
       text: str(t.label) || IDLE_TEXT[status] || '', place: ROOM_NAMES[t.room] ?? '', badge: t.badge ?? null, finishedAt: t.finishedAt ?? null, since: num(t.since), recent: recentOf(t.recent),
     });
     for (const m of Array.isArray(t.members) ? t.members : []) {
-      rows.push({ key: `t${i}:m:${str(m.id)}`, kind: 'member', name: str(m.type) || '팀원', color: str(t.color) || '#8a94a6', teamColor: str(t.color) || '#8a94a6', status: str(m.status) || 'idle', wait: false, text: str(m.label), place: ROOM_NAMES[m.room] ?? '', badge: null, since: num(m.since), recent: recentOf(m.recent) });
+      rows.push({ key: `t${i}:m:${str(m.id)}`, kind: 'member', name: str(m.type) || '팀원', color: str(t.color) || '#8a94a6', teamColor: str(t.color) || '#8a94a6', status: str(m.status) || 'idle', wait: false, text: str(m.label), place: ROOM_NAMES[m.room] ?? '', badge: null, since: num(m.since), recent: recentOf(m.recent), ...(m.ai ? { ai: str(m.ai) } : {}) });
     }
     for (const r of Array.isArray(t.roles) ? t.roles : []) {
       const status = r.status === 'running' ? 'write' : r.status === 'failed' ? 'failed' : 'idle';

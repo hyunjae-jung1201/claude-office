@@ -285,3 +285,14 @@ test('PermissionRequest 의 wait 이벤트는 승인 뒤에 할 도구의 방(to
   const b = normalizeEvent({ session_id: 's', cwd: '/c', hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'python3 make_ppt.py' } }, NOW);
   assert.equal(b.toolActivity, 'docs');
 });
+
+test('Codex hook: office_ai 가 있으면 도구를 Bash·Edit·Read 로 맞추고 ai 표시를 단다', () => {
+  const ev = (extra) => normalizeEvent({ session_id: 'c1', cwd: '/x', hook_event_name: 'PreToolUse', office_ai: 'codex', ...extra }, 1);
+  const sh = ev({ tool_name: 'exec_command', tool_input: { cmd: 'pytest -q' } });
+  assert.deepEqual([sh.ai, sh.toolName, sh.activity], ['codex', 'Bash', 'lab']);
+  assert.equal(ev({ tool_name: 'shell', tool_input: { command: ['bash', '-lc', 'git status'] } }).activity, 'git');
+  const patch = ev({ tool_name: 'apply_patch', tool_input: '*** Begin Patch\n*** Update File: /x/README.md\n@@\n-a\n+b\n*** End Patch' });
+  assert.deepEqual([patch.toolName, patch.activity], ['Edit', 'docs']);
+  assert.equal(normalizeEvent({ session_id: 'c1', cwd: '/x', hook_event_name: 'Stop', office_ai: 'nope' }, 1).ai, undefined); // 모르는 도구 이름은 무시
+  assert.equal(normalizeEvent({ session_id: 'c1', cwd: '/x', hook_event_name: 'Stop' }, 1).ai, undefined);
+});

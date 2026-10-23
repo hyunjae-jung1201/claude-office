@@ -21,6 +21,22 @@ export function portrait({ kind, variant = 0, color }) {
     node('circle', { cx: 18, cy: 3.6, r: 1.8, fill: color }, svg);
     return svg;
   }
+  if (kind === 'alien') { // 외계인: 사람과 완전히 다른 모습(초록 달걀형 머리, 큰 검은 눈, 더듬이)
+    node('path', { d: 'M5 37c0-7 5-10 13-10s13 3 13 10z', fill: '#6f7e9c' }, svg);
+    node('rect', { x: 15, y: 31, width: 6, height: 4, rx: 1, fill: color }, svg);
+    node('rect', { x: 16.2, y: 22, width: 3.6, height: 6, rx: 1.6, fill: '#8fdcae' }, svg);
+    for (const sx of [-1, 1]) {
+      node('line', { x1: 18 + sx * 4.5, y1: 8, x2: 18 + sx * 8, y2: 2.5, stroke: '#6fb98e', 'stroke-width': 1.1, 'stroke-linecap': 'round' }, svg);
+      node('circle', { cx: 18 + sx * 8, cy: 2.5, r: 1.7, fill: '#9dffd0' }, svg);
+    }
+    node('ellipse', { cx: 18, cy: 15, rx: 8, ry: 10, fill: '#8fdcae' }, svg);
+    for (const sx of [-1, 1]) {
+      node('ellipse', { cx: 18 + sx * 3.7, cy: 16, rx: 2.5, ry: 3.8, fill: '#0b0e14', transform: `rotate(${sx * -22} ${18 + sx * 3.7} 16)` }, svg);
+      node('circle', { cx: 18 + sx * 3.1, cy: 14.4, r: 0.7, fill: '#d8fff0' }, svg);
+    }
+    node('path', { d: 'M16.5 22q1.5 0.8 3 0', fill: 'none', stroke: '#0b0e14', 'stroke-width': 0.7, 'stroke-linecap': 'round' }, svg);
+    return svg;
+  }
   const skin = SKIN[variant % SKIN.length];
   const hair = HAIR[variant % HAIR.length];
   node('path', { d: 'M3 37c0-8 6-11.5 15-11.5S33 29 33 37z', fill: color }, svg); // 어깨(셔츠)

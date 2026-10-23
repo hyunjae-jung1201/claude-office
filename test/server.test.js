@@ -723,3 +723,15 @@ test('인증 토큰이 설정되면 /event·/ingest 는 올바른 x-office-token
     assert.equal((await fetch(`http://127.0.0.1:${port}/`)).status, 200);
   });
 });
+
+test('Codex hook 신호(office_ai)는 팀장이 아닌 외계인 팀원이 되고, 역할자 검토·일지 대상이 아니다', async () => {
+  await withServer({}, async ({ port }) => {
+    const c = await connect(port);
+    const res = await post(port, hookPayload({ session_id: 'codex-abcdef12', office_ai: 'codex', hook_event_name: 'PreToolUse', tool_name: 'exec_command', tool_input: { cmd: 'pytest' } }));
+    assert.equal(res.status, 204);
+    const snap = await c.waitFor((s) => teamA(s).members.length === 1);
+    assert.equal(teamA(snap).status, 'off');
+    assert.deepEqual([teamA(snap).members[0].type, teamA(snap).members[0].ai, teamA(snap).members[0].room], ['Codex', 'codex', 'lab']);
+    c.close();
+  });
+});

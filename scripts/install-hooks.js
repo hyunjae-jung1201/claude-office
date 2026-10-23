@@ -10,26 +10,30 @@ export const HOOK_EVENTS = [
   'SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse',
   'PermissionRequest', 'Notification', 'Stop', 'SubagentStart', 'SubagentStop',
 ];
+// Codex CLI(~/.codex/hooks.json)는 같은 이름의 이벤트 중 이것만 쓴다
+export const CODEX_HOOK_EVENTS = ['SessionStart', 'SessionEnd', 'UserPromptSubmit', 'PreToolUse', 'PostToolUse', 'Stop'];
 const TOOL_EVENTS = new Set(['PreToolUse', 'PostToolUse']);
 
 const hasCommand = (group, command) => (group.hooks ?? []).some((h) => h.command === command);
 
-export function buildHookSettings(existing, command) {
+export function buildHookSettings(existing, command, { events = HOOK_EVENTS, codex = false } = {}) {
   const out = structuredClone(existing ?? {});
   out.hooks ??= {};
-  for (const event of HOOK_EVENTS) {
+  for (const event of events) {
     const groups = (out.hooks[event] ??= []);
     if (groups.some((g) => hasCommand(g, command))) continue;
-    const group = { hooks: [{ type: 'command', command, timeout: 2 }] };
-    if (TOOL_EVENTS.has(event)) group.matcher = '*';
+    // Codex 는 모든 도구를 빈 matcher 로 고르고, timeout 필드는 쓰지 않는다(hook.js 가 스스로 1초 안에 끝낸다)
+    const group = { hooks: [codex ? { type: 'command', command } : { type: 'command', command, timeout: 2 }] };
+    if (codex) group.matcher = '';
+    else if (TOOL_EVENTS.has(event)) group.matcher = '*';
     groups.push(group);
   }
   return out;
 }
 
-export function describeChanges(before, after) {
+export function describeChanges(before, after, events = HOOK_EVENTS) {
   const lines = [];
-  for (const event of HOOK_EVENTS) {
+  for (const event of events) {
     const had = new Set((before.hooks?.[event] ?? []).flatMap((g) => (g.hooks ?? []).map((h) => h.command)));
     for (const g of after.hooks?.[event] ?? []) {
       for (const h of g.hooks ?? []) if (!had.has(h.command)) lines.push(`+ ${event}: ${h.command}`);
@@ -41,12 +45,14 @@ export function describeChanges(before, after) {
 function main(argv) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const arg = (name) => (argv.includes(name) ? argv[argv.indexOf(name) + 1] : undefined);
-  const settingsPath = arg('--settings') ?? join(homedir(), '.claude', 'settings.json');
-  const command = arg('--command') ?? `node ${join(root, 'src', 'hook.js')}`;
+  const codex = argv.includes('--codex'); // Codex CLI 도 사무실에 외계인 팀원으로 나타나게 한다
+  const settingsPath = arg('--settings') ?? (codex ? join(homedir(), '.codex', 'hooks.json') : join(homedir(), '.claude', 'settings.json'));
+  const command = arg('--command') ?? `${codex ? 'CLAUDE_OFFICE_AI=codex ' : ''}node ${join(root, 'src', 'hook.js')}`;
+  const events = codex ? CODEX_HOOK_EVENTS : HOOK_EVENTS;
 
   const before = existsSync(settingsPath) ? JSON.parse(readFileSync(settingsPath, 'utf8')) : {};
-  const after = buildHookSettings(before, command);
-  const lines = describeChanges(before, after);
+  const after = buildHookSettings(before, command, { events, codex });
+  const lines = describeChanges(before, after, events);
 
   if (lines.length === 0) return console.log(`변경 없음: ${settingsPath} 에 이미 설치돼 있습니다.`);
   console.log(`${settingsPath} 에 추가할 hook (기존 항목은 그대로 유지):`);
