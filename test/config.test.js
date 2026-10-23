@@ -246,3 +246,10 @@ test('ai 팀은 다른 PC 에서 보낸 같은 AI 의 신호도 받는다', () =
   assert.equal(matchProject(config, '/pc1/only/path', 'PC1', undefined, 'codex').name, 'Codex');
   assert.equal(matchProject(config, '/pc1/only/path', null, undefined, 'codex').name, 'Codex');
 });
+
+test('같은 AI 도구의 팀은 하나만 둘 수 있다(PC 가 달라도)', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'co-cfg-'));
+  const f = join(dir, 'config.json');
+  writeFileSync(f, JSON.stringify({ remotes: [{ name: 'PC1', push: true }], projects: [{ name: 'Codex', ai: 'codex' }, { name: 'Codex2', ai: 'codex', host: 'PC1' }] }));
+  assert.throws(() => loadConfig(f), /도구마다 하나/);
+});

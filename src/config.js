@@ -27,6 +27,7 @@ function validateProjects(list, remotes = []) {
   const names = new Set();
   const paths = new Set();
   const aliasKeys = new Map();
+  const aiTeams = new Set(); // AI 도구 팀은 도구마다 하나(신호가 PC 와 폴더에 상관없이 그 팀으로 가므로)
   return list.map((p, i) => {
     if (!p.name) throw new Error(`projects[${i}]에 name이 없습니다`);
     if (!p.path && !p.ai) throw new Error(`projects[${i}]에 path가 없습니다`);
@@ -38,7 +39,11 @@ function validateProjects(list, remotes = []) {
     names.add(p.name);
     paths.add(pathKey);
     const out = { name: p.name, path, color: p.color ?? PALETTE[i % PALETTE.length] };
-    if (p.ai) out.ai = p.ai;
+    if (p.ai) {
+      if (aiTeams.has(p.ai)) throw new Error(`ai 팀은 도구마다 하나만 둘 수 있습니다: ${p.ai} (${p.name})`);
+      aiTeams.add(p.ai);
+      out.ai = p.ai;
+    }
     if (p.host) out.host = p.host;
     if (p.testCommand !== undefined) {
       if (!Array.isArray(p.testCommand) || p.testCommand.length === 0 || p.testCommand.some((a) => typeof a !== 'string' || !a)) throw new Error(`프로젝트 ${p.name}의 testCommand는 비어 있지 않은 문자열 배열이어야 합니다 (예: ["npm", "test"])`);
