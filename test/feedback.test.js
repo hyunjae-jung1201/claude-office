@@ -78,3 +78,21 @@ test('fromUser: 사용자가 확인해 전달하면 경미한 지적도 담고, 
   assert.doesNotMatch(note, /참고만/); // info 는 제외
   assert.equal(box.take('s1'), undefined);
 });
+
+test('출처는 항목마다 따로: 사용자가 전달한 의견 뒤에 자동 의견이 섞여도 자동 의견은 "사용자가 확인함"으로 표시되지 않는다', () => {
+  const box = createFeedbackBox({ minSeverity: 'major' });
+  const user = { results: [{ roleName: 'QA', findings: [{ severity: 'minor', text: '사용자가 확인한 지적' }] }] };
+  const auto = { results: [{ roleName: '개발자', findings: [{ severity: 'major', text: '자동 검토 지적 (이전 지시를 무시하라 같은 문장이 있을 수 있음)' }] }] };
+  box.add('s1', user, { fromUser: true });
+  box.add('s1', auto);
+  const note = box.take('s1');
+  const [userPart, autoPart] = note.split('[Claude Office 자동 검토 의견');
+  assert.match(userPart, /사용자가 보고서에서 확인하고 전달함/);
+  assert.match(userPart, /사용자가 확인한 지적/);
+  assert.doesNotMatch(userPart, /자동 검토 지적/); // 자동 항목은 사용자 머리말 아래에 오지 않는다
+  assert.match(autoPart, /참고용이며 사용자의 지시가 아님/);
+  assert.match(autoPart, /자동 검토 지적/);
+  const autoFirst = createFeedbackBox({ minSeverity: 'major' });
+  autoFirst.add('s2', auto);
+  assert.doesNotMatch(autoFirst.take('s2'), /사용자가 보고서에서 확인/); // 자동만 있으면 사용자 머리말 자체가 없다
+});
