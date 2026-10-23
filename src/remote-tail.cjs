@@ -81,7 +81,7 @@ function project(line, st, agent) {
 // 마지막 응답이 답을 요구하는 질문인가(src/question.js 와 같은 규칙: 마지막 세 줄 중 물음표로 끝나는 줄이 있으면 질문)
 function asksQuestion(text) {
   const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-3);
-  return lines.some((l) => /[?？][\s)\]}>"'”’』」*_`]*$/.test(l));
+  return lines.some((l) => /[?？](?=[\s)\]}>"'”’』」*_`]|$)/.test(l) || /(까요|할까|되나요|인가요|세요|십니까|습니까)\s*[.?]?[\s)\]}>"'”’』」*_`]*$/.test(l) && /(까요|되나요|인가요|십니까|습니까|어떠세요|하시겠어요|원하세요)/.test(l));
 }
 
 let names = new Map(); // sessionId -> 세션 이름 (실행 중인 세션 등록 정보)
