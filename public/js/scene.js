@@ -6,7 +6,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route, meetingSpot } from './layout.js';
+import { FLOOR, ROOMS, ENTRANCE, TEAM_COUNT, targetFor, memberTarget, memberSeat, deskZone, route, meetingSpot, freeSpotFor } from './layout.js';
 import { buildOffice, LAMPS, wx, wz } from './office.js';
 import { parseRosterKey, mixHex, ROLE_TEAM_MIX } from './roster-model.js';
 import { roomActivity } from './activity.js';
@@ -487,6 +487,18 @@ export function createScene(canvas, overlay, opts = {}) {
       leader.bubbleObj.position.y = leader.responseNeeded ? 1.6 + 0.5 * (i % 3) : leader.bubbleHeight;
       setBubble(leader, celebrating ? '완료!' : team.label, leader.responseNeeded ? 'wait' : team.status, celebrating);
 
+      // 팀원 자리: 작업실이 아닌 방에서는 그 방의 비어 있는 자리(탁자 의자·작업대 앞)에 가서 가구 쪽을 보고 앉거나 선다.
+      // 자리는 가구와 짝(layout.js)이라 팀장과 같은 방식으로 방향이 맞다. 자리가 모자라면 팀장 곁에 비켜 선다.
+      const seatFor = (ent, status, room, slot) => {
+        if (room === 'work' || !room) return memberTarget(status, i, slot, room);
+        const taken = new Set();
+        for (const l of leaders) if (l && goalOf(l).room === room) taken.add(l.team);
+        for (const o of members.values()) if (o !== ent && !o.leaving && o.spotRoom === room && o.spotIdx != null) taken.add(o.spotIdx);
+        let idx = ent.spotRoom === room && ent.spotIdx != null && !taken.has(ent.spotIdx) ? ent.spotIdx : freeSpotFor(room, i, taken);
+        if (idx == null) { ent.spotRoom = null; ent.spotIdx = null; return memberTarget(status, i, slot, room); }
+        ent.spotRoom = room; ent.spotIdx = idx;
+        return targetFor(status === 'off' ? 'idle' : status, idx, room);
+      };
       // 팀원
       const seen = new Set();
       team.members.forEach((m, idx) => {
@@ -501,7 +513,7 @@ export function createScene(canvas, overlay, opts = {}) {
         ent.status = m.status;
         ent.slot = idx;
         staggerLabels(ent, idx);
-        ent.goal = { ...memberTarget(m.status, i, idx, m.room), room: m.room };
+        ent.goal = { ...seatFor(ent, m.status, m.room, idx), room: m.room };
         if (m.room === 'work') deskWanted.add(`${i}:${idx}`); // 작업실에 앉는 팀원에게 책상이 나타난다
         setBubble(ent, m.label, m.status);
       });
@@ -523,7 +535,7 @@ export function createScene(canvas, overlay, opts = {}) {
         // room 이 있는 job 아바타(테스터·기록원)는 그 방에서 일한다. 역할자 검토는 팀 책상에서.
         // 검토를 끝낸 역할자는 기획실 탁자로 가서 서로 얘기한다(회의)
         ent.goal = r.room
-          ? { ...memberTarget(ent.status, i, slot, r.room), room: r.room }
+          ? { ...seatFor(ent, ent.status, r.room, slot), room: r.room }
           : r.status === 'running'
             ? (deskWanted.add(`${i}:${slot}`), { ...memberSeat(i, slot), pose: 'sitType' })
             : { ...meetingSpot(i, idx), pose: 'talk', room: 'planning' };

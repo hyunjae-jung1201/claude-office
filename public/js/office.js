@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, DOOR_W, DOOR_LINES, deskZone } from './layout.js';
+import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, DOOR_W, DOOR_LINES, deskZone, RESEARCH_TABLES, researchSeats, DOCS_TABLE, docsSeats } from './layout.js';
 import * as T from './textures.js';
 import { dayState } from './daylight.js';
 
@@ -360,17 +360,14 @@ export function buildOffice(scene) {
     cyl(cx, cy, 0.05, 0.72, '#8b93a8', 0, { seg: 10 });
     cyl(cx, cy, 0.26, 0.03, '#6d7488', 0, { seg: 20 });
   };
-  const resTables = [[4.37, 1.45, [0, 1, 2]], [5.6, 2.45, [3, 4, 5]]];
-  const resSeats = [[-1, 0, Math.PI / 2], [1, 0, -Math.PI / 2], [0, 1, Math.PI]]; // [dx, dy, 바라보는 방향]
-  resTables.forEach(([cx, cy, ids], t) => {
-    roundTable(cx, cy, 0.52);
-    resSeats.forEach(([dx, dy, yaw], k) => {
-      laptop(cx + dx * 0.27, cy + dy * 0.27, 0.74, yaw, screens[(t + k) % 3]);
-      chair(cx + dx * 0.65, cy + dy * 0.65, ['#4f6a8f', '#6a8a6a', '#8f6a5a'][k], yaw - Math.PI);
-      box(cx + dx * 0.4 - 0.08 + dy * 0.2, cy + dy * 0.4 - 0.08 - dx * 0.2, 0.16, 0.2, 0.012, k % 2 ? '#fff9e8' : '#d6e4f7', 0.745, { r: 0.002, rot: 0.3 * (k - 1) });
-    });
-    mug(cx, cy, 0.74, ['#d9553f', '#4f7f9c'][t]);
+  // 탁자·의자·노트북은 layout.js 의 RESEARCH_TABLES / researchSeats() 로 만든다(자리와 가구가 어긋나지 않게)
+  RESEARCH_TABLES.forEach((t, ti) => roundTable(t.x, t.y, t.r));
+  researchSeats().forEach((seat, k) => {
+    laptop(seat.table.x + seat.dx * 0.27, seat.table.y + seat.dy * 0.27, 0.74, seat.face, screens[(Math.floor(k / 3) + (k % 3)) % 3]);
+    chair(seat.x, seat.y, ['#4f6a8f', '#6a8a6a', '#8f6a5a'][k % 3], seat.face - Math.PI);
+    box(seat.table.x + seat.dx * 0.4 - 0.08 + seat.dy * 0.2, seat.table.y + seat.dy * 0.4 - 0.08 - seat.dx * 0.2, 0.16, 0.2, 0.012, k % 2 ? '#fff9e8' : '#d6e4f7', 0.745, { r: 0.002, rot: 0.3 * ((k % 3) - 1) });
   });
+  RESEARCH_TABLES.forEach((t, ti) => mug(t.x, t.y, 0.74, ['#d9553f', '#4f7f9c'][ti]));
   // 마인드맵 화이트보드(바퀴 달린 스탠드)
   {
     const c = document.createElement('canvas');
@@ -415,24 +412,23 @@ export function buildOffice(scene) {
 
   // ---------------------------------------------------------------- 문서실
   // 긴 공동 작업 탁자 하나(양쪽에 세 명씩), 가운데 줄지은 초록 램프, 종이 더미·바인더, 한쪽 벽의 복합기 코너 — 서로 마주 보고 문서를 함께 만든다
-  box(13.95, 1.3, 2.7, 0.9, 0.05, '#c4a87a', 0.72, { r: 0.015 });
-  for (const [x, y] of [[14.05, 1.38], [16.5, 1.38], [14.05, 2.1], [16.5, 2.1]]) box(x, y, 0.07, 0.07, 0.72, '#6d5a42', 0, { r: 0.01 });
+  const DT = DOCS_TABLE;
+  box(DT.x, DT.y, DT.w, DT.d, 0.05, '#c4a87a', 0.72, { r: 0.015 });
+  for (const [x, y] of [[DT.x + 0.1, DT.y + 0.08], [DT.x + DT.w - 0.2, DT.y + 0.08], [DT.x + 0.1, DT.y + DT.d - 0.15], [DT.x + DT.w - 0.2, DT.y + DT.d - 0.15]]) box(x, y, 0.07, 0.07, 0.72, '#6d5a42', 0, { r: 0.01 });
   for (const x of [14.55, 15.3, 16.05]) { // 램프(초록 갓) 줄
-    cyl(x, 1.75, 0.06, 0.02, '#2a2f3d', 0.77);
-    cyl(x, 1.75, 0.012, 0.28, '#3a3f4d', 0.79);
-    box(x - 0.12, 1.63, 0.24, 0.1, 0.1, '#2f6b4f', 1.06, { r: 0.02, material: std('#2f6b4f', { emissive: '#ffd98a', ei: 0.5 }) });
+    cyl(x, DT.y + DT.d / 2, 0.06, 0.02, '#2a2f3d', 0.77);
+    cyl(x, DT.y + DT.d / 2, 0.012, 0.28, '#3a3f4d', 0.79);
+    box(x - 0.12, DT.y + DT.d / 2 - 0.12, 0.24, 0.1, 0.1, '#2f6b4f', 1.06, { r: 0.02, material: std('#2f6b4f', { emissive: '#ffd98a', ei: 0.5 }) });
   }
-  for (const [x, y, rot] of [[14.4, 1.38, 0.1], [15.15, 1.4, -0.08], [15.9, 1.38, 0.15], [14.45, 1.98, -0.1], [15.2, 1.96, 0.06], [15.95, 1.98, -0.12]]) { // 자리마다 종이 더미
-    box(x, y, 0.3, 0.38, 0.012, '#ffffff', 0.77, { r: 0.002, rot });
-    box(x + 0.03, y + 0.02, 0.28, 0.36, 0.012, '#f7f2e2', 0.784, { r: 0.002, rot: rot * -0.6 });
-  }
+  docsSeats().forEach((seat, k) => { // 자리마다 의자와 종이 더미(탁자 쪽)
+    const toward = seat.face === 0 ? 1 : -1;
+    chair(seat.x, seat.y, ['#8f6a5a', '#6a8a8f', '#8a7a5a'][k % 3], seat.face - Math.PI);
+    box(seat.x - 0.15, seat.y + toward * 0.43 - 0.19, 0.3, 0.38, 0.012, '#ffffff', 0.77, { r: 0.002, rot: 0.1 * ((k % 3) - 1) });
+    box(seat.x - 0.12, seat.y + toward * 0.45 - 0.17, 0.28, 0.36, 0.012, '#f7f2e2', 0.784, { r: 0.002, rot: -0.06 * ((k % 3) - 1) });
+  });
   box(16.2, 1.5, 0.22, 0.3, 0.05, '#7a4f2e', 0.77, { r: 0.012 }); // 두꺼운 바인더
   box(16.24, 1.9, 0.2, 0.2, 0.05, '#3f5a7a', 0.77, { r: 0.012, rot: 0.3 });
   mug(14.2, 1.75, 0.77, '#e8e2d4');
-  [14.45, 15.2, 15.95].forEach((x, k) => {
-    chair(x, 0.95, ['#8f6a5a', '#6a8a8f', '#8a7a5a'][k], -Math.PI); // 윗줄: 남쪽(탁자)을 본다
-    chair(x, 2.6, ['#8a7a5a', '#8f6a5a', '#6a8a8f'][k], 0);
-  });
   // 복합기 코너: 대형 복합기, 종이 트레이 더미, 서류함
   box(14.4, 3.25, 1.3, 0.55, 0.9, '#d9dde0', 0, { r: 0.03 });
   box(14.45, 3.3, 1.2, 0.45, 0.05, '#2d3340', 0.9, { r: 0.01 });

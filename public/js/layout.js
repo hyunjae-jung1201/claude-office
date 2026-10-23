@@ -61,22 +61,26 @@ export function memberSeat(teamIndex, memberIndex) {
   return { x: z.x + 0.3 + 0.55 * (memberIndex % 2), y: 2.6 + 1.0 * Math.floor(memberIndex / 2) };
 }
 
+// ---- 앉는 방의 가구와 자리: 자리(좌표·바라보는 방향)와 의자·탁자는 같은 값에서 나온다(office.js 가 이 값으로 가구를 만든다).
+// 가구 배치를 바꾸려면 여기 값을 고친다 — 아바타의 자리·방향이 함께 바뀐다.
+export const RESEARCH_TABLES = [{ x: 4.37, y: 1.45, r: 0.52 }, { x: 5.6, y: 2.45, r: 0.52 }]; // 둥근 토론 탁자
+const SEAT_DIRS = [{ dx: -1, dy: 0, face: Math.PI / 2 }, { dx: 1, dy: 0, face: -Math.PI / 2 }, { dx: 0, dy: 1, face: Math.PI }]; // 탁자의 서·동·남쪽에 앉아 탁자를 본다
+export const researchSeats = () => RESEARCH_TABLES.flatMap((t) => SEAT_DIRS.map((d) => ({ x: t.x + d.dx * 0.65, y: t.y + d.dy * 0.65, face: d.face, table: t, dx: d.dx, dy: d.dy })));
+export const DOCS_TABLE = { x: 13.95, y: 1.3, w: 2.7, d: 0.9 }; // 긴 공동 작업 탁자
+const DOCS_SEAT_X = [14.45, 15.2, 15.95];
+export const docsSeats = () => [...DOCS_SEAT_X.map((x) => ({ x, y: DOCS_TABLE.y - 0.35, face: 0 })), ...DOCS_SEAT_X.map((x) => ({ x, y: DOCS_TABLE.y + DOCS_TABLE.d + 0.4, face: Math.PI }))]; // 윗줄은 남쪽, 아랫줄은 북쪽을 본다
+
 // 방마다 팀 번호(0~4)별 서 있는/앉는 자리. 가장자리에서 충분히 떨어져 있고 팀끼리 겹치지 않는다.
 const row = (x0, dx, y) => (i) => ({ x: x0 + dx * i, y });
 const grid = (x0, y0) => (i) => ({ x: x0 + 0.9 * (i % 3), y: y0 + 1.0 * Math.floor(i / 3) });
 const SPOTS = {
   library: row(0.5, 0.5, 1.15), // 책장 앞(뒷벽)
-  // 리서치실: 둥근 토론 탁자 2개, 탁자마다 세 명이 둘러앉아 마주 본다(face = 탁자 쪽)
-  research: (i) => [
-    { x: 3.72, y: 1.45, face: Math.PI / 2 }, { x: 5.02, y: 1.45, face: -Math.PI / 2 }, { x: 4.37, y: 2.15, face: Math.PI },
-    { x: 4.95, y: 2.45, face: Math.PI / 2 }, { x: 6.25, y: 2.45, face: -Math.PI / 2 }, { x: 5.6, y: 3.1, face: Math.PI },
-  ][i],
+  research: (i) => { const { x, y, face } = researchSeats()[i]; return { x, y, face }; }, // 둥근 토론 탁자 둘레
   work: (i) => {
     const z = deskZone(i);
     return { x: z.x + z.w / 2, y: 1.55 }; // 팀장 책상 바로 앞 의자
   },
-  // 문서실: 긴 공동 작업 탁자 하나, 양쪽에 세 명씩 마주 앉는다(윗줄은 남쪽, 아랫줄은 북쪽을 본다)
-  docs: (i) => ({ x: 14.45 + 0.75 * (i % 3), y: i < 3 ? 0.95 : 2.6, face: i < 3 ? 0 : Math.PI }),
+  docs: (i) => { const { x, y, face } = docsSeats()[i]; return { x, y, face }; }, // 긴 공동 작업 탁자 양쪽
   planning: row(17.2, 0.48, 0.6), // 칸반 보드 앞
   server: (i) => ({ x: 1.68, y: 5.9 + 0.55 * i }), // 서버 랙 앞 서비스 선반
   data: row(3.8, 0.5, 6.35), // 서류 캐비닛 앞
@@ -118,6 +122,21 @@ export function memberTarget(status, teamIndex, memberIndex, room = roomFor(stat
   if (!MEMBER_OFFSETS[memberIndex]) throw new RangeError(`memberIndex ${memberIndex}`);
   const [dx, dy] = MEMBER_OFFSETS[memberIndex];
   return { x: base.x + dx, y: base.y + dy, pose: base.pose, ...(base.face !== undefined ? { face: base.face } : {}) };
+}
+
+// 팀원 자리: 방의 자리 6곳(팀장 자리와 같은 곳) 중 비어 있는 곳을 팀장 자리에서 가까운 순으로 고른다. 모두 차 있으면 null.
+// room 의 자리는 가구(탁자·의자·작업대)와 짝이므로, 팀원도 서 있거나 앉아서 그 가구를 향해 일한다.
+export function freeSpotFor(room, preferredIndex, taken) {
+  if (!SPOTS[room]) throw new Error(`unknown room: ${room}`);
+  const base = SPOTS[room](preferredIndex);
+  let best = null;
+  for (let i = 0; i < TEAM_COUNT; i++) {
+    if (taken.has(i)) continue;
+    const p = SPOTS[room](i);
+    const d = Math.hypot(p.x - base.x, p.y - base.y);
+    if (!best || d < best.d - 1e-9) best = { i, d };
+  }
+  return best ? best.i : null;
 }
 
 // ---- 칸막이 벽과 출입구: 가운데 줄·아랫줄 방의 윗변에 낮은 벽이 서 있고, 방마다 문(틈)이 하나 있다.

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROOMS, ROOM_NAMES, FLOOR, ENTRANCE, targetFor, memberSeat, memberTarget, deskZone, roomFor } from '../public/js/layout.js';
+import { ROOMS, ROOM_NAMES, FLOOR, ENTRANCE, targetFor, memberSeat, memberTarget, deskZone, roomFor, freeSpotFor, researchSeats, docsSeats, RESEARCH_TABLES, DOCS_TABLE } from '../public/js/layout.js';
 
 const TEAMS = [0, 1, 2, 3, 4, 5];
 const ROOM_IDS = ['library', 'research', 'work', 'docs', 'planning', 'server', 'data', 'lab', 'build', 'git', 'briefing', 'response', 'lounge'];
@@ -204,4 +204,29 @@ test('meetingSpot: 기획실 안, 탁자(17.3~19.2 × 1.0~1.7)를 피한 자리�
   }
   assert.deepEqual(meetingSpot(0, 5), meetingSpot(0, 1)); // 5번째 이상은 자리를 돌려 쓴다
   assert.throws(() => meetingSpot(9, 0), RangeError);
+});
+
+test('앉는 방의 자리는 가구(탁자)와 짝: 팀장 자리 = 의자 자리, 모든 자리는 탁자 쪽을 본다', () => {
+  const dirTo = (from, to) => [Math.sin(Math.atan2(to.x - from.x, to.y - from.y)), Math.cos(Math.atan2(to.x - from.x, to.y - from.y))];
+  researchSeats().forEach((seat, i) => {
+    assert.deepEqual({ x: targetFor('read', i, 'research').x, y: targetFor('read', i, 'research').y }, { x: seat.x, y: seat.y });
+    const [fx, fy] = dirTo(seat, seat.table);
+    assert.ok(Math.abs(Math.sin(seat.face) - fx) < 1e-9 && Math.abs(Math.cos(seat.face) - fy) < 1e-9, `research ${i} 방향`);
+  });
+  assert.equal(researchSeats().length, RESEARCH_TABLES.length * 3);
+  const mid = DOCS_TABLE.y + DOCS_TABLE.d / 2;
+  docsSeats().forEach((seat, i) => {
+    assert.equal(targetFor('read', i, 'docs').y, seat.y);
+    assert.equal(Math.cos(seat.face) > 0, seat.y < mid, `docs ${i}: 탁자 쪽을 본다`); // 탁자보다 위(작은 y)에 앉으면 남쪽(+y)을 본다
+  });
+});
+
+test('freeSpotFor: 비어 있는 자리 중 팀장 자리에서 가장 가까운 곳, 모두 차면 null', () => {
+  assert.equal(freeSpotFor('docs', 0, new Set()), 0); // 팀장이 다른 곳에 있으면 자기 자리도 쓸 수 있다
+  assert.equal(freeSpotFor('docs', 0, new Set([0])), 1);
+  assert.equal(freeSpotFor('docs', 0, new Set([0, 1])), 2);
+  assert.equal(freeSpotFor('docs', 0, new Set([0, 1, 2])), 3); // 같은 줄이 차면 건너편
+  assert.equal(freeSpotFor('research', 0, new Set([0])), 2); // 같은 탁자에서 가장 가까운 의자(남쪽)
+  assert.equal(freeSpotFor('lab', 2, new Set([0, 1, 2, 3, 4, 5])), null);
+  assert.throws(() => freeSpotFor('moon', 0, new Set()));
 });
