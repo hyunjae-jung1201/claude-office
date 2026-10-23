@@ -74,6 +74,11 @@ Claude Code가 `~/.claude/sessions/<pid>.json`에 적는 **세션 등록 정보*
 세션이 파일을 수정하고 응답을 끝내면 PM·개발자·QA 역할자가 읽기 전용 `claude -p`로 변경을 검토한다. 검토 중에는 역할자 아바타가 팀 책상에 나타나 일하고, 끝나면 퇴근하며 팀장 곁에 판정 배지(✓ 통과 / ⚠ 우려 n / ⛔ 중단 권고)가 남는다. 오른쪽 위 **보고서** 버튼에서 최근 검토와 지적 상세를 볼 수 있고, 파일은 `data/reviews/`에 저장된다. 역할은 `roles/<id>.md` 파일을 추가해 늘린다. 기본으로 도는 것은 PM·개발자·QA 이고, 접근성·문구·문서·임베디드·성능·보안·아키텍트·데이터베이스·배포·운영(`devops`)·UX·의존성·릴리스·ML 검토(`mlreview`)는 `config.json` 의 `roles.default` 또는 팀별 `projects[].roles` 에 id 를 적어야 켜진다(켠 역할 수만큼 `claude` 실행이 늘어 일일 한도를 쓴다). 자세한 사용법·설정·한계는 `docs/roles-howto.md`, 읽기 전용 검증은 `docs/roles-verification.md`.
 - 화면 확인용: `CLAUDE_OFFICE_FAKE_ROLES=1 CLAUDE_OFFICE_REVIEW_DIR=/tmp/x node src/server.js` (가짜 역할자 결과, 실제 claude 호출 없음)
 
+## 다른 AI 도구(Codex)도 함께 보기
+Codex CLI 로 같은 프로젝트 폴더에서 일하면 사무실에 **외계인** 아바타(목록에는 "Codex")가 팀원처럼 나타나, 하는 일에 맞는 방에서 일한다. 팀장은 항상 Claude 이고, Codex 세션은 역할자 검토·작업 일지 대상이 아니다.
+- 켜기: `node scripts/install-hooks.js --codex --apply` (`~/.codex/hooks.json` 에 hook 만 추가, 기존 항목은 그대로 두고 백업을 남긴다). 이미 떠 있는 Codex 세션은 새로 시작해야 반영된다.
+- 원리: hook 이 `CLAUDE_OFFICE_AI=codex` 를 달아 서버로 보내면, 서버가 Codex 의 도구(`exec_command`·`apply_patch` 등)를 Bash·Edit 로 맞춰 방을 고른다. 모르는 도구는 작업실로 본다.
+
 ## 세션 이름으로 팀 찾기
 세션을 홈 폴더에서 열고 이름만 프로젝트 이름으로 붙여 쓰는 경우가 많아서, 폴더가 안 맞으면 Claude Code가 `~/.claude/sessions`에 적어 둔 **세션 이름**을 팀 이름/`aliases`와 비교한다(대소문자 무시). 폴더가 맞으면 폴더가 우선이다.
 ```json

@@ -70,7 +70,7 @@ function main(argv) {
   const tmp = `${settingsPath}.tmp-${process.pid}`;
   writeFileSync(tmp, JSON.stringify(after, null, 2) + '\n');
   renameSync(tmp, settingsPath); // 쓰는 도중 중단돼도 설정 파일이 깨지지 않게
-  console.log('적용했습니다. 새로 시작하는 Claude Code 세션부터 반영됩니다.');
+  console.log(`적용했습니다. 새로 시작하는 ${codex ? 'Codex' : 'Claude Code'} 세션부터 반영됩니다.`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main(process.argv.slice(2));
