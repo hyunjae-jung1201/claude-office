@@ -226,7 +226,7 @@ function applyEventCore(state, ev, now) {
         s.awaiting = false;
         break;
       }
-      s.awaiting = true;
+      s.awaiting = ev.asksQuestion === true; // 답이 필요한 질문으로 끝났을 때만 응답 대기실. 그냥 끝난 턴은 휴게실에서 다음 지시를 기다린다
       const worked = s.busySince != null && ts - s.busySince >= state.config.celebrateAfterSeconds * 1000;
       s.finishedAt = worked ? ts : null;
       s.busySince = null;

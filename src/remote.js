@@ -94,7 +94,7 @@ export function projectionToEvents(p, ctx, now) {
       }
       break;
     case 'stop':
-      out.push({ ...base, type: 'stop', assistantText: str(p.a) ? maskSecrets(p.a.slice(0, 20_000)).slice(0, 2000) : undefined });
+      out.push({ ...base, type: 'stop', asksQuestion: p.q === 1, assistantText: str(p.a) ? maskSecrets(p.a.slice(0, 20_000)).slice(0, 2000) : undefined });
       break;
     case 'astart':
       if (str(p.a)) out.push({ ...base, type: 'agentStart', agentId: p.a, agentType: str(p.t) });

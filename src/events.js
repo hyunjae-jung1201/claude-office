@@ -1,3 +1,4 @@
+import { asksQuestion } from './question.js';
 import { maskSecrets } from './mask.js';
 
 const READ_TOOLS = new Set(['Read', 'Grep', 'Glob', 'WebFetch', 'WebSearch']);
@@ -209,7 +210,7 @@ export function normalizeEvent(payload, now) {
   switch (name) {
     case 'SessionStart': return { ...base, type: 'start' };
     case 'SessionEnd': return { ...base, type: 'end' };
-    case 'Stop': return { ...base, type: 'stop', assistantText: maskedText(payload.last_assistant_message, RESPONSE_LIMIT) };
+    case 'Stop': return { ...base, type: 'stop', assistantText: maskedText(payload.last_assistant_message, RESPONSE_LIMIT), asksQuestion: asksQuestion(payload.last_assistant_message) };
     case 'UserPromptSubmit': {
       const prompt = str(payload.prompt);
       if (prompt?.startsWith('<task-notification>')) return null;

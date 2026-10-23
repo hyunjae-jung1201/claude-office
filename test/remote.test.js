@@ -134,3 +134,10 @@ test('tools 배열에 null 같은 잘못된 항목이 있어도 던지지 않는
   assert.doesNotThrow(() => projectionToEvents({ k: 'atool', s: 'a', c: '/x', a: 'ag', tools: [null] }, ctx, 1));
   assert.doesNotThrow(() => projectionToEvents({ k: 'tool', s: 'a', c: '/x', tools: 'x' }, ctx, 1));
 });
+
+test('stop 줄의 q 표시는 asksQuestion 으로 전달된다(질문으로 끝난 턴만 응답 대기실)', () => {
+  const ctx = { tools: new Map(), seen: new Set() };
+  const stop = (p) => projectionToEvents({ s: 'a', c: '/x', k: 'stop', ...p }, ctx, 1).find((e) => e.type === 'stop');
+  assert.equal(stop({ q: 1 }).asksQuestion, true);
+  assert.equal(stop({}).asksQuestion, false);
+});

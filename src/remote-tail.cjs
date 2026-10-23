@@ -64,17 +64,24 @@ function project(line, st, agent) {
     if (tools.length) return { k: 'tool', tools };
     // 생각만 있는 end_turn 줄은 제외: 턴 종료는 텍스트가 있는 줄 하나로만 센다
     if (m.stop_reason === 'end_turn' && m.content.some((b) => b && b.type === 'text')) {
-      if (!INCLUDE_TEXT) return { k: 'stop' };
       const texts = m.content.filter((b) => b && b.type === 'text').map((b) => String(b.text || ''));
-      return { k: 'stop', a: texts.join('\n').slice(0, 2000) };
+      const q = asksQuestion(texts.join('\n')) ? { q: 1 } : {};
+      if (!INCLUDE_TEXT) return { k: 'stop', ...q };
+      return { k: 'stop', ...q, a: texts.join('\n').slice(0, 2000) };
     }
     // 옛 Claude Code 기록은 stop_reason 이 항상 null: 텍스트만 있는 줄은 "끝일지도" 후보로 두고, 이어지는 줄이 없을 때만 stop 으로 낸다
     if (!agent && m.stop_reason == null) {
       const text = m.content.filter((b) => b && b.type === 'text').map((b) => String(b.text || '')).join('\n');
-      if (text.trim()) return { k: 'maybe-stop', ...(INCLUDE_TEXT ? { a: text.slice(0, 2000) } : {}) };
+      if (text.trim()) return { k: 'maybe-stop', ...(asksQuestion(text) ? { q: 1 } : {}), ...(INCLUDE_TEXT ? { a: text.slice(0, 2000) } : {}) };
     }
   }
   return null;
+}
+
+// 마지막 응답이 답을 요구하는 질문인가(src/question.js 와 같은 규칙: 마지막 세 줄 중 물음표로 끝나는 줄이 있으면 질문)
+function asksQuestion(text) {
+  const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean).slice(-3);
+  return lines.some((l) => /[?？][\s)\]}>"'”’』」*_`]*$/.test(l));
 }
 
 let names = new Map(); // sessionId -> 세션 이름 (실행 중인 세션 등록 정보)
@@ -191,7 +198,7 @@ function readNew(file, stat, st) {
   for (const l of lines) {
     const p = project(l, st);
     if (!p) continue;
-    if (p.k === 'maybe-stop') { st.cand = { a: p.a, at: Date.now() }; continue; }
+    if (p.k === 'maybe-stop') { st.cand = { a: p.a, q: p.q, at: Date.now() }; continue; }
     st.cand = null; // 이어지는 줄이 있으니 중간 설명이었다
     if (st.cwd) emit({ ...header(file, st), ...p });
   }
@@ -201,9 +208,9 @@ function readNew(file, stat, st) {
 function flushCandidates() {
   for (const [file, st] of files) {
     if (!st.cand || Date.now() - st.cand.at < STOP_QUIET_MS) continue;
-    const { a } = st.cand;
+    const { a, q } = st.cand;
     st.cand = null;
-    if (st.cwd) emit({ ...header(file, st), k: 'stop', ...(a !== undefined ? { a } : {}) });
+    if (st.cwd) emit({ ...header(file, st), k: 'stop', ...(q ? { q: 1 } : {}), ...(a !== undefined ? { a } : {}) });
   }
 }
 
