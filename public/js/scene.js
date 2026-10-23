@@ -574,14 +574,19 @@ export function createScene(canvas, overlay, opts = {}) {
 
   // 쉬는 팀장이 가끔 휴게실에서 소파를 떠나 놀다 돌아온다: 커피 · 오락기 · 다트 · 잡지 읽기(같은 자리를 둘이 쓰지 않는다)
   const LOUNGE_ACTIVITIES = [
-    { id: 'coffee', ms: [4500, 7500], spot: (team) => ({ x: 9.4 + 0.5 * team, y: 10.85, pose: 'drink' }) },
+    { id: 'coffee', ms: [4500, 7500], spot: (team) => ({ x: 9.4 + 0.5 * team, y: 10.85, pose: 'drink' }) }, // 팀마다 자리가 달라 겹치지 않는다
     { id: 'arcade', ms: [9000, 15000], spot: () => ({ x: 14.05, y: 10.55, pose: 'arcade', face: Math.PI }) },
-    { id: 'darts', ms: [9000, 14000], spot: (team) => ({ x: 17.55 + 0.3 * (team % 3), y: 11.0, pose: 'darts', face: Math.PI }) },
+    { id: 'darts', ms: [9000, 14000], spot: (team, lane) => ({ x: 17.5 + 0.5 * lane, y: 11.0, pose: 'darts', face: Math.PI }) }, // 던지는 줄 3개(lane 0~2)
     { id: 'read', ms: [8000, 13000], spot: () => ({ x: 19.05, y: 10.45, pose: 'browse', face: Math.PI }) },
   ];
+  const DART_LANES = 3;
+  const freeDartLane = (l) => {
+    const used = new Set(leaders.filter((o) => o && o !== l && o.wanderAct?.id === 'darts').map((o) => o.wanderLane));
+    return [...Array(DART_LANES).keys()].find((k) => !used.has(k));
+  };
   function pickActivity(l) {
     const busy = new Set(leaders.filter((o) => o && o !== l && o.wanderAct).map((o) => o.wanderAct.id));
-    const free = LOUNGE_ACTIVITIES.filter((x) => (x.id === 'coffee' || x.id === 'darts' || !busy.has(x.id)) && x.id !== l.lastAct);
+    const free = LOUNGE_ACTIVITIES.filter((x) => x.id !== l.lastAct && (x.id === 'coffee' ? true : x.id === 'darts' ? freeDartLane(l) !== undefined : !busy.has(x.id)));
     return free[Math.floor(Math.random() * free.length)] ?? LOUNGE_ACTIVITIES[0];
   }
   function updateWander(l, now) {
@@ -590,7 +595,8 @@ export function createScene(canvas, overlay, opts = {}) {
     if (!l.nextWanderAt) l.nextWanderAt = now + 8000 + Math.random() * 25000;
     if (!l.wanderStage && now >= l.nextWanderAt) {
       l.wanderAct = pickActivity(l);
-      l.goalOverride = { ...l.wanderAct.spot(l.team), room: 'lounge' };
+      l.wanderLane = l.wanderAct.id === 'darts' ? freeDartLane(l) : 0;
+      l.goalOverride = { ...l.wanderAct.spot(l.team, l.wanderLane), room: 'lounge' };
       l.wanderStage = 'go';
     }
     if (l.wanderStage === 'go' && Math.hypot(l.goalOverride.x - l.pos.x, l.goalOverride.y - l.pos.y) < 0.15) {
@@ -959,7 +965,8 @@ export function createScene(canvas, overlay, opts = {}) {
       const act = LOUNGE_ACTIVITIES.find((a) => a.id === id);
       if (!l || !act) return false;
       l.wanderAct = act;
-      l.goalOverride = { ...act.spot(l.team), room: 'lounge' };
+      l.wanderLane = act.id === 'darts' ? (freeDartLane(l) ?? 0) : 0;
+      l.goalOverride = { ...act.spot(l.team, l.wanderLane), room: 'lounge' };
       l.wanderStage = 'do';
       l.wanderUntil = performance.now() + 3600_000;
       l.pos.x = l.goalOverride.x; l.pos.y = l.goalOverride.y; l.path = []; l.goalKey = `${l.pos.x},${l.pos.y}`;
