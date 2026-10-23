@@ -66,3 +66,15 @@ test('테스트가 실패했다면 의견에 critical 로 포함된다(통과·�
   box.add('s2', { repoName: 'p', results: [], tests: { command: 'npm test', ok: true, exitCode: 0, output: '' } });
   assert.equal(box.size(), 0);
 });
+
+test('fromUser: 사용자가 확인해 전달하면 경미한 지적도 담고, 사용자가 전달했다고 밝힌다', () => {
+  const box = createFeedbackBox({ minSeverity: 'major' });
+  const review = { results: [{ roleName: 'QA', findings: [{ severity: 'minor', text: '이름이 헷갈린다', file: 'a.js', line: 3 }, { severity: 'info', text: '참고만' }] }] };
+  assert.equal(box.add('s1', review), false); // 자동 전달은 major 이상만
+  assert.equal(box.add('s1', review, { fromUser: true }), true);
+  const note = box.take('s1');
+  assert.match(note, /사용자가 보고서에서 확인하고 전달함/);
+  assert.match(note, /이름이 헷갈린다/);
+  assert.doesNotMatch(note, /참고만/); // info 는 제외
+  assert.equal(box.take('s1'), undefined);
+});

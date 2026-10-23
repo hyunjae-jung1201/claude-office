@@ -735,3 +735,59 @@ test('Codex hook 신호(office_ai)는 팀장이 아닌 외계인 팀원이 되�
     c.close();
   });
 });
+
+// ---- 보고서에서 "확인": 배지를 지우고 원하면 지적을 작업 대화로 전달 (POST /api/review-ack)
+const MINOR_JSON = JSON.stringify({ verdict: 'concern', summary: '경미한 지적', findings: [{ severity: 'minor', text: '이름이 헷갈린다', file: 'a.js', line: 1 }] });
+const ackPost = (port, body, headers = { origin: null }) => {
+  const h = { 'content-type': 'application/json' };
+  if (headers.origin !== null) h.origin = headers.origin ?? `http://127.0.0.1:${port}`;
+  return fetch(`http://127.0.0.1:${port}/api/review-ack`, { method: 'POST', headers: h, body: typeof body === 'string' ? body : JSON.stringify(body) });
+};
+
+test('review-ack: 확인하면 배지가 지워지고 목록에 확인됨이 표시되며, 대화로 전달하면 그 세션의 다음 메시지에 한 번 붙는다(경미한 지적도)', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  const opts = roleServer(repo, { run: async () => MINOR_JSON, rolesCfg: { deliver: 'session', deliverMinSeverity: 'major' } });
+  await withServer(opts, async ({ port }) => {
+    const c = await connect(port);
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js'), session: 'ak1' });
+    const snap = await c.waitFor((s) => teamA(s).badge && s.reviews.length === 1);
+    const id = snap.reviews[0].id;
+    // 자동 전달은 major 이상만이라 아직 아무것도 없다
+    assert.equal((await postJson(port, { session_id: 'ak1', cwd: repo, hook_event_name: 'UserPromptSubmit', prompt: '먼저' })).status, 204);
+    const res = await ackPost(port, { id, deliver: true }, { origin: undefined });
+    assert.equal(res.status, 200);
+    assert.deepEqual(await res.json(), { ok: true, deliver: 'queued' });
+    const after = await c.waitFor((s) => s.reviews[0]?.acked === true);
+    assert.equal(teamA(after).badge, null); // 배지가 지워진다
+    const r = await postJson(port, { session_id: 'ak1', cwd: repo, hook_event_name: 'UserPromptSubmit', prompt: '다음' });
+    assert.equal(r.status, 200);
+    assert.match(r.body.hookSpecificOutput.additionalContext, /사용자가 보고서에서 확인하고 전달함/);
+    assert.match(r.body.hookSpecificOutput.additionalContext, /이름이 헷갈린다/);
+    assert.equal((await postJson(port, { session_id: 'ak1', cwd: repo, hook_event_name: 'UserPromptSubmit', prompt: '또' })).status, 204); // 한 번만
+    assert.deepEqual(opts.reviewStore.acked.ids(), [id]); // 재시작해도 확인 상태가 남는다
+    c.close();
+  });
+});
+
+test('review-ack: 확인만 하면 배지만 지우고 전달하지 않으며, 출처·형식·없는 id 는 거절한다', async () => {
+  const repo = makeRepo();
+  writeFileSync(join(repo, 'a.js'), 'const a = 2;\n');
+  await withServer(roleServer(repo, { run: async () => CONCERN_JSON, rolesCfg: { deliver: 'session', deliverMinSeverity: 'major' } }), async ({ port }) => {
+    const c = await connect(port);
+    await editThenStop(port, { cwd: repo, file: join(repo, 'a.js'), session: 'ak2' });
+    const snap = await c.waitFor((s) => teamA(s).badge && s.reviews.length === 1);
+    const id = snap.reviews[0].id;
+    assert.equal((await ackPost(port, { id, deliver: false })).status, 403); // Origin 없음(브라우저가 아님) → 거절
+    assert.equal((await ackPost(port, { id, deliver: false }, { origin: 'http://evil.example' })).status, 403);
+    assert.equal((await ackPost(port, { id: 'zz' }, { origin: undefined })).status, 400);
+    assert.equal((await ackPost(port, { id: 'abcdef12' }, { origin: undefined })).status, 404);
+    assert.equal((await fetch(`http://127.0.0.1:${port}/api/review-ack`, { method: 'POST', headers: { 'content-type': 'text/plain', origin: `http://127.0.0.1:${port}` }, body: '{}' })).status, 415);
+    // major 지적은 자동 전달 예약이 이미 있었다 — 확인만 눌러도 전달 예약은 그대로(지우지 않는다)
+    const res = await ackPost(port, { id, deliver: false }, { origin: undefined });
+    assert.deepEqual(await res.json(), { ok: true, deliver: 'skipped' });
+    const after = await c.waitFor((s) => s.reviews[0]?.acked === true);
+    assert.equal(teamA(after).badge, null);
+    c.close();
+  });
+});

@@ -22,7 +22,7 @@ const RESPONSE_LABEL = '응답 기다리는 중';
 const LIMIT_NOTICE = '오늘 검토 한도에 도달했습니다';
 
 export function createState(config) {
-  return { config, sessions: new Map(), roleActivity: new Map(), badges: new Map(), history: [], notice: null };
+  return { config, sessions: new Map(), roleActivity: new Map(), badges: new Map(), history: [], notice: null, acked: new Set() };
 }
 
 export const teamOfSession = (state, sessionId) => state.sessions.get(sessionId)?.project;
@@ -86,12 +86,25 @@ export function applyReviewEvent(state, ev, now) {
 }
 
 // 서버 시작 때 저장된 검토(최근순)에서 목록과 팀 배지를 복원한다
-export function setReviewHistory(state, reviews) {
+export function setReviewHistory(state, reviews, ackedIds = []) {
   const valid = reviews.filter((r) => r && Array.isArray(r.results));
+  state.acked = new Set(ackedIds);
   state.history = valid.slice(0, HISTORY_LIMIT).map(reviewSummary);
-  for (const r of valid) {
-    if (r.team && !state.badges.has(r.team)) state.badges.set(r.team, { verdict: r.verdict, concerns: r.concerns, at: r.finishedAt });
+  const seen = new Set();
+  for (const r of valid) { // 팀마다 가장 최근 검토만 배지가 된다(그게 확인된 것이면 배지 없음)
+    if (!r.team || seen.has(r.team)) continue;
+    seen.add(r.team);
+    if (!state.acked.has(r.id) && !state.badges.has(r.team)) state.badges.set(r.team, { verdict: r.verdict, concerns: r.concerns, at: r.finishedAt });
   }
+}
+
+// 사용자가 보고서에서 검토를 "확인"했다: 목록에 확인됨으로 표시하고, 그 팀의 가장 최근 검토였다면 팀장 옆 배지를 지운다. 없는 id 면 false.
+export function acknowledgeReview(state, id) {
+  const item = state.history.find((h) => h.id === id);
+  if (!item) return false;
+  state.acked.add(id);
+  if (item.team && state.history.find((h) => h.team === item.team)?.id === id) state.badges.delete(item.team);
+  return true;
 }
 
 function sessionFor(state, ev, project) {
@@ -306,5 +319,5 @@ export function snapshot(state, now) {
       ...trail(latest),
     };
   });
-  return { ts: now, teams, reviews: state.history, reviewNotice: state.notice ?? undefined };
+  return { ts: now, teams, reviews: state.history.map((h) => (state.acked.has(h.id) ? { ...h, acked: true } : h)), reviewNotice: state.notice ?? undefined };
 }

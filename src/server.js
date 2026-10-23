@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { loadConfig, matchProject } from './config.js';
 import { normalizeEvent } from './events.js';
-import { createState, applyEvent, tick, snapshot, setLabel, applyReviewEvent, setReviewHistory, teamOfSession } from './state.js';
+import { createState, applyEvent, tick, snapshot, setLabel, applyReviewEvent, setReviewHistory, acknowledgeReview, teamOfSession } from './state.js';
 import { ruleLabel } from './labels.js';
 import { createSummarizer } from './summarizer.js';
 import { startRemote, startLocalTail, projectionToEvents } from './remote.js';
@@ -61,7 +61,7 @@ export async function startServer({
   const rolesOn = Boolean(roles && config.roles?.enabled);
   if (rolesOn) validateRoleIds(config, roles);
   const store = rolesOn ? (reviewStore ?? createReviewStore({ dir: join(ROOT, 'data', 'reviews') })) : null;
-  if (rolesOn) setReviewHistory(state, store.list(20));
+  if (rolesOn) setReviewHistory(state, store.list(20), store.acked.ids());
   const clients = new Set();
   const seqs = new Map(); // 세션/에이전트별 최신 이벤트 번호: 늦게 끝난 요약이 최신 문구를 덮지 않게 한다
 
@@ -84,6 +84,7 @@ export async function startServer({
     : null;
   let scheduler = null;
   let tracker = null;
+  const reviewSessions = new Map(); // 검토 id -> 그 검토를 일으킨 세션(보고서에서 "대화로 전달"할 때 쓴다)
   const hookSeen = new Map(); // hook 신호를 보내는 세션 -> 마지막 신호 시각 (같은 세션을 세션 기록으로 또 세지 않기 위해)
 
   function handleEvent(ev) {
@@ -221,6 +222,42 @@ export async function startServer({
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(data));
   }
 
+  // 보고서에서 "확인": 검토를 확인됨으로 표시해 배지를 지우고, 원하면 그 지적을 작업 세션의 다음 메시지에 붙여 전달한다.
+  // 전달은 그 세션에 사용자가 다음 메시지를 보낼 때 이뤄진다(실행 중인 대화에 끼어들 수는 없다).
+  function ackReview(req, res) {
+    const chunks = [];
+    let size = 0;
+    req.on('data', (c) => { size += c.length; if (size <= 4096) chunks.push(c); });
+    req.on('end', () => {
+      const send = (status, obj) => res.writeHead(status, { 'content-type': 'application/json', 'cache-control': 'no-store' }).end(JSON.stringify(obj));
+      let b;
+      try { b = JSON.parse(Buffer.concat(chunks).toString('utf8')); } catch { return send(400, { error: 'bad-json' }); }
+      if (size > 4096 || typeof b?.id !== 'string' || !/^[0-9a-f]{8}$/.test(b.id)) return send(400, { error: 'bad-request' });
+      const item = state.history.find((h) => h.id === b.id);
+      if (!item) return send(404, { error: 'not-found' });
+      let deliver = 'skipped'; // skipped | queued | off | no-session | nothing
+      if (b.deliver === true) {
+        if (!feedback) deliver = 'off';
+        else {
+          const review = store?.forRepo(item.repoRoot, 20, item.host || undefined).find((r) => r.id === b.id);
+          let sessionId = reviewSessions.get(b.id);
+          if (!sessionId) { // 재시작 등으로 모르면 그 팀의 가장 최근 Claude 세션으로
+            let best = null;
+            for (const s of state.sessions.values()) if (s.project === item.team && !s.ai && (!best || s.lastEventAt > best.lastEventAt)) best = s;
+            sessionId = best?.sessionId;
+          }
+          if (!review || !sessionId) deliver = 'no-session';
+          else deliver = feedback.add(sessionId, review, { fromUser: true }) === false ? 'nothing' : 'queued';
+        }
+      }
+      acknowledgeReview(state, b.id);
+      try { store?.acked.add(b.id); } catch { /* 저장 실패는 화면 동작을 막지 않는다 */ }
+      broadcast();
+      send(200, { ok: true, deliver });
+    });
+    req.on('error', () => res.writeHead(400).end());
+  }
+
   async function serveStatic(pathname, res) {
     let rel;
     try { rel = decodeURIComponent(pathname); } catch { return res.writeHead(400).end(); }
@@ -266,6 +303,11 @@ export async function startServer({
       if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
       return reviewNow(req, res);
     }
+    if (req.method === 'POST' && pathname === '/api/review-ack') {
+      if (!req.headers.origin || !originOk(req.headers.origin)) return res.writeHead(403).end(); // 대화에 의견을 넣는 동작이라 브라우저 화면(같은 출처)에서만 받는다
+      if (!String(req.headers['content-type'] ?? '').startsWith('application/json')) return res.writeHead(415).end();
+      return ackReview(req, res);
+    }
     if (req.method === 'GET') return serveStatic(pathname, res);
     res.writeHead(404).end();
   });
@@ -299,6 +341,7 @@ export async function startServer({
       // 화면에 보일 팀: 그 세션이 속한 팀 → 저장소를 덮는 팀 → 없음(보고서 패널에만 남는다)
       resolveTeam: (job) => job.team ?? teamOfSession(state, job.sessionId) ?? matchProject(config, job.repoRoot)?.name,
       emit: (e) => {
+        if (e.type === 'done' && e.sessionId) { reviewSessions.set(e.review.id, e.sessionId); while (reviewSessions.size > 300) reviewSessions.delete(reviewSessions.keys().next().value); }
         if (e.type === 'done' && feedback) feedback.add(e.sessionId, e.review);
         if (e.type === 'done' && e.team) dailyLog?.recordReview(e.team, e.review);
         applyReviewEvent(state, e, now());

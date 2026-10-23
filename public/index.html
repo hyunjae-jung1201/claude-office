@@ -75,6 +75,13 @@
   .rp-name { font-weight: 700; } .rp-sum { color: #b4bfdc; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .rp-time { flex: none; color: #8d99bd; font-size: 11px; }
   .rp-title { font-weight: 800; margin-bottom: 8px; }
+  .rp-actions { display: flex; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+  .rp-ack { font: inherit; font-size: 12.5px; font-weight: 800; border: 0; border-radius: 9px; padding: 7px 12px; cursor: pointer; background: rgba(255,255,255,.08); color: var(--ink); }
+  .rp-ack.primary { background: #2fbf71; color: #06210f; }
+  .rp-ack:hover:not(:disabled) { filter: brightness(1.12); } .rp-ack:disabled { opacity: .5; cursor: default; }
+  .rp-ack:focus-visible { outline: 2px solid #8fb2ff; outline-offset: 2px; }
+  .rp-ack-status { color: #9af0bf; font-size: 12.5px; line-height: 1.45; margin-bottom: 10px; min-height: 1em; }
+  .rp-item.acked { opacity: .55; } .rp-item.acked .rp-icon { color: #8d99bd; }
   .rp-role { background: rgba(255,255,255,.05); border-radius: 10px; padding: 9px 10px; margin-bottom: 8px; border-left: 3px solid #4ad58a; }
   .rp-role.concern { border-color: #f5a524; } .rp-role.block, .rp-role.failed { border-color: #ff6b6f; }
   .rp-role-head { font-weight: 800; } .rp-summary { color: #c9d3f5; margin: 3px 0 6px; }

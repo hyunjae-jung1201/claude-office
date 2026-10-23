@@ -65,6 +65,18 @@ export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
     return filesOf(d).slice(0, limit).map((f) => read(d, f)).filter(Boolean);
   }
 
+  // 사용자가 보고서에서 "확인"한 검토 id(재시작해도 유지). 확인된 검토의 배지는 다시 나타나지 않는다.
+  const ackFile = join(dir, '_acked.json');
+  const acked = {
+    ids() {
+      try { const a = JSON.parse(readFileSync(ackFile, 'utf8')); return Array.isArray(a) ? a.filter((x) => typeof x === 'string') : []; } catch { return []; }
+    },
+    add(id) {
+      const next = [...new Set([...acked.ids(), id])].slice(-500);
+      writeAtomic(ackFile, JSON.stringify(next));
+    },
+  };
+
   const counterFile = join(dir, '_counter.json');
   const counter = {
     used() {
@@ -82,6 +94,7 @@ export function createReviewStore({ dir, now = Date.now, keep = 200 }) {
 
   return {
     counter,
+    acked,
     forRepo,
     latestFor: (repoRoot, host) => forRepo(repoRoot, 1, host)[0] ?? null,
     save(review) {

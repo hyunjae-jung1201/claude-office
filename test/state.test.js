@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, applyEvent, tick, snapshot, setLabel } from '../src/state.js';
+import { createState, applyEvent, tick, snapshot, setLabel, acknowledgeReview } from '../src/state.js';
 
 const config = {
   port: 9410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30,
@@ -459,4 +459,20 @@ test('ai 전용 팀: Codex 신호는 폴더와 상관없이 그 팀의 팀장(ai
   assert.deepEqual([codex.ai, codex.status, codex.room], ['codex', 'run', 'lab']);
   assert.equal(snap.teams.find((t) => t.name === 'A').status, 'off'); // 같은 폴더여도 폴더 팀은 그대로
   assert.equal(snap.teams.find((t) => t.name === 'A').members.length, 0);
+});
+
+test('검토 확인(acknowledgeReview): 팀의 가장 최근 검토면 배지를 지우고, 재시작 복원 때도 확인된 것은 배지가 되지 않는다', () => {
+  const review = (id, at, team = 'A') => ({ id, team, repoRoot: '/w/a', repoName: 'a', verdict: 'concern', concerns: 2, finishedAt: at, results: [{ verdict: 'concern', summary: '요약', findings: [] }] });
+  const st = createState(config);
+  setReviewHistory(st, [review('aaaaaaa1', 3000), review('aaaaaaa2', 2000)]);
+  assert.ok(teamA(st, 5000).badge);
+  assert.equal(acknowledgeReview(st, 'zzzzzzzz'), false);
+  assert.equal(acknowledgeReview(st, 'aaaaaaa2'), true); // 오래된 검토를 확인해도 최근 배지는 그대로
+  assert.ok(teamA(st, 5000).badge);
+  assert.equal(acknowledgeReview(st, 'aaaaaaa1'), true);
+  assert.equal(teamA(st, 5000).badge, null);
+  assert.deepEqual(snapshot(st, 5000).reviews.map((r) => [r.id, r.acked === true]), [['aaaaaaa1', true], ['aaaaaaa2', true]]);
+  const st2 = createState(config); // 재시작
+  setReviewHistory(st2, [review('aaaaaaa1', 3000), review('aaaaaaa2', 2000)], ['aaaaaaa1']);
+  assert.equal(teamA(st2, 5000).badge, null); // 가장 최근 검토가 확인됐으니 옛 검토가 배지로 되살아나지 않는다
 });
