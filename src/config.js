@@ -27,7 +27,7 @@ function validateProjects(list, remotes = []) {
   const names = new Set();
   const paths = new Set();
   const aliasKeys = new Map();
-  const aiTeams = new Set(); // AI 도구 팀은 도구마다 하나(신호가 PC 와 폴더에 상관없이 그 팀으로 가므로)
+  const aiTeams = new Set(); // AI 도구 팀은 PC(host)마다 도구당 하나(신호가 폴더와 상관없이 그 PC 의 팀으로 가므로)
   return list.map((p, i) => {
     if (!p.name) throw new Error(`projects[${i}]에 name이 없습니다`);
     if (!p.path && !p.ai) throw new Error(`projects[${i}]에 path가 없습니다`);
@@ -40,8 +40,9 @@ function validateProjects(list, remotes = []) {
     paths.add(pathKey);
     const out = { name: p.name, path, color: p.color ?? PALETTE[i % PALETTE.length] };
     if (p.ai) {
-      if (aiTeams.has(p.ai)) throw new Error(`ai 팀은 도구마다 하나만 둘 수 있습니다: ${p.ai} (${p.name})`);
-      aiTeams.add(p.ai);
+      const aiKey = `${p.ai}|${p.host ?? ''}`;
+      if (aiTeams.has(aiKey)) throw new Error(`ai 팀은 PC 마다 도구당 하나만 둘 수 있습니다: ${p.ai}${p.host ? ` (${p.host})` : ''} — ${p.name}`);
+      aiTeams.add(aiKey);
       out.ai = p.ai;
     }
     if (p.host) out.host = p.host;
@@ -132,7 +133,7 @@ export function addProject(path, folder, name) {
 // 폴더가 어느 팀에도 안 맞으면, 세션 이름이 팀 이름/별칭과 같은 팀으로 연결한다.
 export function matchProject(config, cwd, host = null, sessionName = undefined, ai = undefined) {
   if (ai) { // 다른 AI 도구의 신호는 그 도구 전용 팀이 있으면 폴더와 상관없이 그 팀으로 간다
-    const team = config.projects.find((p) => p.ai === ai); // 다른 PC 에서 온 신호도 같은 AI 팀이 받는다(그 AI 도구의 활동을 한 팀으로 모은다)
+    const team = config.projects.find((p) => p.ai === ai && (p.host ?? null) === (host ?? null)); // PC 마다 자기 AI 팀이 따로 있다(이 PC 의 Codex 와 다른 PC 의 Codex 는 서로 다른 팀)
     if (team) return team;
   }
   const dir = trimSlash(cwd);

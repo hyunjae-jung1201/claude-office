@@ -221,7 +221,7 @@ test('remotes[].push: 다른 PC 가 밀어 넣는 원격은 ssh 없이도 받고
   assert.throws(() => loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC9', push: 'yes' }] })), /push/);
 });
 
-test('projects[].ai: 다른 AI 도구 전용 팀은 path 없이 만들 수 있고, 그 도구의 신호는 폴더·PC 와 상관없이 이 팀으로 간다', () => {
+test('projects[].ai: 다른 AI 도구 전용 팀은 path 없이 만들 수 있고, 그 도구의 신호는 폴더와 상관없이 이 팀으로 간다', () => {
   const load = (projects) => {
     const dir = mkdtempSync(join(tmpdir(), 'co-cfg-'));
     const f = join(dir, 'config.json');
@@ -238,18 +238,18 @@ test('projects[].ai: 다른 AI 도구 전용 팀은 path 없이 만들 수 있�
   assert.throws(() => load([{ name: 'X' }]), /path/);
 });
 
-test('ai 팀은 다른 PC 에서 보낸 같은 AI 의 신호도 받는다', () => {
+test('ai 팀은 PC 마다 따로 있다: 이 PC 신호는 이 PC 의 팀, 다른 PC 신호는 그 PC 의 팀으로 간다', () => {
   const dir = mkdtempSync(join(tmpdir(), 'co-cfg-'));
   const f = join(dir, 'config.json');
-  writeFileSync(f, JSON.stringify({ remotes: [{ name: 'PC1', push: true }], projects: [{ name: 'A', path: '/w/a', host: 'PC1' }, { name: 'Codex', ai: 'codex' }] }));
+  writeFileSync(f, JSON.stringify({ remotes: [{ name: 'PC1', push: true }], projects: [{ name: 'Codex', ai: 'codex' }, { name: 'Codex(PC1)', ai: 'codex', host: 'PC1' }] }));
   const config = loadConfig(f);
-  assert.equal(matchProject(config, '/pc1/only/path', 'PC1', undefined, 'codex').name, 'Codex');
-  assert.equal(matchProject(config, '/pc1/only/path', null, undefined, 'codex').name, 'Codex');
+  assert.equal(matchProject(config, '/x', null, undefined, 'codex').name, 'Codex');
+  assert.equal(matchProject(config, '/x', 'PC1', undefined, 'codex').name, 'Codex(PC1)');
 });
 
-test('같은 AI 도구의 팀은 하나만 둘 수 있다(PC 가 달라도)', () => {
+test('같은 PC 에 같은 AI 도구의 팀은 하나만 둘 수 있다', () => {
   const dir = mkdtempSync(join(tmpdir(), 'co-cfg-'));
   const f = join(dir, 'config.json');
-  writeFileSync(f, JSON.stringify({ remotes: [{ name: 'PC1', push: true }], projects: [{ name: 'Codex', ai: 'codex' }, { name: 'Codex2', ai: 'codex', host: 'PC1' }] }));
-  assert.throws(() => loadConfig(f), /도구마다 하나/);
+  writeFileSync(f, JSON.stringify({ projects: [{ name: 'Codex', ai: 'codex' }, { name: 'Codex2', ai: 'codex' }] }));
+  assert.throws(() => loadConfig(f), /중복|PC 마다 도구당 하나/); // 같은 가짜 경로(ai:codex)라 중복으로 먼저 걸린다
 });
