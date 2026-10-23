@@ -554,7 +554,7 @@ export function buildOffice(scene) {
   box(19.55, 9.9, 0.3, 0.3, 0.55, '#6d5a42', 0, { r: 0.02 });
   cyl(19.7, 10.05, 0.13, 0.2, '#ffd9a0', 0.58, { r2: 0.08, material: std('#ffd9a0', { emissive: '#ffd28a', ei: 0.9 }) });
   plant(8.3, 9.75, 1);
-  plant(14.5, 9.75, 0);
+  plant(15.0, 9.7, 0);
   plant(19.2, 12.3, 1);
 
   // ---------------------------------------------------------------- 생활 소품: 출입구 안전 설비와 쓰레기통(몇 개만, 현실적인 자리에)
@@ -574,6 +574,58 @@ export function buildOffice(scene) {
   cyl(19.75, 5.0, 0.1, 0.4, '#3f4a5c', 0, { r2: 0.09 }); // 우산꽂이
   cyl(19.74, 5.0, 0.012, 0.3, '#2a2f3d', 0.38);
   cyl(19.78, 4.98, 0.012, 0.26, '#7a3a3a', 0.38);
+
+  // ---------------------------------------------------------------- 휴게실 놀이 코너(커피 말고 할 거리): 오락기 · 다트 · 잡지 선반 (아바타가 가끔 와서 논다)
+  // 칸막이 벽(y 9.4)의 아래쪽 면을 따라 놓는다. 노는 자리는 scene.js 의 LOUNGE_ACTIVITIES.
+  box(13.75, 9.56, 0.66, 0.62, 1.62, '#3a55b0', 0, { r: 0.04 }); // 오락기 몸통
+  box(14.4, 9.72, 0.025, 0.3, 1.0, '#ff5fa2', 0.3, { r: 0.004, material: glow('#ff5fa2', 0.35) }); // 옆면 장식 띠
+  box(14.4, 10.04, 0.025, 0.1, 1.0, '#7fe0ff', 0.3, { r: 0.004, material: glow('#7fe0ff', 0.35) });
+  box(13.7, 9.6, 0.76, 0.56, 0.1, '#1a2342', 1.58, { r: 0.02 }); // 윗부분 간판 틀
+  box(13.8, 10.14, 0.56, 0.03, 0.1, '#ff5fa2', 1.6, { r: 0.004, material: glow('#ff5fa2', 1.0) }); // 간판 불빛
+  box(13.82, 10.14, 0.52, 0.025, 0.44, '#0d1226', 0.92, { r: 0.006 }); // 화면 베젤
+  box(13.86, 10.15, 0.44, 0.02, 0.36, '#7fe0ff', 0.96, { r: 0.004, material: glow('#7fe0ff', 0.9) }); // 화면
+  box(13.78, 10.02, 0.62, 0.22, 0.07, '#1a1d2a', 0.8, { r: 0.012 }); // 조작판
+  cyl(13.95, 10.12, 0.018, 0.1, '#e5484d', 0.87); // 조이스틱
+  ball(13.95, 10.12, 0.035, '#e5484d', 0.98);
+  for (const [x, c] of [[14.15, '#f5a524'], [14.25, '#35e0a1']]) cyl(x, 10.11, 0.026, 0.02, c, 0.87, { material: glow(c, 0.7) });
+  // 다트판(칸막이 벽 아래쪽 면에 건다)
+  const dartTex = T.cached('dartboard', () => {
+    const c = document.createElement('canvas');
+    c.width = c.height = 256;
+    const g = c.getContext('2d');
+    const rings = [['#1d1f26', '#e8dcc0', 124], ['#c4382f', '#2f8f5a', 100], ['#1d1f26', '#e8dcc0', 92], ['#c4382f', '#2f8f5a', 62], ['#1d1f26', '#e8dcc0', 54]];
+    g.fillStyle = '#14161c';
+    g.beginPath(); g.arc(128, 128, 126, 0, Math.PI * 2); g.fill();
+    for (const [a, b, r] of rings) {
+      for (let k = 0; k < 20; k++) {
+        g.fillStyle = k % 2 ? a : b;
+        g.beginPath(); g.moveTo(128, 128); g.arc(128, 128, r, (k / 20) * Math.PI * 2, ((k + 1) / 20) * Math.PI * 2); g.fill();
+      }
+    }
+    g.fillStyle = '#2f8f5a'; g.beginPath(); g.arc(128, 128, 14, 0, Math.PI * 2); g.fill();
+    g.fillStyle = '#c4382f'; g.beginPath(); g.arc(128, 128, 6, 0, Math.PI * 2); g.fill();
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  });
+  const dartFrame = put(new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 28), std('#3a2a1c')), false);
+  dartFrame.rotation.x = Math.PI / 2;
+  dartFrame.position.set(wx(18.0), 1.0, wz(9.6));
+  const dartFace = new THREE.Mesh(new THREE.CircleGeometry(0.31, 32), basic(dartTex));
+  dartFace.position.set(wx(18.0), 1.0, wz(9.63));
+  scene.add(dartFrame, dartFace);
+  for (const [dx, dy] of [[0.04, 0.03], [-0.09, 0.08], [0.12, -0.07]]) { // 꽂혀 있는 다트
+    const d = put(new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.13, 6), std('#c9ccd4')), false);
+    d.rotation.x = Math.PI / 2;
+    d.position.set(wx(18.0) + dx, 1.0 + dy, wz(9.7));
+    scene.add(d);
+  }
+  box(17.5, 9.5, 0.9, 0.08, 0.04, '#7a5a3a', 0.52, { r: 0.006 }); // 다트판 아래 작은 선반(다트 놓는 곳)
+  // 잡지 선반
+  box(18.7, 9.56, 0.74, 0.34, 0.9, '#8a6a46', 0, { r: 0.02 });
+  box(18.76, 9.9, 0.62, 0.05, 0.04, '#6d5a42', 0.34, { r: 0.004 });
+  [['#c4553f', 0], ['#4f7f9c', 0.14], ['#d9a441', 0.28], ['#6f8f6a', 0.42]].forEach(([c, dx], k) => box(18.78 + dx, 9.74, 0.12, 0.03, 0.2, c, 0.62 + (k % 2) * 0.02, { r: 0.002, rot: (k - 1.5) * 0.06 }));
+  [['#e8d7b0', 0], ['#8f6f9c', 0.2], ['#4c8dff', 0.4]].forEach(([c, dx]) => box(18.78 + dx, 9.74, 0.14, 0.03, 0.2, c, 0.2, { r: 0.002 }));
 
   // ---------------------------------------------------------------- 칸막이 벽: 가운데·아랫줄 방의 윗변에 낮은 벽(문 틈 포함)
   // (높이 1.4) 복도의 아바타 머리는 벽 너머로 보이고, 방 이름은 이 벽 위에 단다.

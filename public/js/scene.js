@@ -572,15 +572,37 @@ export function createScene(canvas, overlay, opts = {}) {
     return best;
   }
 
-  // 쉬는 팀장이 가끔 휴게실 카페 카운터에 가서 커피를 마시고 돌아온다
-  const COFFEE = (team) => ({ x: 9.4 + 0.5 * team, y: 10.85, pose: 'drink', room: 'lounge' });
+  // 쉬는 팀장이 가끔 휴게실에서 소파를 떠나 놀다 돌아온다: 커피 · 오락기 · 다트 · 잡지 읽기(같은 자리를 둘이 쓰지 않는다)
+  const LOUNGE_ACTIVITIES = [
+    { id: 'coffee', ms: [4500, 7500], spot: (team) => ({ x: 9.4 + 0.5 * team, y: 10.85, pose: 'drink' }) },
+    { id: 'arcade', ms: [9000, 15000], spot: () => ({ x: 14.05, y: 10.55, pose: 'arcade', face: Math.PI }) },
+    { id: 'darts', ms: [9000, 14000], spot: (team) => ({ x: 17.55 + 0.3 * (team % 3), y: 11.0, pose: 'darts', face: Math.PI }) },
+    { id: 'read', ms: [8000, 13000], spot: () => ({ x: 19.05, y: 10.45, pose: 'browse', face: Math.PI }) },
+  ];
+  function pickActivity(l) {
+    const busy = new Set(leaders.filter((o) => o && o !== l && o.wanderAct).map((o) => o.wanderAct.id));
+    const free = LOUNGE_ACTIVITIES.filter((x) => (x.id === 'coffee' || x.id === 'darts' || !busy.has(x.id)) && x.id !== l.lastAct);
+    return free[Math.floor(Math.random() * free.length)] ?? LOUNGE_ACTIVITIES[0];
+  }
   function updateWander(l, now) {
     const idleSit = l.goal.pose === 'sit' && l.goal.room === 'lounge' && l.status === 'idle';
-    if (!idleSit) { l.goalOverride = null; l.wanderStage = null; l.nextWanderAt = 0; return; }
+    if (!idleSit) { l.goalOverride = null; l.wanderStage = null; l.wanderAct = null; l.nextWanderAt = 0; return; }
     if (!l.nextWanderAt) l.nextWanderAt = now + 8000 + Math.random() * 25000;
-    if (!l.wanderStage && now >= l.nextWanderAt) { l.goalOverride = COFFEE(l.team); l.wanderStage = 'go'; }
-    if (l.wanderStage === 'go' && Math.hypot(l.goalOverride.x - l.pos.x, l.goalOverride.y - l.pos.y) < 0.15) { l.wanderStage = 'drink'; l.wanderUntil = now + 4500 + Math.random() * 3000; }
-    if (l.wanderStage === 'drink' && now >= l.wanderUntil) { l.goalOverride = null; l.wanderStage = null; l.nextWanderAt = now + 20000 + Math.random() * 40000; }
+    if (!l.wanderStage && now >= l.nextWanderAt) {
+      l.wanderAct = pickActivity(l);
+      l.goalOverride = { ...l.wanderAct.spot(l.team), room: 'lounge' };
+      l.wanderStage = 'go';
+    }
+    if (l.wanderStage === 'go' && Math.hypot(l.goalOverride.x - l.pos.x, l.goalOverride.y - l.pos.y) < 0.15) {
+      l.wanderStage = 'do';
+      const [lo, hi] = l.wanderAct.ms;
+      l.wanderUntil = now + lo + Math.random() * (hi - lo);
+    }
+    if (l.wanderStage === 'do' && now >= l.wanderUntil) {
+      l.lastAct = l.wanderAct.id;
+      l.goalOverride = null; l.wanderStage = null; l.wanderAct = null;
+      l.nextWanderAt = now + 15000 + Math.random() * 35000;
+    }
   }
 
   function pose(entity, dt, moving) {
@@ -676,6 +698,25 @@ export function createScene(canvas, overlay, opts = {}) {
       head.rotation.y = Math.sin(t * 0.5) * 0.4;
       head.rotation.x = Math.sin(t * 1.1) * 0.05;
       lift = Math.sin(t * 2) * 0.01;
+    } else if (p === 'arcade') {
+      // 오락기: 조이스틱을 흔들고 버튼을 두드리다, 가끔 주먹을 불끈 쥔다
+      const win = Math.max(0, Math.sin(t * 0.8 + 1.3) - 0.85) / 0.15; // 가끔(약 8초마다) 잠깐
+      armR.rotation.x = -1.15 + Math.sin(t * 6) * 0.08 - win * 1.6;
+      armR.rotation.z = Math.sin(t * 5) * 0.1;
+      armL.rotation.x = -1.0 + Math.max(0, Math.sin(t * 9)) * 0.14;
+      head.rotation.x = -0.04 + Math.sin(t * 3) * 0.03;
+      head.rotation.y = Math.sin(t * 1.3) * 0.08;
+      entity.body.rotation.x = 0.05 + Math.sin(t * 4) * 0.02;
+      entity.body.rotation.z = Math.sin(t * 5) * 0.03;
+      lift = win * 0.05;
+    } else if (p === 'darts') {
+      // 다트: 겨냥 → 던지기 → 팔 따라가기 → 다음 다트를 집는다(3초 주기)
+      const c = t % 3;
+      if (c < 1.0) { armR.rotation.x = -1.6 + Math.sin(t * 8) * 0.02; armL.rotation.x = -0.2; head.rotation.x = -0.05; pen.visible = true; entity.body.rotation.x = -0.04; }
+      else if (c < 1.25) { const k = (c - 1.0) / 0.25; armR.rotation.x = -2.0 + 0.7 * k; armL.rotation.x = -0.2; head.rotation.x = -0.05; pen.visible = k < 0.5; entity.body.rotation.x = -0.04 + 0.12 * k; }
+      else if (c < 2.2) { const k = Math.min(1, (c - 1.25) / 0.9); armR.rotation.x = -1.3 + 0.9 * k; armL.rotation.x = -0.2; head.rotation.x = -0.05 + 0.05 * k; entity.body.rotation.x = 0.08 * (1 - k); }
+      else { armR.rotation.x = -0.4 - Math.max(0, Math.sin((c - 2.2) * 3.5)) * 0.5; armL.rotation.x = -0.2; head.rotation.y = Math.sin((c - 2.2) * 3) * 0.2; pen.visible = c > 2.7; }
+      lift = Math.sin(t * 2) * 0.006;
     } else if (p === 'sitType') {
       // 작업실 의자에 앉아 타자: 다리를 앞으로 굽히고 엉덩이를 의자 높이에 맞춘다
       legL.rotation.x = legR.rotation.x = -1.45;
@@ -911,6 +952,18 @@ export function createScene(canvas, overlay, opts = {}) {
       forcedRoom = room || null;
       if (!room) return;
       for (const l of leaders) if (l) { const g = goalOf(l); l.pos.x = g.x; l.pos.y = g.y; l.path = []; l.goalKey = `${g.x},${g.y}`; }
+    },
+    // 검증용: 휴게실에 쉬는 팀장을 그 놀이 자리에 바로 세워 동작을 확인한다(coffee|arcade|darts|read)
+    playIn(id, team = 0) {
+      const l = leaders[team];
+      const act = LOUNGE_ACTIVITIES.find((a) => a.id === id);
+      if (!l || !act) return false;
+      l.wanderAct = act;
+      l.goalOverride = { ...act.spot(l.team), room: 'lounge' };
+      l.wanderStage = 'do';
+      l.wanderUntil = performance.now() + 3600_000;
+      l.pos.x = l.goalOverride.x; l.pos.y = l.goalOverride.y; l.path = []; l.goalKey = `${l.pos.x},${l.pos.y}`;
+      return true;
     },
     // 검증용: 카메라를 타일 좌표 (x, y) 로 바로 옮기고 확대한다(애니메이션 없음)
     viewAt(x, y, zoom = 2.2) {
