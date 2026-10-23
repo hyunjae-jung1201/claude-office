@@ -529,7 +529,8 @@ export function createScene(canvas, overlay, opts = {}) {
   }
 
   // ---- 프레임마다: 이동, 포즈 애니메이션, 장식
-  const goalOf = (e) => e.goalOverride ?? e.goal;
+  let forcedRoom = null; // 검증용: 모든 팀장을 한 방의 자기 자리에 세운다(forceRoom)
+  const goalOf = (e) => (forcedRoom && !e.member ? { ...targetFor('run', e.team, forcedRoom), room: forcedRoom } : e.goalOverride ?? e.goal);
   const allEntities = () => [...leaders.filter(Boolean), ...members.values()].filter((e) => !e.leaving);
   function nearestOther(entity, within) {
     let best = null;
@@ -876,6 +877,21 @@ export function createScene(canvas, overlay, opts = {}) {
       update(snapshot);
     },
     render,
+    // 검증용: 모든 팀장을 그 방의 자리로 바로 옮겨 자세를 확인한다(null 이면 해제)
+    forceRoom(room) {
+      forcedRoom = room || null;
+      if (!room) return;
+      for (const l of leaders) if (l) { const g = goalOf(l); l.pos.x = g.x; l.pos.y = g.y; l.path = []; l.goalKey = `${g.x},${g.y}`; }
+    },
+    // 검증용: 카메라를 타일 좌표 (x, y) 로 바로 옮기고 확대한다(애니메이션 없음)
+    viewAt(x, y, zoom = 2.2) {
+      const to = new THREE.Vector3(wx(x), 0.4, wz(y));
+      camera.position.add(to.clone().sub(controls.target));
+      controls.target.copy(to);
+      camera.zoom = zoom;
+      camera.updateProjectionMatrix();
+      controls.update();
+    },
     // 검증용: 현재 아바타 상태
     inspect: () => ({
       leaders: leaders.map((l) => l && { pos: { ...l.pos }, goal: { ...l.goal }, status: l.status, celebrating: performance.now() < l.celebrateUntil, text: l.bubble.querySelector('.txt').textContent }),

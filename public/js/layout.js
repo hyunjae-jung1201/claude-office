@@ -66,27 +66,28 @@ const row = (x0, dx, y) => (i) => ({ x: x0 + dx * i, y });
 const grid = (x0, y0) => (i) => ({ x: x0 + 0.9 * (i % 3), y: y0 + 1.0 * Math.floor(i / 3) });
 const SPOTS = {
   library: row(0.5, 0.5, 1.15), // 책장 앞(뒷벽)
-  research: row(3.75, 0.46, 2.2),
+  research: (i) => ({ x: 4.06 + 1.05 * (i % 3), y: 1.55 + 1.95 * Math.floor(i / 3) }), // 책상 6개(두 줄) 의자
   work: (i) => {
     const z = deskZone(i);
     return { x: z.x + z.w / 2, y: 1.55 }; // 팀장 책상 바로 앞 의자
   },
-  docs: row(14.0, 0.5, 2.4),
-  planning: row(17.2, 0.48, 0.75), // 칸반 보드 앞
-  server: (i) => ({ x: 1.5, y: 5.9 + 0.55 * i }), // 서버 랙 앞
+  docs: (i) => ({ x: 14.21 + 1.05 * (i % 3), y: 1.5 + 1.95 * Math.floor(i / 3) }), // 책상 6개(두 줄) 의자
+  planning: row(17.2, 0.48, 0.6), // 칸반 보드 앞
+  server: (i) => ({ x: 1.68, y: 5.9 + 0.55 * i }), // 서버 랙 앞 서비스 선반
   data: row(3.8, 0.5, 6.35), // 서류 캐비닛 앞
   lab: row(7.0, 0.5, 6.4), // 실험대 앞
-  build: row(10.25, 0.46, 6.8), // 컨베이어 앞
-  git: (i) => ({ x: 13.5 + 0.5 * (i % 3) + 0.25 * Math.floor(i / 3), y: 6.4 + 0.7 * Math.floor(i / 3) }), // 보드 앞(두 줄)
-  briefing: row(16.6, 0.6, 7.1), // 연단 앞
+  build: row(10.25, 0.46, 6.55), // 컨베이어 앞
+  git: (i) => (i < 4 ? { x: 13.5 + 0.46 * i, y: 5.85 } : { x: 14.0 + 0.55 * (i - 4), y: 6.6 }), // 보드 앞(다섯째·여섯째는 금고를 피해 한 줄 뒤)
+  briefing: row(16.6, 0.6, 6.8), // 연단 옆
   response: row(1.2, 1.3, 11.5), // 벤치에 앉아 사용자의 응답을 기다린다
   lounge: row(9.5, 0.95, 12.2), // 소파에 앉아 쉰다
 };
 const BEDS = row(15.1, 0.9, 12.0); // 휴게실 침대(꺼진 세션)
 // 방마다 하는 일(자세): 작업실·리서치·문서는 타자, 자료실·데이터 창고는 책/서류를 꺼내 읽고, 기획실은 보드에 쓰고, 서버실은 서서 콘솔을 치고,
 // 테스트 랩은 시약을 섞고, 빌드실은 장비를 손보고, 형상관리실은 보드를 가리키고, 브리핑룸은 발표한다.
+// (타자 type 은 서서 하는 일: 서버실 선반 앞)
 const POSE = {
-  work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit',
+  work: 'sitType', docs: 'sitType', research: 'sitType', response: 'sit', lounge: 'sit',
   library: 'browse', data: 'browse', planning: 'write', server: 'type', lab: 'mix', build: 'tinker', git: 'point', briefing: 'present',
 };
 // 일하는 대상 쪽을 바라보는 방향(yaw). 뒷벽(-y) = Math.PI, 왼쪽(-x) = -Math.PI/2. 없으면 자세의 기본 방향.

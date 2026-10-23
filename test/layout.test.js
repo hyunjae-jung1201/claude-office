@@ -50,8 +50,8 @@ test('팀장의 목표: 방마다 6팀 모두 방 안(가장자리에서 0.3 이
   }
 });
 
-test('포즈: 방마다 그 방의 일을 한다(작업실 sitType, 타자 type, 책 꺼내기 browse, 보드 쓰기 write, 시약 mix, 장비 tinker, 가리키기 point, 발표 present), 앉는 곳은 sit', () => {
-  const want = { work: 'sitType', docs: 'type', research: 'type', response: 'sit', lounge: 'sit', library: 'browse', data: 'browse', planning: 'write', server: 'type', lab: 'mix', build: 'tinker', git: 'point', briefing: 'present' };
+test('포즈: 방마다 그 방의 일을 한다(책상에 앉아 타자 sitType, 서서 타자 type, 책 꺼내기 browse, 보드 쓰기 write, 시약 mix, 장비 tinker, 가리키기 point, 발표 present), 앉는 곳은 sit', () => {
+  const want = { work: 'sitType', docs: 'sitType', research: 'sitType', response: 'sit', lounge: 'sit', library: 'browse', data: 'browse', planning: 'write', server: 'type', lab: 'mix', build: 'tinker', git: 'point', briefing: 'present' };
   for (const room of ROOM_IDS) for (const t of TEAMS) assert.equal(targetFor('read', t, room).pose, want[room] ?? 'stand', room);
 });
 
