@@ -127,7 +127,7 @@ export function addProject(path, folder, name) {
 // 폴더가 어느 팀에도 안 맞으면, 세션 이름이 팀 이름/별칭과 같은 팀으로 연결한다.
 export function matchProject(config, cwd, host = null, sessionName = undefined, ai = undefined) {
   if (ai) { // 다른 AI 도구의 신호는 그 도구 전용 팀이 있으면 폴더와 상관없이 그 팀으로 간다
-    const team = config.projects.find((p) => p.ai === ai && (p.host ?? null) === (host ?? null));
+    const team = config.projects.find((p) => p.ai === ai); // 다른 PC 에서 온 신호도 같은 AI 팀이 받는다(그 AI 도구의 활동을 한 팀으로 모은다)
     if (team) return team;
   }
   const dir = trimSlash(cwd);
