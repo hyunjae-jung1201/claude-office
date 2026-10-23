@@ -339,19 +339,55 @@ export function buildOffice(scene) {
   lampFloor(2.5, 3.5);
 
   // ---------------------------------------------------------------- 리서치실
+  // 리서치실: 둥근 토론 탁자 2개(탁자마다 노트북 셋), 마인드맵 화이트보드, 자료 더미 — 책상 줄이 아니라 둘러앉아 토론하는 곳
   const screens = [T.codeScreen(81, '#7fb6ff'), T.chartScreen(82), T.codeScreen(83, '#f5a524')];
-  for (const dy of [0, 1.95]) [3.6, 4.65, 5.7].forEach((x, k) => { // 뒷줄·앞줄 3개씩, 6팀이 모두 자기 책상에 앉는다
-    const i = k + (dy ? 3 : 0);
-    box(x, 0.5 + dy, 0.92, 0.7, 0.04, '#d6dbe6', 0.7, { r: 0.015 });
-    for (const lx of [x + 0.04, x + 0.84]) box(lx, 0.56 + dy, 0.04, 0.58, 0.7, '#8b93a8', 0, { r: 0.01, metal: 0.4 });
-    monitor(x + 0.46, 0.68 + dy, 0.74, screens[i % 3]);
-    keyboard(x + 0.29, 0.92 + dy, 0.74);
-    if (i % 3 === 1) mug(x + 0.8, 0.9 + dy, 0.74, '#d9553f');
-    else box(x + 0.7, 0.85 + dy, 0.16, 0.2, 0.025, '#fff9e8', 0.74, { r: 0.004, rot: 0.2 });
-    chair(x + 0.46, 1.55 + dy, ['#4f6a8f', '#6a8a6a', '#8f6a5a'][i % 3], (k - 1) * 0.3);
+  const laptop = (x, y, elev, yaw, tex) => { // 사용자는 yaw 방향을 본다: 화면은 먼 쪽에서 사용자를 향한다
+    const g = new THREE.Group();
+    g.position.set(wx(x), elev, wz(y));
+    g.rotation.y = yaw;
+    const base = put(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.014, 0.21), std('#2d3340')));
+    const lid = put(new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.012), std('#20242f')));
+    lid.position.set(0, 0.1, 0.1);
+    lid.rotation.x = -0.25;
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(0.27, 0.17), basic(tex));
+    face.position.set(0, 0.1, 0.092);
+    face.rotation.set(-0.25, Math.PI, 0);
+    g.add(base, lid, face);
+    scene.add(g);
+  };
+  const roundTable = (cx, cy, r, color = '#e8edf5') => {
+    cyl(cx, cy, r, 0.04, color, 0.72, { seg: 36 });
+    cyl(cx, cy, 0.05, 0.72, '#8b93a8', 0, { seg: 10 });
+    cyl(cx, cy, 0.26, 0.03, '#6d7488', 0, { seg: 20 });
+  };
+  const resTables = [[4.37, 1.45, [0, 1, 2]], [5.6, 2.45, [3, 4, 5]]];
+  const resSeats = [[-1, 0, Math.PI / 2], [1, 0, -Math.PI / 2], [0, 1, Math.PI]]; // [dx, dy, 바라보는 방향]
+  resTables.forEach(([cx, cy, ids], t) => {
+    roundTable(cx, cy, 0.52);
+    resSeats.forEach(([dx, dy, yaw], k) => {
+      laptop(cx + dx * 0.27, cy + dy * 0.27, 0.74, yaw, screens[(t + k) % 3]);
+      chair(cx + dx * 0.65, cy + dy * 0.65, ['#4f6a8f', '#6a8a6a', '#8f6a5a'][k], yaw - Math.PI);
+      box(cx + dx * 0.4 - 0.08 + dy * 0.2, cy + dy * 0.4 - 0.08 - dx * 0.2, 0.16, 0.2, 0.012, k % 2 ? '#fff9e8' : '#d6e4f7', 0.745, { r: 0.002, rot: 0.3 * (k - 1) });
+    });
+    mug(cx, cy, 0.74, ['#d9553f', '#4f7f9c'][t]);
   });
-  cyl(3.55, 3.75, 0.03, 0.55, '#7a8bb0', 0.0); // 지구본(뒷줄 책상 옆 구석)
-  ball(3.55, 3.75, 0.2, '#4c7fb0', 0.78, { rough: 0.5 });
+  // 마인드맵 화이트보드(바퀴 달린 스탠드)
+  {
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 160;
+    const g = c.getContext('2d');
+    g.fillStyle = '#f6f8fb'; g.fillRect(0, 0, 256, 160);
+    g.lineWidth = 3;
+    const node = (x, y, r, col) => { g.fillStyle = col; g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill(); };
+    for (const [x, y, col] of [[60, 40, '#4c8dff'], [190, 36, '#f5a524'], [52, 116, '#13a58a'], [200, 118, '#e8637a']]) { g.strokeStyle = '#8b93a8'; g.beginPath(); g.moveTo(128, 80); g.lineTo(x, y); g.stroke(); node(x, y, 18, col); }
+    node(128, 80, 26, '#232838');
+    g.fillStyle = '#fff'; g.font = 'bold 15px sans-serif'; g.textAlign = 'center'; g.fillText('WHY?', 128, 86);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    box(3.75, 0.32, 1.35, 0.05, 0.9, '#cfd4de', 0.62, { r: 0.012, metal: 0.3 });
+    flat(4.42, 0.36, 1.25, 0.78, 1.07, new THREE.MeshBasicMaterial({ map: tex }), 0);
+    for (const x of [3.82, 5.0]) { box(x, 0.28, 0.06, 0.2, 0.62, '#8b93a8', 0, { r: 0.01, metal: 0.4 }); cyl(x + 0.03, 0.3, 0.035, 0.04, '#2a2f3d', 0); }
+  }
 
   // ---------------------------------------------------------------- 작업실: 팀 책상
   const deskTops = ['#dcc08f', '#cfb27e', '#e1c99d', '#d5ba88', '#dcc08f', '#c9ad7c'];
@@ -378,22 +414,35 @@ export function buildOffice(scene) {
   }
 
   // ---------------------------------------------------------------- 문서실
-  for (const dy of [0, 1.95]) [13.75, 14.8, 15.85].forEach((x, k) => { // 뒷줄·앞줄 3개씩
-    const i = k;
-    box(x, 0.5 + dy, 0.92, 0.7, 0.045, '#c4a87a', 0.7, { r: 0.015 });
-    box(x + 0.04, 0.54 + dy, 0.05, 0.6, 0.7, '#6d5a42', 0, { r: 0.01 });
-    box(x + 0.83, 0.54 + dy, 0.05, 0.6, 0.7, '#6d5a42', 0, { r: 0.01 });
-    box(x + 0.12, 0.66 + dy, 0.34, 0.46, 0.012, '#ffffff', 0.745, { r: 0.002, rot: 0.1 * (i - 1) });
-    box(x + 0.17, 0.72 + dy, 0.34, 0.46, 0.012, '#f7f2e2', 0.757, { r: 0.002, rot: -0.07 });
-    box(x + 0.55, 0.8 + dy, 0.22, 0.14, 0.05, '#7a4f2e', 0.745, { r: 0.012 });
-    cyl(x + 0.7, 0.62 + dy, 0.05, 0.03, '#2a2f3d', 0.745);
-    cyl(x + 0.7, 0.62 + dy, 0.012, 0.3, '#3a3f4d', 0.77);
-    cyl(x + 0.7, 0.62 + dy, 0.11, 0.14, '#ffe9a8', 1.05, { r2: 0.05, material: std('#ffe9a8', { emissive: '#ffd98a', ei: 0.9 }) });
-    chair(x + 0.46, 1.5 + dy, ['#8f6a5a', '#6a8a8f', '#8a7a5a'][i], 0.2 * (i - 1));
+  // 긴 공동 작업 탁자 하나(양쪽에 세 명씩), 가운데 줄지은 초록 램프, 종이 더미·바인더, 한쪽 벽의 복합기 코너 — 서로 마주 보고 문서를 함께 만든다
+  box(13.95, 1.3, 2.7, 0.9, 0.05, '#c4a87a', 0.72, { r: 0.015 });
+  for (const [x, y] of [[14.05, 1.38], [16.5, 1.38], [14.05, 2.1], [16.5, 2.1]]) box(x, y, 0.07, 0.07, 0.72, '#6d5a42', 0, { r: 0.01 });
+  for (const x of [14.55, 15.3, 16.05]) { // 램프(초록 갓) 줄
+    cyl(x, 1.75, 0.06, 0.02, '#2a2f3d', 0.77);
+    cyl(x, 1.75, 0.012, 0.28, '#3a3f4d', 0.79);
+    box(x - 0.12, 1.63, 0.24, 0.1, 0.1, '#2f6b4f', 1.06, { r: 0.02, material: std('#2f6b4f', { emissive: '#ffd98a', ei: 0.5 }) });
+  }
+  for (const [x, y, rot] of [[14.4, 1.38, 0.1], [15.15, 1.4, -0.08], [15.9, 1.38, 0.15], [14.45, 1.98, -0.1], [15.2, 1.96, 0.06], [15.95, 1.98, -0.12]]) { // 자리마다 종이 더미
+    box(x, y, 0.3, 0.38, 0.012, '#ffffff', 0.77, { r: 0.002, rot });
+    box(x + 0.03, y + 0.02, 0.28, 0.36, 0.012, '#f7f2e2', 0.784, { r: 0.002, rot: rot * -0.6 });
+  }
+  box(16.2, 1.5, 0.22, 0.3, 0.05, '#7a4f2e', 0.77, { r: 0.012 }); // 두꺼운 바인더
+  box(16.24, 1.9, 0.2, 0.2, 0.05, '#3f5a7a', 0.77, { r: 0.012, rot: 0.3 });
+  mug(14.2, 1.75, 0.77, '#e8e2d4');
+  [14.45, 15.2, 15.95].forEach((x, k) => {
+    chair(x, 0.95, ['#8f6a5a', '#6a8a8f', '#8a7a5a'][k], -Math.PI); // 윗줄: 남쪽(탁자)을 본다
+    chair(x, 2.6, ['#8a7a5a', '#8f6a5a', '#6a8a8f'][k], 0);
   });
-  box(16.4, 3.1, 0.4, 0.45, 0.95, '#8a93a0', 0, { r: 0.02, metal: 0.3 }); // 서류함(앞줄 책상 옆 구석)
+  // 복합기 코너: 대형 복합기, 종이 트레이 더미, 서류함
+  box(14.4, 3.25, 1.3, 0.55, 0.9, '#d9dde0', 0, { r: 0.03 });
+  box(14.45, 3.3, 1.2, 0.45, 0.05, '#2d3340', 0.9, { r: 0.01 });
+  box(14.6, 3.38, 0.35, 0.3, 0.06, '#f4efe2', 0.95, { r: 0.004 });
+  box(15.2, 3.5, 0.4, 0.04, 0.12, '#1b2a48', 0.9, { r: 0.004, material: glow('#7fb6ff', 0.55) }); // 조작 화면
+  for (let k = 0; k < 4; k++) box(14.5, 3.3 + 0.0, 0.5, 0.45, 0.02, k % 2 ? '#fff9e8' : '#ffffff', 0.0 + 0.02 + k * 0.02, { r: 0.002 }); // 바닥에 쌓인 종이
+  box(13.62, 3.0, 0.5, 0.35, 0.34, '#c9a56a', 0, { r: 0.015 }); // 종이 상자
+  box(13.66, 3.04, 0.42, 0.27, 0.05, '#f4efe2', 0.34, { r: 0.004 });
+  box(16.4, 3.1, 0.4, 0.45, 0.95, '#8a93a0', 0, { r: 0.02, metal: 0.3 }); // 서류함
   for (let k = 0; k < 3; k++) box(16.45, 3.55, 0.3, 0.02, 0.2, '#9aa3b0', 0.07 + k * 0.3, { r: 0.006 });
-  plant(13.55, 3.5, 0);
 
   // ---------------------------------------------------------------- 기획실
   flat(18.4, 0.1, 2.6, 1.3, 1.45, basic(T.cached('kanban', () => T.kanban(101))));
@@ -679,12 +728,6 @@ export function buildOffice(scene) {
     cyl(3.55, 3.75, 0.1, 0.06, '#232838', 0.62, { r2: 0.07 });
     cyl(3.55, 3.75, 0.02, 0.3, '#3a4054', 0.66);
   }
-  // 문서실: 서류함 위 복합기와 종이 상자
-  box(16.43, 3.12, 0.34, 0.3, 0.2, '#d9dde0', 0.95, { r: 0.015 });
-  box(16.45, 3.14, 0.3, 0.26, 0.03, '#8b93a8', 1.15, { r: 0.004 });
-  box(16.52, 3.2, 0.14, 0.01, 0.02, '#35e0a1', 1.02, { r: 0.002, material: glow('#35e0a1', 0.9) });
-  box(13.62, 3.55, 0.36, 0.28, 0.32, '#c9a56a', 0, { r: 0.015 });
-  box(13.66, 3.58, 0.28, 0.2, 0.05, '#f4efe2', 0.32, { r: 0.004 });
   // 기획실: 아이디어 전구 조명과 알록달록 빈백 의자
   for (const [x, y, c] of [[17.0, 3.2, '#ff7ab0'], [18.7, 3.35, '#ffd23a']]) { cyl(x, y, 0.24, 0.3, c, 0, { r2: 0.19 }); ball(x, y, 0.22, c, 0.3, { sy: 0.7 }); }
   cyl(19.65, 2.5, 0.05, 0.05, '#2a2f3d', 0);

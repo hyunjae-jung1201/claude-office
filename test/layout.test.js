@@ -102,6 +102,8 @@ test('팀장 책상 자리는 팀 책상 구역 안이고, 팀원 4명의 자리
 test('일하는 방은 일하는 대상 쪽(face)을 바라본다: 서버 랙은 왼쪽, 나머지는 뒷벽, 팀원도 같은 방향', () => {
   assert.equal(targetFor('read', 0, 'server').face, -Math.PI / 2);
   for (const room of ['library', 'data', 'planning', 'lab', 'build', 'git', 'briefing']) assert.equal(targetFor('read', 1, room).face, Math.PI, room);
+  assert.deepEqual([0, 1, 2].map((t) => targetFor('read', t, 'research').face), [Math.PI / 2, -Math.PI / 2, Math.PI]); // 둥근 탁자: 마주 보고 둘러앉는다
+  assert.deepEqual([0, 3].map((t) => targetFor('read', t, 'docs').face), [0, Math.PI]); // 긴 탁자: 양쪽에서 마주 본다
   assert.equal(targetFor('read', 1, 'lounge').face, undefined);
   assert.equal(memberTarget('read', 1, 2, 'library').face, Math.PI);
 });

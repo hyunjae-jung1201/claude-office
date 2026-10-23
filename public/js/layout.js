@@ -66,12 +66,17 @@ const row = (x0, dx, y) => (i) => ({ x: x0 + dx * i, y });
 const grid = (x0, y0) => (i) => ({ x: x0 + 0.9 * (i % 3), y: y0 + 1.0 * Math.floor(i / 3) });
 const SPOTS = {
   library: row(0.5, 0.5, 1.15), // 책장 앞(뒷벽)
-  research: (i) => ({ x: 4.06 + 1.05 * (i % 3), y: 1.55 + 1.95 * Math.floor(i / 3) }), // 책상 6개(두 줄) 의자
+  // 리서치실: 둥근 토론 탁자 2개, 탁자마다 세 명이 둘러앉아 마주 본다(face = 탁자 쪽)
+  research: (i) => [
+    { x: 3.72, y: 1.45, face: Math.PI / 2 }, { x: 5.02, y: 1.45, face: -Math.PI / 2 }, { x: 4.37, y: 2.15, face: Math.PI },
+    { x: 4.95, y: 2.45, face: Math.PI / 2 }, { x: 6.25, y: 2.45, face: -Math.PI / 2 }, { x: 5.6, y: 3.1, face: Math.PI },
+  ][i],
   work: (i) => {
     const z = deskZone(i);
     return { x: z.x + z.w / 2, y: 1.55 }; // 팀장 책상 바로 앞 의자
   },
-  docs: (i) => ({ x: 14.21 + 1.05 * (i % 3), y: 1.5 + 1.95 * Math.floor(i / 3) }), // 책상 6개(두 줄) 의자
+  // 문서실: 긴 공동 작업 탁자 하나, 양쪽에 세 명씩 마주 앉는다(윗줄은 남쪽, 아랫줄은 북쪽을 본다)
+  docs: (i) => ({ x: 14.45 + 0.75 * (i % 3), y: i < 3 ? 0.95 : 2.6, face: i < 3 ? 0 : Math.PI }),
   planning: row(17.2, 0.48, 0.6), // 칸반 보드 앞
   server: (i) => ({ x: 1.68, y: 5.9 + 0.55 * i }), // 서버 랙 앞 서비스 선반
   data: row(3.8, 0.5, 6.35), // 서류 캐비닛 앞
@@ -97,7 +102,8 @@ export function targetFor(status, teamIndex, room = roomFor(status)) {
   if (!SPOTS[room]) throw new Error(`unknown room: ${room}`);
   checkTeam(teamIndex);
   if (room === 'lounge' && status === 'off') return { ...BEDS(teamIndex), pose: 'sleep' };
-  return { ...SPOTS[room](teamIndex), pose: POSE[room] ?? 'stand', ...(FACE[room] !== undefined ? { face: FACE[room] } : {}) };
+  const spot = SPOTS[room](teamIndex);
+  return { ...spot, pose: POSE[room] ?? 'stand', ...(spot.face === undefined && FACE[room] !== undefined ? { face: FACE[room] } : {}) };
 }
 
 // 팀원이 들어오고 나가는 입구(바닥 오른쪽 가장자리, 위쪽 복도 끝).
