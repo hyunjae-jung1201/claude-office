@@ -439,6 +439,13 @@ export function createScene(canvas, overlay, opts = {}) {
   function update(snapshot) {
     const now = performance.now();
     snapLeaderRooms = snapshot.teams.map((t) => (t && t.status !== 'off' ? t.room : null)); // 꺼진 팀장은 침대에서 자므로 자리를 쓰지 않는다
+    // 팀원의 옛 자리 예약 정리: 이번 스냅샷에서 다른 방으로 가거나 사라지는 팀원의 예약은 팀 갱신 순서와 상관없이 먼저 푼다
+    const nextRoom = new Map();
+    snapshot.teams.forEach((t, ti) => {
+      for (const m of t?.members ?? []) nextRoom.set(`${ti}:${m.id}`, m.room);
+      for (const r of t?.roles ?? []) if (r.room) nextRoom.set(`${ti}:role:${r.id}`, r.room);
+    });
+    for (const [key, ent] of members) if (ent.spotRoom && nextRoom.get(key) !== ent.spotRoom) { ent.spotRoom = null; ent.spotIdx = null; }
     act = roomActivity(snapshot);
     deskWanted = new Set();
     snapshot.teams.forEach((team, i) => {
@@ -495,7 +502,9 @@ export function createScene(canvas, overlay, opts = {}) {
         if (room === 'work' || !room) { ent.spotRoom = null; ent.spotIdx = null; return memberTarget(status, i, slot, room); } // 자리를 쓰지 않는 목적지: 예약을 푼다
         const othersTaken = new Set();
         for (const o of members.values()) if (o !== ent && !o.leaving && o.spotRoom === room && o.spotIdx != null) othersTaken.add(o.spotIdx);
-        const idx = pickMemberSpot(room, i, { leaderRooms: snapLeaderRooms, othersTaken, current: { room: ent.spotRoom, idx: ent.spotIdx } });
+        // 팀장 자리: 이번 스냅샷의 방 + 지금 실제로 가는 방(완료 연출 중에는 이동을 4초 미룬다)을 모두 피한다
+        const leaderRooms = snapLeaderRooms.map((r, j) => (r === room || (leaders[j] && snapLeaderRooms[j] != null && goalOf(leaders[j]).room === room) ? room : r));
+        const idx = pickMemberSpot(room, i, { leaderRooms, othersTaken, current: { room: ent.spotRoom, idx: ent.spotIdx } });
         if (idx == null) { ent.spotRoom = null; ent.spotIdx = null; return memberTarget(status, i, slot, room); }
         ent.spotRoom = room; ent.spotIdx = idx;
         return targetFor(status === 'off' ? 'idle' : status, idx, room);
