@@ -21,7 +21,7 @@ function makeRow(row) {
   const body = el('span', 'ro-body');
   const top = el('span', 'ro-top');
   top.append(el('b', 'ro-name'), el('span', 'ro-badge'));
-  if (row.kind === 'team') { const go = el('button', 'ro-go', '검토'); go.type = 'button'; go.title = '지금 검토'; top.append(go); }
+  if (row.kind === 'team' && !row.ai) { const go = el('button', 'ro-go', '검토'); go.type = 'button'; go.title = '지금 검토'; top.append(go); }
   body.append(top, el('span', 'ro-text'));
   li.append(blob, body);
   return li;

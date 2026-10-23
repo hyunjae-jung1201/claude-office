@@ -37,3 +37,8 @@ test('이름이 원격의 자체 팀과 같으면 거절한다(화면에 같은 
   const clash = { projects: [{ name: '사고 판별', path: '/other' }] };
   assert.throws(() => mergeMirror(remote, clash, 'PC1'), /사고 판별/);
 });
+
+test('mergeMirror: Codex 같은 AI 도구 팀은 다른 PC 로 미러하지 않는다', () => {
+  const out = mergeMirror({ projects: [{ name: 'R', path: '/r' }] }, { projects: [{ name: 'A', path: '/a' }, { name: 'Codex', path: 'ai:codex', ai: 'codex' }] }, 'PC1');
+  assert.deepEqual(out.projects.map((p) => p.name), ['R', 'A']);
+});

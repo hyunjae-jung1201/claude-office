@@ -3,7 +3,8 @@ const MAX_TEAMS = 6;
 const KEEP = ['name', 'path', 'color', 'aliases'];
 
 export function mergeMirror(remote, local, name) {
-  const mine = (local.projects ?? []).filter((p) => !p.host); // 다른 원격에 있는 팀은 그 PC 가 이미 가지고 있다
+  const mine = (local.projects ?? []).filter((p) => !p.host && !p.ai); // Codex 같은 AI 도구 팀은 이 PC 의 hook 신호로만 채워지므로 미러하지 않는다
+  // (다른 원격에 있는 팀은 그 PC 가 이미 가지고 있다) // 다른 원격에 있는 팀은 그 PC 가 이미 가지고 있다
   const own = (remote.projects ?? []).filter((p) => p.host !== name); // 원격 자체 팀(과 다른 원격의 팀)은 보존, 옛 미러 팀은 교체
   for (const p of mine) {
     if (own.some((o) => o.name === p.name)) throw new Error(`원격에 같은 이름의 자체 팀이 있습니다: ${p.name}`);

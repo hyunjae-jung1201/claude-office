@@ -101,7 +101,7 @@ export async function startServer({
     }
     // 이 PC의 세션은 등록 정보에서 이름을 찾는다(원격 이벤트는 수집기가 이름을 실어 보낸다)
     ev.sessionName ??= ev.host ? undefined : registry.nameOf(ev.sessionId);
-    const project = matchProject(config, ev.cwd, ev.host, ev.sessionName);
+    const project = matchProject(config, ev.cwd, ev.host, ev.sessionName, ev.ai);
     if (!project) return; // 지정하지 않은 폴더: 상태·추적·브로드캐스트 모두 만들지 않는다
     if (!ev.ai) dailyLog?.record(project, ev);
     applyEvent(state, ev, ev.ts);

@@ -462,7 +462,7 @@ export function createScene(canvas, overlay, opts = {}) {
       let leader = leaders[i];
       if (!leader) {
         const start = targetFor(team.status, i, team.room);
-        leader = leaders[i] = makeEntity({ team: i, id: `L${i}`, tile: start, name: team.name, color: team.color, bubbleHeight: BUBBLE_LEVELS[i % BUBBLE_LEVELS.length] });
+        leader = leaders[i] = makeEntity({ team: i, id: `L${i}`, tile: start, name: team.name, color: team.color, bubbleHeight: BUBBLE_LEVELS[i % BUBBLE_LEVELS.length], ai: team.ai });
         office.deskAccents[i].material.color.set(team.color);
       }
       leader.status = team.status;

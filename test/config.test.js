@@ -220,3 +220,20 @@ test('remotes[].push: 다른 PC 가 밀어 넣는 원격은 ssh 없이도 받고
   assert.throws(() => loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC9' }] })), /ssh|push/);
   assert.throws(() => loadConfig(cfgFile({ projects: [], remotes: [{ name: 'PC9', push: 'yes' }] })), /push/);
 });
+
+test('projects[].ai: 다른 AI 도구 전용 팀은 path 없이 만들 수 있고, 그 도구의 신호는 폴더와 상관없이 이 팀으로 간다', () => {
+  const load = (projects) => {
+    const dir = mkdtempSync(join(tmpdir(), 'co-cfg-'));
+    const f = join(dir, 'config.json');
+    writeFileSync(f, JSON.stringify({ projects }));
+    return loadConfig(f);
+  };
+  const config = load([{ name: 'A', path: '/w/a' }, { name: 'Codex', ai: 'codex', color: '#8fdcae' }]);
+  assert.deepEqual([config.projects[1].ai, config.projects[1].path], ['codex', 'ai:codex']);
+  assert.equal(matchProject(config, '/w/a/src', null, undefined, 'codex').name, 'Codex'); // ai 신호는 폴더와 상관없이
+  assert.equal(matchProject(config, '/w/a/src').name, 'A'); // 일반 신호는 폴더로
+  assert.equal(matchProject(config, '/anything', null, undefined, 'codex').name, 'Codex');
+  assert.equal(matchProject(load([{ name: 'A', path: '/w/a' }]), '/w/a', null, undefined, 'codex').name, 'A'); // ai 팀이 없으면 폴더 팀의 외계인 팀원
+  assert.throws(() => load([{ name: 'X', ai: 'nope' }]), /ai는/);
+  assert.throws(() => load([{ name: 'X' }]), /path/);
+});

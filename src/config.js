@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { basename } from 'node:path';
 
+const AI_TOOLS = new Set(['codex']); // projects[].ai 로 팀이 될 수 있는 다른 AI 도구
 const DEFAULTS = { port: 9410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30, responseWaitMinutes: 5 };
 const MAX_PROJECTS = 6;
 const PALETTE = ['#e8637a', '#2a7f8f', '#8fb339', '#d9822b', '#6c63d9', '#e5b83a'];
@@ -28,14 +29,16 @@ function validateProjects(list, remotes = []) {
   const aliasKeys = new Map();
   return list.map((p, i) => {
     if (!p.name) throw new Error(`projects[${i}]에 name이 없습니다`);
-    if (!p.path) throw new Error(`projects[${i}]에 path가 없습니다`);
+    if (!p.path && !p.ai) throw new Error(`projects[${i}]에 path가 없습니다`);
+    if (p.ai !== undefined && !AI_TOOLS.has(p.ai)) throw new Error(`프로젝트 ${p.name}의 ai는 ${[...AI_TOOLS].join(', ')} 중 하나여야 합니다`);
     if (p.host && !remoteNames.has(p.host)) throw new Error(`프로젝트 ${p.name}의 host(${p.host})가 remotes에 정의돼 있지 않습니다`);
-    const path = trimSlash(p.path);
+    const path = p.ai ? `ai:${p.ai}` : trimSlash(p.path); // 다른 AI 도구 팀은 폴더가 아니라 그 도구의 모든 활동을 받는다(실제 cwd 와 겹치지 않는 가짜 경로)
     const pathKey = `${p.host ?? ''}|${path}`;
     if (names.has(p.name) || paths.has(pathKey)) throw new Error(`프로젝트 이름 또는 경로가 중복입니다: ${p.name}`);
     names.add(p.name);
     paths.add(pathKey);
     const out = { name: p.name, path, color: p.color ?? PALETTE[i % PALETTE.length] };
+    if (p.ai) out.ai = p.ai;
     if (p.host) out.host = p.host;
     if (p.testCommand !== undefined) {
       if (!Array.isArray(p.testCommand) || p.testCommand.length === 0 || p.testCommand.some((a) => typeof a !== 'string' || !a)) throw new Error(`프로젝트 ${p.name}의 testCommand는 비어 있지 않은 문자열 배열이어야 합니다 (예: ["npm", "test"])`);
@@ -122,7 +125,11 @@ export function addProject(path, folder, name) {
 
 // host가 없으면 이 PC의 프로젝트, 있으면 그 원격 PC의 프로젝트만 후보가 된다.
 // 폴더가 어느 팀에도 안 맞으면, 세션 이름이 팀 이름/별칭과 같은 팀으로 연결한다.
-export function matchProject(config, cwd, host = null, sessionName = undefined) {
+export function matchProject(config, cwd, host = null, sessionName = undefined, ai = undefined) {
+  if (ai) { // 다른 AI 도구의 신호는 그 도구 전용 팀이 있으면 폴더와 상관없이 그 팀으로 간다
+    const team = config.projects.find((p) => p.ai === ai && (p.host ?? null) === (host ?? null));
+    if (team) return team;
+  }
   const dir = trimSlash(cwd);
   let best = null;
   for (const p of config.projects) {

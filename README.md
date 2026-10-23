@@ -75,9 +75,11 @@ Claude Code가 `~/.claude/sessions/<pid>.json`에 적는 **세션 등록 정보*
 - 화면 확인용: `CLAUDE_OFFICE_FAKE_ROLES=1 CLAUDE_OFFICE_REVIEW_DIR=/tmp/x node src/server.js` (가짜 역할자 결과, 실제 claude 호출 없음)
 
 ## 다른 AI 도구(Codex)도 함께 보기
-Codex CLI 로 같은 프로젝트 폴더에서 일하면 사무실에 **외계인** 아바타(목록에는 "Codex")가 팀원처럼 나타나, 하는 일에 맞는 방에서 일한다. 팀장은 항상 Claude 이고, Codex 세션은 역할자 검토·작업 일지 대상이 아니다.
-- 켜기: `node scripts/install-hooks.js --codex --apply` (`~/.codex/hooks.json` 에 hook 만 추가, 기존 항목은 그대로 두고 백업을 남긴다). 이미 떠 있는 Codex 세션은 새로 시작해야 반영된다.
-- 원리: hook 이 `CLAUDE_OFFICE_AI=codex` 를 달아 서버로 보내면, 서버가 Codex 의 도구(`exec_command`·`apply_patch` 등)를 Bash·Edit 로 맞춰 방을 고른다. 모르는 도구는 작업실로 본다.
+Codex 는 **전용 팀**(외계인 아바타)으로 보인다. 어느 폴더에서 일하든 Codex 의 활동은 이 팀 하나로 모이고, 하는 일에 맞는 방에서 일한다. Codex 세션은 역할자 검토·작업 일지 대상이 아니다.
+- 팀 만들기: `config.json` 의 `projects` 에 `{ "name": "Codex", "ai": "codex", "color": "#6fd6a0" }` 를 추가한다(`path` 없음, 팀 6개 한도에 포함). 이 팀은 다른 PC 로 미러하지 않는다.
+- hook 켜기: `node scripts/install-hooks.js --codex --apply` (`~/.codex/hooks.json` 에 hook 만 추가, 기존 항목은 그대로 두고 백업을 남긴다). 이미 떠 있는 Codex 세션은 새로 시작해야 반영된다. hook 은 `CLAUDE_OFFICE_AI=codex` 를 달아 보내고, 서버가 `exec_command`·`apply_patch` 같은 도구를 Bash·Edit 로 맞춰 방을 고른다(모르는 도구는 작업실).
+- Claude 작업의 자동 코드 검사(`~/.claude/hooks/codex-review.py`)가 도는 동안에는 이 팀이 **테스트 랩**에서 "코드 리뷰 실행 중"으로 보이고, 끝나면 휴게실로 돌아간다.
+- `ai` 팀이 없으면 Codex 는 그 폴더 팀의 외계인 팀원으로 나온다.
 
 ## 세션 이름으로 팀 찾기
 세션을 홈 폴더에서 열고 이름만 프로젝트 이름으로 붙여 쓰는 경우가 많아서, 폴더가 안 맞으면 Claude Code가 `~/.claude/sessions`에 적어 둔 **세션 이름**을 팀 이름/`aliases`와 비교한다(대소문자 무시). 폴더가 맞으면 폴더가 우선이다.

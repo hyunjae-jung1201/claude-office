@@ -158,7 +158,7 @@ function applyEventCore(state, ev, now) {
     state.sessions.delete(ev.sessionId);
     return;
   }
-  const project = matchProject(state.config, ev.cwd, ev.host, ev.sessionName);
+  const project = matchProject(state.config, ev.cwd, ev.host, ev.sessionName, ev.ai);
   if (!project) return;
   const ts = ev.ts ?? now;
 
@@ -275,7 +275,7 @@ export function snapshot(state, now) {
     const others = []; // 다른 AI 도구의 세션
     for (const s of state.sessions.values()) {
       if (s.project !== p.name) continue;
-      if (s.ai) { others.push(s); continue; }
+      if (s.ai && !p.ai) { others.push(s); continue; } // AI 전용 팀이 아닌 폴더 팀에서는 다른 AI 도구 세션이 외계인 팀원
       if (!latest || s.lastEventAt > latest.lastEventAt) latest = s;
     }
     const aiMembers = others.map((s) => ({ id: `ai:${s.ai}:${String(s.sessionId).slice(0, 8)}`, type: AI_NAMES[s.ai] ?? s.ai, ai: s.ai, status: s.status, label: s.label, activity: s.status === 'idle' ? 'lounge' : s.activity, startedAt: s.startedAt ?? s.lastEventAt, hist: s.hist, since: s.since }));
@@ -285,7 +285,7 @@ export function snapshot(state, now) {
       : [];
     const badge = state.badges.get(p.name) ?? null;
     if (!latest) {
-      return { name: p.name, color: p.color, status: 'off', label: DEFAULT_LABEL.off, room: 'lounge', members: aiMembers.slice(0, maxMembers).map(publicMember), overflow: Math.max(0, aiMembers.length - maxMembers), finishedAt: null, roles, badge, recent: [], since: null };
+      return { name: p.name, color: p.color, ...(p.ai ? { ai: p.ai } : {}), status: 'off', label: DEFAULT_LABEL.off, room: 'lounge', members: aiMembers.slice(0, maxMembers).map(publicMember), overflow: Math.max(0, aiMembers.length - maxMembers), finishedAt: null, roles, badge, recent: [], since: null };
     }
     const all = [...latest.members.values(), ...aiMembers].sort((a, b) => a.startedAt - b.startedAt);
     // 응답은 끝났지만 백그라운드 명령이 도는 중이면 서버실에서 일하는 것으로 보여 준다
@@ -294,6 +294,7 @@ export function snapshot(state, now) {
     return {
       name: p.name,
       color: p.color,
+      ...(p.ai ? { ai: p.ai } : {}),
       status: background ? 'run' : latest.status,
       label: background ? BACKGROUND_LABEL : room === 'response' && latest.status === 'idle' ? RESPONSE_LABEL : latest.label,
       room,

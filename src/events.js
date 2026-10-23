@@ -73,6 +73,7 @@ function segmentRoom(seg, full) {
   if (!rest) return null;
   const first = rest.split(/\s+/)[0].replace(/^.*\//, '').replace(/^\(+/, '');
   if (first === 'git' || first === 'gh') return 'git';
+  if (first === 'codex' && /^codex\s+(?:review|exec|e)\b/.test(rest)) return 'lab'; // 코드를 검사하는 일은 검증하는 방(테스트 랩)
   if (LAB.test(rest)) return 'lab';
   if (BUILD.test(rest)) return 'build';
   if (DATA_CMD.test(rest)) return 'data';

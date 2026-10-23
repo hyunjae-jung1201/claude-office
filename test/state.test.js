@@ -450,3 +450,13 @@ test('ai 세션은 팀장이 되지 않고 ai 표시가 붙은 팀원으로 나�
   feed(st, ev('stop', 5000, { sessionId: 'cx-1234567890', ai: 'codex' }));
   assert.equal(teamA(st, 5000).members.find((m) => m.ai).room, 'lounge'); // 끝나면 휴게실에서 쉰다
 });
+
+test('ai 전용 팀: Codex 신호는 폴더와 상관없이 그 팀의 팀장(ai 표시)이 되고, 폴더 팀에는 영향이 없다', () => {
+  const st = createState({ ...config, projects: [...config.projects, { name: 'Codex', path: 'ai:codex', ai: 'codex', color: '#8fdcae' }] });
+  feed(st, ev('prompt', 1000, { sessionId: 'cx1', cwd: '/w/a', ai: 'codex' }), ev('tool', 2000, { sessionId: 'cx1', cwd: '/w/a', ai: 'codex', category: 'run', activity: 'lab' }));
+  const snap = snapshot(st, 2000);
+  const codex = snap.teams.find((t) => t.name === 'Codex');
+  assert.deepEqual([codex.ai, codex.status, codex.room], ['codex', 'run', 'lab']);
+  assert.equal(snap.teams.find((t) => t.name === 'A').status, 'off'); // 같은 폴더여도 폴더 팀은 그대로
+  assert.equal(snap.teams.find((t) => t.name === 'A').members.length, 0);
+});
