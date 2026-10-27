@@ -19,6 +19,7 @@ const STATUS_COLOR = { read: '#4c8dff', write: '#13a58a', run: '#8b5cf6', wait: 
 const WALK_SPEED = 2.8; // 타일/초
 const CELEBRATE_MS = 4000;
 const MEMBER_SCALE = 0.82;
+const AVATAR_SCALE = 1.18; // 아바타 전체 크기 배율(팀장·팀원 공통)
 const BUBBLE_LEVELS = [1.6, 2.05]; // 이웃 팀 말풍선이 겹치지 않도록 2단계로 번갈아 둔다(머리 바로 위가 1단계) 
 
 // 소품 모양(작은 도형 조합). 이름은 roleprops.js 에서 정한다.
@@ -329,7 +330,7 @@ export function createScene(canvas, overlay, opts = {}) {
     alert.append(el('b'));
     alert.firstChild.textContent = '!';
     entity.alertObj = new CSS2DObject(alert);
-    entity.alertObj.position.set(0.55, member ? 1.0 : 1.15, 0);
+    entity.alertObj.position.set(0.55, member ? 1.2 : 1.4, 0);
     entity.alertObj.visible = false;
     entity.group.add(entity.alertObj);
 
@@ -350,7 +351,7 @@ export function createScene(canvas, overlay, opts = {}) {
     const variant = isBot ? 0 : variantFor({ team, kind: member ? 'member' : 'team', id });
     const roleId = member && String(id).startsWith('role:') ? String(id).slice(5) : null;
     const body = makeAvatar(color, variant, ai ? 'alien' : isBot ? 'bot' : 'human', roleId);
-    body.scale.setScalar(scale);
+    body.scale.setScalar(scale * AVATAR_SCALE);
     group.add(body);
     group.position.set(wx(tile.x), 0, wz(tile.y));
     scene.add(group);
@@ -399,6 +400,7 @@ export function createScene(canvas, overlay, opts = {}) {
     entity.bubbleObj.visible = false; // 하는 일은 왼쪽 목록에 적는다(아바타 위에는 이름표·표시만 둔다)
     entity.alertObj.visible = status === 'wait';
     entity.zzzObj.visible = sleeping;
+    entity.zzzObj.position.set(0.3, sleeping ? 0.95 : 1.65, sleeping ? -0.5 : 0); // 누우면 머리맡으로 내린다
   }
 
   // ---- 팀원 책상: 하위 에이전트·검토자가 작업실에 앉을 때만 책상과 의자가 나타나고, 떠나면 사라진다(빈 책상이 늘어서 지저분해지지 않게)
@@ -770,11 +772,12 @@ export function createScene(canvas, overlay, opts = {}) {
       entity.body.position.y = goal.room === 'lounge' ? 0.2 : 0.06; // 휴게실 소파는 벤치보다 높다
       lift = Math.sin(t * 2) * 0.008;
     } else if (p === 'sleep') {
-      // 소파에 앉아 고개를 떨구고 잔다: 다리를 앞으로, 엉덩이를 좌석 높이에 맞춘다
-      legL.rotation.x = legR.rotation.x = -1.45;
-      armL.rotation.x = armR.rotation.x = -0.25;
-      head.rotation.x = 0.55 + Math.sin(t * 1.6) * 0.04;
-      entity.body.position.y = 0.3; // 침대 매트리스 높이
+      // 침대에 등을 대고 눕는다: 머리는 베개(북쪽), 얼굴은 천장 쪽. 다리는 펴고 손은 몸 옆에.
+      entity.body.rotation.x = -Math.PI / 2;
+      entity.body.position.y = 0.44; // 매트리스 윗면(0.3) + 몸통 반두께
+      entity.body.position.z = 0.7; // 발이 침대 남쪽 끝, 머리가 베개 위에 오게 민다
+      armL.rotation.x = armR.rotation.x = -0.12;
+      head.rotation.x = -0.08 + Math.sin(t * 1.6) * 0.02;
     } else {
       armL.rotation.x = Math.sin(t * 2) * 0.05;
       armR.rotation.x = -Math.sin(t * 2) * 0.05;
