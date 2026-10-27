@@ -362,7 +362,7 @@ export async function startServer({
           const body = JSON.stringify({ rows });
           await Promise.all(u.push.map((t) => {
             const file = `${t.root}/data/usage-remote.json`;
-            return execOut('ssh', [...sshBaseArgs(t), `cat > '${file}.tmp' && mv '${file}.tmp' '${file}'`], body);
+            return execOut('ssh', [...sshBaseArgs(t), `mkdir -p '${t.root}/data' && cat > '${file}.tmp' && mv '${file}.tmp' '${file}'`], body);
           }));
         }
         : null,
