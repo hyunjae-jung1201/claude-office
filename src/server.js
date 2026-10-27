@@ -9,7 +9,9 @@ import { normalizeEvent } from './events.js';
 import { createState, applyEvent, tick, snapshot, setLabel, applyReviewEvent, setReviewHistory, acknowledgeReview, teamOfSession } from './state.js';
 import { ruleLabel } from './labels.js';
 import { createSummarizer } from './summarizer.js';
-import { startRemote, startLocalTail, projectionToEvents } from './remote.js';
+import { startRemote, startLocalTail, projectionToEvents, sshBaseArgs } from './remote.js';
+import { createUsageMonitor } from './usage.js';
+import { spawn } from 'node:child_process';
 import { createSessionRegistry } from './sessions.js';
 import { createLiveMonitor } from './live.js';
 import { validateRoleIds } from './roles/loader.js';
@@ -64,10 +66,18 @@ export async function startServer({
   if (rolesOn) setReviewHistory(state, store.list(20), store.acked.ids());
   const clients = new Set();
   const seqs = new Map(); // 세션/에이전트별 최신 이벤트 번호: 늦게 끝난 요약이 최신 문구를 덮지 않게 한다
+  let usageMonitor = null; // 토큰 사용량(아래에서 config.usage 가 있을 때 만든다)
+
+  const snapJson = () => {
+    const snap = snapshot(state, now());
+    const usage = usageMonitor?.rows();
+    if (usage?.length) snap.usage = usage;
+    return JSON.stringify(snap);
+  };
 
   const broadcast = () => {
     if (clients.size === 0) return;
-    const msg = JSON.stringify(snapshot(state, now()));
+    const msg = snapJson();
     for (const ws of clients) if (ws.readyState === 1) ws.send(msg);
   };
 
@@ -287,6 +297,7 @@ export async function startServer({
     const url = new URL(req.url, 'http://localhost');
     const { pathname } = url;
     if (req.method === 'GET' && pathname === '/api/reviews') return serveReviews(url, res);
+    if (req.method === 'GET' && pathname === '/api/usage') return res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(usageMonitor?.rows() ?? []));
     if (req.method === 'POST' && (pathname === '/event' || pathname === '/ingest') && token && !tokenMatches(token, req.headers[TOKEN_HEADER])) return res.writeHead(401).end();
     if (req.method === 'POST' && pathname === '/event') {
       if (req.headers.origin) return res.writeHead(403).end();
@@ -317,8 +328,50 @@ export async function startServer({
     clients.add(ws);
     ws.on('close', () => clients.delete(ws));
     ws.on('error', () => clients.delete(ws));
-    ws.send(JSON.stringify(snapshot(state, now())));
+    ws.send(snapJson());
   });
+
+  // 토큰 사용량: config.usage 가 있을 때만. 각 PC에서 ccusage(오프라인)로 오늘(KST) 누적을 모은다.
+  if (config.usage) {
+    const u = config.usage;
+    const USAGE_FILE = join(ROOT, 'data', 'usage-remote.json'); // 다른 PC가 밀어넣는 행
+    const STALE_MS = 15 * 60 * 1000;
+    const execOut = (bin, args, input = null) => new Promise((ok, fail) => {
+      const child = spawn(bin, args, { stdio: ['pipe', 'pipe', 'pipe'] });
+      let out = '';
+      let err = '';
+      child.stdout.on('data', (d) => { out += d; });
+      child.stderr.on('data', (d) => { err += d; });
+      child.on('error', fail);
+      child.on('close', (code) => (code === 0 ? ok(out) : fail(new Error(err.trim().slice(0, 200) || `exit ${code}`))));
+      child.stdin.end(input ?? '');
+    });
+    usageMonitor = createUsageMonitor({
+      sources: [{ name: u.localName ?? 'PC', local: true }, ...(u.remotes ?? [])],
+      run: (source, cmd) => (source.local ? execOut('bash', ['-c', cmd]) : execOut('ssh', [...sshBaseArgs(source), cmd])),
+      // 밀어넣어진 행: 너무 오래된 행은 숫자 대신 '연결 안 됨'으로 보여준다
+      importRows: u.import
+        ? async () => {
+          const { rows = [] } = JSON.parse(await readFile(USAGE_FILE, 'utf8').catch(() => '{}')) ?? {};
+          return rows.map((r) => (now() - r.at > STALE_MS ? { name: r.name, error: true, at: r.at } : r));
+        }
+        : null,
+      // 내 행을 다른 PC의 data/usage-remote.json 으로 내보낸다 (그쪽 import 가 읽는다)
+      push: Array.isArray(u.push) && u.push.length
+        ? async (rows) => {
+          const body = JSON.stringify({ rows });
+          await Promise.all(u.push.map((t) => {
+            const file = `${t.root}/data/usage-remote.json`;
+            return execOut('ssh', [...sshBaseArgs(t), `cat > '${file}.tmp' && mv '${file}.tmp' '${file}'`], body);
+          }));
+        }
+        : null,
+      intervalMs: (u.intervalSeconds ?? 60) * 1000,
+      now,
+      onUpdate: () => broadcast(),
+    });
+    usageMonitor.start();
+  }
 
   // 이 PC에서 실행 중인 세션: 등록 정보를 주기적으로 읽어 상태 변화·하트비트를 이벤트로 흘려 넣는다
   const liveMonitor = createLiveMonitor({ list: () => registry.liveSessions(), emit: handleEvent, now });
@@ -369,6 +422,7 @@ export async function startServer({
       dailyLog?.close();
       for (const r of remotes) r.stop();
       localCollector?.stop();
+      usageMonitor?.stop();
       for (const ws of clients) ws.terminate();
       return new Promise((r) => {
         wss.close(() => server.close(() => r()));

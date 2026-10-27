@@ -2,6 +2,7 @@ import { createScene } from './scene.js';
 import { createPanel } from './panel.js';
 import { createRoster } from './roster.js';
 import { createCard } from './card.js';
+import { createUsageHud } from './usage.js';
 
 const canvas = document.getElementById('c');
 const overlay = document.getElementById('overlay');
@@ -11,6 +12,7 @@ const hourParam = Number.parseFloat(new URLSearchParams(location.search).get('ho
 const scene = createScene(canvas, overlay, { hour: hourParam, ao: new URLSearchParams(location.search).get('ao') !== '0' }); // ?ao=0 으로 환경광 차폐를 끌 수 있다
 const card = createCard(document.getElementById('card'));
 const panel = createPanel({ button: document.getElementById('rp-btn'), panel: document.getElementById('rp') });
+const usageHud = createUsageHud(document.getElementById('usage'));
 let toastTimer = null;
 function toast(text) {
   const el = document.getElementById('toast');
@@ -101,6 +103,7 @@ function connect() {
       const snap = JSON.parse(e.data);
       scene.update(snap);
       panel.update(snap);
+      usageHud.update(snap);
       roster.update(snap);
       card.refresh(roster.rows());
     } catch (err) { console.error('bad snapshot', err); }

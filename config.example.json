@@ -4,6 +4,28 @@
   "maxMembers": 4,
   "celebrateAfterSeconds": 30,
   "projects": [
-    { "name": "예시 프로젝트", "path": "/home/me/projects/example", "color": "#e8637a" }
-  ]
+    {
+      "name": "예시 프로젝트",
+      "path": "/home/me/projects/example",
+      "color": "#e8637a"
+    }
+  ],
+  "usage": {
+    "localName": "이 PC 이름(예: PC1)",
+    "remotes": [
+      {
+        "name": "PC2",
+        "ssh": "user@host",
+        "key": "~/.ssh/claude_office_ed25519(생략 가능)"
+      }
+    ],
+    "push": [
+      {
+        "ssh": "user@host",
+        "root": "/home/user/projects/claude-office"
+      }
+    ],
+    "import": false,
+    "intervalSeconds": 60
+  }
 }
