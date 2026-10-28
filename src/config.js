@@ -3,7 +3,7 @@ import { basename } from 'node:path';
 
 const AI_TOOLS = new Set(['codex']); // projects[].ai 로 팀이 될 수 있는 다른 AI 도구
 const DEFAULTS = { port: 9410, offAfterMinutes: 10, maxMembers: 4, celebrateAfterSeconds: 30, responseWaitMinutes: 5 };
-const MAX_PROJECTS = 6;
+const MAX_PROJECTS = 7;
 const PALETTE = ['#e8637a', '#2a7f8f', '#8fb339', '#d9822b', '#6c63d9', '#e5b83a'];
 
 const trimSlash = (p) => (p.length > 1 ? p.replace(/\/+$/, '') : p);

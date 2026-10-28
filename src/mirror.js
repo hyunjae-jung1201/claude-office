@@ -1,5 +1,5 @@
 // 이 PC 의 팀을 다른 PC(push 원격)의 Claude Office 설정에 맞춘다. 순수 함수(원격 설정 객체 → 새 설정 객체).
-const MAX_TEAMS = 6;
+const MAX_TEAMS = 7;
 const KEEP = ['name', 'path', 'color', 'aliases'];
 
 export function mergeMirror(remote, local, name) {

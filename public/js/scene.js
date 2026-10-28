@@ -600,7 +600,7 @@ export function createScene(canvas, overlay, opts = {}) {
   const LOUNGE_ACTIVITIES = [
     { id: 'coffee', ms: [4500, 7500], spot: (team) => ({ x: 9.4 + 0.5 * team, y: 10.85, pose: 'drink' }) }, // 팀마다 자리가 달라 겹치지 않는다
     { id: 'arcade', ms: [9000, 15000], spot: () => ({ x: 14.05, y: 10.55, pose: 'arcade', face: Math.PI }) },
-    { id: 'darts', ms: [9000, 14000], spot: (team, lane) => ({ x: 17.5 + 0.5 * lane, y: 11.0, pose: 'darts', face: Math.PI }) }, // 던지는 줄 3개(lane 0~2)
+    { id: 'darts', ms: [9000, 14000], spot: (team, lane) => ({ x: 17.5 + 0.5 * lane, y: 10.9, pose: 'darts', face: Math.PI }) }, // 던지는 줄 3개(lane 0~2), 침대 줄(y 11.03~)을 피해 한 걸음 앞
     { id: 'read', ms: [8000, 13000], spot: () => ({ x: 19.05, y: 10.45, pose: 'browse', face: Math.PI }) },
   ];
   const DART_LANES = 3;

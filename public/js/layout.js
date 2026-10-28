@@ -32,7 +32,7 @@ export const ROOM_NAMES = {
   response: '응답 대기실', lounge: '휴게실',
 };
 
-export const TEAM_COUNT = 6;
+export const TEAM_COUNT = 7;
 const MEMBER_MAX = 4;
 const DESK_W = ROOMS.work.w / TEAM_COUNT; // 작업실을 팀 수로 나눈 책상 폭
 
@@ -57,41 +57,41 @@ export function memberSeat(teamIndex, memberIndex) {
   checkTeam(teamIndex);
   if (!Number.isInteger(memberIndex) || memberIndex < 0 || memberIndex >= MEMBER_MAX) throw new RangeError(`memberIndex ${memberIndex}`);
   const z = deskZone(teamIndex);
-  // 팀원 책상 두 줄(앉는 자리): 팀장 책상 뒤쪽 줄 아래로 y 2.6, 3.6
-  return { x: z.x + 0.3 + 0.55 * (memberIndex % 2), y: 2.6 + 1.0 * Math.floor(memberIndex / 2) };
+  // 팀원 책상 두 줄(앉는 자리): 팀장 책상 뒤쪽 줄 아래로 y 2.55, 3.55 (좁아진 구역에서 간격을 지키려 오른쪽 자리를 살짝 뒤로 민다)
+  return { x: z.x + 0.26 + 0.48 * (memberIndex % 2), y: 2.55 + 0.16 * (memberIndex % 2) + 1.0 * Math.floor(memberIndex / 2) };
 }
 
 // ---- 앉는 방의 가구와 자리: 자리(좌표·바라보는 방향)와 의자·탁자는 같은 값에서 나온다(office.js 가 이 값으로 가구를 만든다).
 // 가구 배치를 바꾸려면 여기 값을 고친다 — 아바타의 자리·방향이 함께 바뀐다.
-export const RESEARCH_TABLES = [{ x: 4.37, y: 1.45, r: 0.52 }, { x: 5.6, y: 2.45, r: 0.52 }]; // 둥근 토론 탁자
+export const RESEARCH_TABLES = [{ x: 4.37, y: 1.45, r: 0.52 }, { x: 5.6, y: 2.45, r: 0.52 }, { x: 4.5, y: 3.0, r: 0.52 }]; // 둥근 토론 탁자
 const SEAT_DIRS = [{ dx: -1, dy: 0, face: Math.PI / 2 }, { dx: 1, dy: 0, face: -Math.PI / 2 }, { dx: 0, dy: 1, face: Math.PI }]; // 탁자의 서·동·남쪽에 앉아 탁자를 본다
 export const researchSeats = () => RESEARCH_TABLES.flatMap((t) => SEAT_DIRS.map((d) => ({ x: t.x + d.dx * 0.65, y: t.y + d.dy * 0.65, face: d.face, table: t, dx: d.dx, dy: d.dy })));
 export const DOCS_TABLE = { x: 13.95, y: 1.3, w: 2.7, d: 0.9 }; // 긴 공동 작업 탁자
 const DOCS_SEAT_X = [14.45, 15.2, 15.95];
-export const docsSeats = () => [...DOCS_SEAT_X.map((x) => ({ x, y: DOCS_TABLE.y - 0.35, face: 0 })), ...DOCS_SEAT_X.map((x) => ({ x, y: DOCS_TABLE.y + DOCS_TABLE.d + 0.4, face: Math.PI }))]; // 윗줄은 남쪽, 아랫줄은 북쪽을 본다
+export const docsSeats = () => [...DOCS_SEAT_X.map((x) => ({ x, y: DOCS_TABLE.y - 0.35, face: 0 })), ...DOCS_SEAT_X.map((x) => ({ x, y: DOCS_TABLE.y + DOCS_TABLE.d + 0.4, face: Math.PI })), { x: 16.45, y: DOCS_TABLE.y - 0.35, face: 0 }]; // 윗줄은 남쪽, 아랫줄은 북쪽을 본다 (7번째 자리는 윗줄 끝)
 
 // 방마다 팀 번호(0~4)별 서 있는/앉는 자리. 가장자리에서 충분히 떨어져 있고 팀끼리 겹치지 않는다.
 const row = (x0, dx, y) => (i) => ({ x: x0 + dx * i, y });
 const grid = (x0, y0) => (i) => ({ x: x0 + 0.9 * (i % 3), y: y0 + 1.0 * Math.floor(i / 3) });
 const SPOTS = {
-  library: row(0.5, 0.5, 1.15), // 책장 앞(뒷벽)
+  library: row(0.32, 0.46, 1.15), // 책장 앞(뒷벽)
   research: (i) => { const { x, y, face } = researchSeats()[i]; return { x, y, face }; }, // 둥근 토론 탁자 둘레
   work: (i) => {
     const z = deskZone(i);
     return { x: z.x + z.w / 2, y: 1.55 }; // 팀장 책상 바로 앞 의자
   },
   docs: (i) => { const { x, y, face } = docsSeats()[i]; return { x, y, face }; }, // 긴 공동 작업 탁자 양쪽
-  planning: row(17.2, 0.48, 0.6), // 칸반 보드 앞
-  server: (i) => ({ x: 1.68, y: 5.9 + 0.55 * i }), // 서버 랙 앞 서비스 선반
-  data: row(3.8, 0.5, 6.35), // 서류 캐비닛 앞
-  lab: row(7.0, 0.5, 6.4), // 실험대 앞
-  build: row(10.25, 0.46, 6.55), // 컨베이어 앞
-  git: (i) => (i < 4 ? { x: 13.5 + 0.46 * i, y: 5.85 } : { x: 14.0 + 0.55 * (i - 4), y: 6.6 }), // 보드 앞(다섯째·여섯째는 금고를 피해 한 줄 뒤)
-  briefing: row(16.6, 0.6, 6.8), // 연단 옆
-  response: row(1.2, 1.3, 11.5), // 벤치에 앉아 사용자의 응답을 기다린다
-  lounge: row(9.5, 0.95, 12.2), // 소파에 앉아 쉰다
+  planning: (i) => ({ x: 17.15 + 0.4 * i, y: 0.6 + 0.35 * (i % 2) }), // 칸반 보드 앞(좁은 방이라 두 줄 지그재그)
+  server: (i) => ({ x: 1.68, y: 5.85 + 0.46 * i }), // 서버 랙 앞 서비스 선반
+  data: (i) => ({ x: 3.72 + 0.4 * i, y: 6.35 + 0.3 * (i % 2) }), // 서류 캐비닛 앞(지그재그)
+  lab: (i) => ({ x: 6.92 + 0.4 * i, y: 6.4 + 0.3 * (i % 2) }), // 실험대 앞(지그재그)
+  build: (i) => ({ x: 10.15 + 0.4 * i, y: 6.85 + 0.25 * (i % 2) }), // 컨베이어 앞(지그재그, 상자를 피해 한 걸음 뒤)
+  git: (i) => (i < 4 ? { x: 13.5 + 0.46 * i, y: 5.85 } : { x: 14.0 + 0.55 * (i - 4), y: 6.6 }), // 보드 앞(다섯째부터는 금고를 피해 한 줄 뒤)
+  briefing: row(16.52, 0.46, 6.8), // 연단 옆
+  response: row(0.9, 1.05, 11.5), // 벤치에 앉아 사용자의 응답을 기다린다
+  lounge: row(9.2, 0.72, 12.2), // 소파에 앉아 쉰다
 };
-const BEDS = row(15.1, 0.9, 12.0); // 휴게실 침대(꺼진 세션)
+export const BEDS = (i) => ({ x: 14.5 + 0.8 * i, y: 12.2 - 0.42 * (i % 2) }); // 휴게실 침대(꺼진 세션): 한 칸씩 어긋난 두 줄 느낌으로 7개
 // 방마다 하는 일(자세): 작업실·리서치·문서는 타자, 자료실·데이터 창고는 책/서류를 꺼내 읽고, 기획실은 보드에 쓰고, 서버실은 서서 콘솔을 치고,
 // 테스트 랩은 시약을 섞고, 빌드실은 장비를 손보고, 형상관리실은 보드를 가리키고, 브리핑룸은 발표한다.
 // (타자 type 은 서서 하는 일: 서버실 선반 앞)

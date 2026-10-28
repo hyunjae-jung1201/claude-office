@@ -26,9 +26,9 @@ test('응답이 필요한 팀(응답 대기실)은 wait 표시가 된다', () =>
   assert.equal(r.status, 'wait');
 });
 
-test('판정 배지와 팀 6개 제한, 꺼진 팀', () => {
-  const rows = rosterRows(snap(Array.from({ length: 7 }, (_, i) => team({ name: `T${i}`, status: i === 1 ? 'off' : 'write', room: i === 1 ? 'lounge' : 'work', label: i === 1 ? '꺼짐' : '일함', badge: i === 0 ? { verdict: 'concern', concerns: 2 } : null }))));
-  assert.equal(rows.filter((r) => r.kind === 'team').length, 6);
+test('판정 배지와 팀 7개 제한, 꺼진 팀', () => {
+  const rows = rosterRows(snap(Array.from({ length: 8 }, (_, i) => team({ name: `T${i}`, status: i === 1 ? 'off' : 'write', room: i === 1 ? 'lounge' : 'work', label: i === 1 ? '꺼짐' : '일함', badge: i === 0 ? { verdict: 'concern', concerns: 2 } : null }))));
+  assert.equal(rows.filter((r) => r.kind === 'team').length, 7);
   assert.deepEqual(rows[0].badge, { verdict: 'concern', concerns: 2 });
   assert.equal(rows[1].status, 'off');
   assert.equal(rows[1].text, '꺼짐');

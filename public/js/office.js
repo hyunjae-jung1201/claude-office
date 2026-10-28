@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, DOOR_W, DOOR_LINES, deskZone, RESEARCH_TABLES, researchSeats, DOCS_TABLE, docsSeats } from './layout.js';
+import { FLOOR, ROOMS, ROOM_NAMES, TEAM_COUNT, DOOR_W, DOOR_LINES, deskZone, RESEARCH_TABLES, researchSeats, DOCS_TABLE, docsSeats, BEDS } from './layout.js';
 import * as T from './textures.js';
 import { dayState } from './daylight.js';
 
@@ -367,7 +367,7 @@ export function buildOffice(scene) {
     chair(seat.x, seat.y, ['#4f6a8f', '#6a8a6a', '#8f6a5a'][k % 3], seat.face - Math.PI);
     box(seat.table.x + seat.dx * 0.4 - 0.08 + seat.dy * 0.2, seat.table.y + seat.dy * 0.4 - 0.08 - seat.dx * 0.2, 0.16, 0.2, 0.012, k % 2 ? '#fff9e8' : '#d6e4f7', 0.745, { r: 0.002, rot: 0.3 * ((k % 3) - 1) });
   });
-  RESEARCH_TABLES.forEach((t, ti) => mug(t.x, t.y, 0.74, ['#d9553f', '#4f7f9c'][ti]));
+  RESEARCH_TABLES.forEach((t, ti) => mug(t.x, t.y, 0.74, ['#d9553f', '#4f7f9c', '#e8b44a'][ti % 3]));
   // 마인드맵 화이트보드(바퀴 달린 스탠드)
   {
     const c = document.createElement('canvas');
@@ -391,23 +391,23 @@ export function buildOffice(scene) {
   const wsScreens = [T.codeScreen(91, '#7fe0c8'), T.codeScreen(92, '#8fb2ff'), T.chartScreen(93)];
   for (let i = 0; i < TEAM_COUNT; i++) {
     const z = deskZone(i);
-    const dx = z.x + 0.09;
-    box(dx, 0.5, 0.96, 0.7, 0.045, deskTops[i], 0.7, { r: 0.015 });
+    const dx = z.x + 0.08;
+    box(dx, 0.5, 0.84, 0.7, 0.045, deskTops[i % deskTops.length], 0.7, { r: 0.015 });
     box(dx + 0.04, 0.54, 0.05, 0.6, 0.7, '#6d5a42', 0, { r: 0.01 });
-    box(dx + 0.87, 0.54, 0.05, 0.6, 0.7, '#6d5a42', 0, { r: 0.01 });
-    box(dx + 0.1, 0.56, 0.76, 0.03, 0.34, '#6d5a42', 0.34, { r: 0.006 });
-    monitor(dx + 0.4, 0.7, 0.745, wsScreens[i % 3]);
-    keyboard(dx + 0.22, 0.97, 0.745);
-    mug(dx + 0.8, 0.95, 0.745, ['#e8e2d4', '#d9553f', '#4f7f9c', '#e8b44a', '#8a5f8f', '#e8e2d4'][i]);
-    if (i % 2 === 0) box(dx + 0.62, 0.9, 0.14, 0.18, 0.03, '#fff9e8', 0.745, { r: 0.004, rot: 0.35 });
-    sticky(dx + 0.12, 1.1 + (i % 2) * 0.05, (i - 2) * 0.05);
+    box(dx + 0.75, 0.54, 0.05, 0.6, 0.7, '#6d5a42', 0, { r: 0.01 });
+    box(dx + 0.1, 0.56, 0.64, 0.03, 0.34, '#6d5a42', 0.34, { r: 0.006 });
+    monitor(dx + 0.37, 0.7, 0.745, wsScreens[i % 3]);
+    keyboard(dx + 0.18, 0.97, 0.745);
+    mug(dx + 0.68, 0.95, 0.745, ['#e8e2d4', '#d9553f', '#4f7f9c', '#e8b44a', '#8a5f8f', '#e8e2d4'][i % 6]);
+    if (i % 2 === 0) box(dx + 0.52, 0.9, 0.14, 0.18, 0.03, '#fff9e8', 0.745, { r: 0.004, rot: 0.35 });
+    sticky(dx + 0.1, 1.1 + (i % 2) * 0.05, (i - 2) * 0.05);
     // 팀 색 명패(팀 색이 바뀌면 scene 이 색을 입힌다)
-    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.07, 0.02), new THREE.MeshBasicMaterial({ color: '#e8637a' }));
-    strip.position.set(wx(dx + 0.48), 0.8, wz(1.215));
+    const strip = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.07, 0.02), new THREE.MeshBasicMaterial({ color: '#e8637a' }));
+    strip.position.set(wx(dx + 0.42), 0.8, wz(1.215));
     scene.add(strip);
     deskAccents.push(strip);
     const chairColors = ['#3f5a7a', '#5a6a4a', '#7a4f4f', '#4a4f6a', '#6a5a3f', '#4f6a6a'];
-    chair(z.x + 0.58, 1.55, chairColors[i], (i % 3 - 1) * 0.12); // 팀장 의자: 책상 바로 앞
+    chair(z.x + 0.5, 1.55, chairColors[i % chairColors.length], (i % 3 - 1) * 0.12); // 팀장 의자: 책상 바로 앞
   }
 
   // ---------------------------------------------------------------- 문서실
@@ -578,11 +578,11 @@ export function buildOffice(scene) {
   plant(16.3, 8.1, 0);
 
   // ---------------------------------------------------------------- 응답 대기실(초록 불빛의 조용한 구석)
-  for (let i = 0; i < 5; i++) {
-    const bx = 1.2 + 1.3 * i;
-    box(bx - 0.55, 11.2, 1.1, 0.5, 0.32, '#3d7a5c', 0, { r: 0.06 });
-    box(bx - 0.55, 11.1, 1.1, 0.14, 0.7, '#346a50', 0, { r: 0.05 });
-    box(bx - 0.2, 11.28, 0.38, 0.3, 0.1, ['#e8d7b0', '#d9a441', '#c9704f', '#e8d7b0', '#8fb2a0'][i], 0.32, { r: 0.05, rot: (i - 2) * 0.1 });
+  for (let i = 0; i < TEAM_COUNT; i++) { // 벤치는 layout.js SPOTS.response 의 자리(0.9 + 1.05*i)와 짝
+    const bx = 0.9 + 1.05 * i;
+    box(bx - 0.47, 11.2, 0.94, 0.5, 0.32, '#3d7a5c', 0, { r: 0.06 });
+    box(bx - 0.47, 11.1, 0.94, 0.14, 0.7, '#346a50', 0, { r: 0.05 });
+    box(bx - 0.19, 11.28, 0.38, 0.3, 0.1, ['#e8d7b0', '#d9a441', '#c9704f', '#e8d7b0', '#8fb2a0'][i % 5], 0.32, { r: 0.05, rot: (i - 2) * 0.1 });
   }
   const responseLine = box(0.3, 9.56, 7.4, 0.05, 0.03, GREEN, 0, { material: glow(GREEN, 1.0), r: 0.005 });
   dynamic.push(responseLine);
@@ -592,12 +592,12 @@ export function buildOffice(scene) {
   plant(6.6, 9.8, 0);
 
   // ---------------------------------------------------------------- 휴게실
-  box(9.0, 12.0, 5.6, 0.95, 0.42, '#c2764f', 0, { r: 0.08 }); // 소파: 테라코타색
-  box(9.0, 12.0, 5.6, 0.26, 0.95, '#b06844', 0, { r: 0.07 });
-  box(9.0, 12.0, 0.28, 0.95, 0.68, '#b06844', 0, { r: 0.07 });
-  box(14.32, 12.0, 0.28, 0.95, 0.68, '#b06844', 0, { r: 0.07 });
-  for (let k = 0; k < 5; k++) box(9.45 + k * 1.05, 12.28, 0.86, 0.6, 0.12, k % 2 ? '#c2764f' : '#d8a25c', 0.42, { r: 0.05 });
-  for (const [x, c, rot] of [[9.45, '#e8d7b0', 0.2], [13.9, '#6f8f6a', -0.2]]) box(x, 12.3, 0.34, 0.12, 0.34, c, 0.45, { r: 0.07, rot });
+  box(8.6, 12.0, 5.5, 0.95, 0.42, '#c2764f', 0, { r: 0.08 }); // 소파: 테라코타색 (자리는 layout.js SPOTS.lounge 의 9.2 + 0.72*i)
+  box(8.6, 12.0, 5.5, 0.26, 0.95, '#b06844', 0, { r: 0.07 });
+  box(8.6, 12.0, 0.28, 0.95, 0.68, '#b06844', 0, { r: 0.07 });
+  box(13.82, 12.0, 0.28, 0.95, 0.68, '#b06844', 0, { r: 0.07 });
+  for (let k = 0; k < TEAM_COUNT; k++) box(8.92 + k * 0.72, 12.28, 0.56, 0.6, 0.12, k % 2 ? '#c2764f' : '#d8a25c', 0.42, { r: 0.05 });
+  for (const [x, c, rot] of [[9.0, '#e8d7b0', 0.2], [13.45, '#6f8f6a', -0.2]]) box(x, 12.3, 0.34, 0.12, 0.34, c, 0.45, { r: 0.07, rot });
   cyl(11.2, 11.15, 0.9, 0.012, '#d9c7a3', 0, { seg: 40 }); // 러그
   cyl(11.2, 11.15, 0.7, 0.014, '#8f6f5a', 0, { seg: 40 });
   box(10.4, 10.85, 1.6, 0.7, 0.04, '#e4d3b0', 0.34, { r: 0.015 });
@@ -618,19 +618,19 @@ export function buildOffice(scene) {
   box(12.95, 9.5, 0.7, 0.6, 1.5, '#c4553f', 0, { r: 0.04 }); // 자판기
   box(13.05, 9.64, 0.38, 0.02, 0.7, '#161a24', 0.55, { r: 0.006, material: glow('#7fb6ff', 0.5) });
   for (let r = 0; r < 4; r++) box(13.1, 9.64, 0.28, 0.02, 0.05, ['#f5a524', '#35e0a1', '#e8637a', '#8fb2ff'][r], 0.6 + r * 0.15, { r: 0.004 });
-  // 침대(꺼진 세션): 담요와 베개
+  // 침대(꺼진 세션): 담요와 베개 — 자리·배치는 layout.js 의 BEDS 와 짝
   for (let i = 0; i < TEAM_COUNT; i++) {
-    const bx = 15.1 + 0.9 * i;
-    box(bx - 0.4, 11.25, 0.8, 1.55, 0.16, '#4a3d33', 0, { r: 0.04 });
-    box(bx - 0.37, 11.3, 0.74, 1.45, 0.14, ['#a7b8d8', '#cdb7a3', '#9fc0b4', '#d6b4b4', '#b9b2d8', '#c7cf9f'][i], 0.16, { r: 0.05 });
-    box(bx - 0.3, 11.35, 0.6, 0.3, 0.1, '#f4efe2', 0.3, { r: 0.06 });
-    box(bx - 0.37, 11.95, 0.74, 0.8, 0.03, ['#6a7fa8', '#a98a6a', '#6f9a88', '#b27a7a', '#8a82b8', '#97a56a'][i], 0.3, { r: 0.015 });
+    const { x: bx, y: by } = BEDS(i);
+    box(bx - 0.36, by - 0.75, 0.72, 1.55, 0.16, '#4a3d33', 0, { r: 0.04 });
+    box(bx - 0.33, by - 0.7, 0.66, 1.45, 0.14, ['#a7b8d8', '#cdb7a3', '#9fc0b4', '#d6b4b4', '#b9b2d8', '#c7cf9f'][i % 6], 0.16, { r: 0.05 });
+    box(bx - 0.27, by - 0.65, 0.54, 0.3, 0.1, '#f4efe2', 0.3, { r: 0.06 });
+    box(bx - 0.33, by - 0.05, 0.66, 0.8, 0.03, ['#6a7fa8', '#a98a6a', '#6f9a88', '#b27a7a', '#8a82b8', '#97a56a'][i % 6], 0.3, { r: 0.015 });
   }
   box(19.55, 9.9, 0.3, 0.3, 0.55, '#6d5a42', 0, { r: 0.02 });
   cyl(19.7, 10.05, 0.13, 0.2, '#ffd9a0', 0.58, { r2: 0.08, material: std('#ffd9a0', { emissive: '#ffd28a', ei: 0.9 }) });
   plant(8.3, 9.75, 1);
   plant(15.0, 9.7, 0);
-  plant(19.2, 12.3, 1);
+  plant(8.25, 12.5, 1); // 소파 왼쪽 구석(침대가 7개로 늘며 오른쪽 구석 자리를 내줬다)
 
   // ---------------------------------------------------------------- 생활 소품: 출입구 안전 설비와 쓰레기통(몇 개만, 현실적인 자리에)
   const bin = (x, y, color = '#5d6573') => { // 사무실 쓰레기통: 살짝 벌어진 원통 + 비닐 가장자리

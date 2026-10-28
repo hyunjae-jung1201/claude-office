@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ROOMS, ROOM_NAMES, FLOOR, ENTRANCE, targetFor, memberSeat, memberTarget, deskZone, roomFor, freeSpotFor, pickMemberSpot, researchSeats, docsSeats, RESEARCH_TABLES, DOCS_TABLE } from '../public/js/layout.js';
 
-const TEAMS = [0, 1, 2, 3, 4, 5];
+const TEAMS = [0, 1, 2, 3, 4, 5, 6];
 const ROOM_IDS = ['library', 'research', 'work', 'docs', 'planning', 'server', 'data', 'lab', 'build', 'git', 'briefing', 'response', 'lounge'];
 const inside = (p, r, m = 0) => p.x >= r.x + m && p.x <= r.x + r.w - m && p.y >= r.y + m && p.y <= r.y + r.d - m;
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -42,11 +42,11 @@ test('관련 있는 방은 서로 붙어 있다 (동선)', () => {
   for (const id of ['server', 'data', 'lab', 'build', 'git', 'briefing']) assert.ok(ROOMS[id].y >= 4 && ROOMS[id].y <= 5.4, id);
 });
 
-test('팀장의 목표: 방마다 6팀 모두 방 안(가장자리에서 0.3 이상)이고 서로 다른 자리', () => {
+test('팀장의 목표: 방마다 7팀 모두 방 안(가장자리에서 0.3 이상)이고 서로 다른 자리', () => {
   for (const room of ROOM_IDS) {
     const spots = TEAMS.map((t) => targetFor('read', t, room));
     spots.forEach((p, t) => assert.ok(inside(p, ROOMS[room], 0.3), `${room}/${t} ${JSON.stringify(p)}`));
-    for (let a = 0; a < 6; a++) for (let b = a + 1; b < 6; b++) assert.ok(dist(spots[a], spots[b]) >= 0.45, `${room} ${a}/${b}`);
+    for (let a = 0; a < spots.length; a++) for (let b = a + 1; b < spots.length; b++) assert.ok(dist(spots[a], spots[b]) >= 0.45, `${room} ${a}/${b}`);
   }
 });
 
@@ -61,7 +61,7 @@ test('꺼짐은 휴게실 침대에서 자고, 쉬는 중은 휴게실 소파에
   assert.ok(sleep.every((p) => p.pose === 'sleep' && inside(p, ROOMS.lounge, 0.3)));
   assert.ok(sit.every((p) => p.pose === 'sit' && inside(p, ROOMS.lounge, 0.3)));
   for (const a of sleep) for (const b of sit) assert.ok(dist(a, b) >= 0.8);
-  for (let i = 0; i < 6; i++) for (let j = i + 1; j < 6; j++) assert.ok(dist(sleep[i], sleep[j]) >= 0.9 - 1e-9);
+  for (let i = 0; i < sleep.length; i++) for (let j = i + 1; j < sleep.length; j++) assert.ok(dist(sleep[i], sleep[j]) >= 0.9 - 1e-9);
 });
 
 test('방을 주지 않으면 상태별 기본 방', () => {
@@ -132,7 +132,7 @@ test('입구는 바닥 오른쪽 가장자리 복도에 있고, 어느 방 안�
 test('잘못된 입력은 오류', () => {
   assert.throws(() => targetFor('dancing', 0));
   assert.throws(() => targetFor('run', 0, 'moon'));
-  assert.throws(() => targetFor('run', 6), RangeError);
+  assert.throws(() => targetFor('run', 7), RangeError);
   assert.throws(() => memberSeat(0, 4), RangeError);
   assert.throws(() => memberTarget('read', 0, 4, 'lab'), RangeError);
 });
@@ -194,7 +194,7 @@ test('방마다 문이 하나씩 있고 방 안쪽 가장자리에서 떨어져 
 import { meetingSpot } from '../public/js/layout.js';
 
 test('meetingSpot: 기획실 안, 탁자(17.3~19.2 × 1.0~1.7)를 피한 자리이고, 같은 팀 4자리는 서로 떨어져 있다', () => {
-  for (let team = 0; team < 6; team++) {
+  for (let team = 0; team < 7; team++) {
     const spots = [0, 1, 2, 3].map((s) => meetingSpot(team, s));
     for (const p of spots) {
       assert.ok(inside(p, ROOMS.planning, 0.3), JSON.stringify(p));
@@ -209,7 +209,7 @@ test('meetingSpot: 기획실 안, 탁자(17.3~19.2 × 1.0~1.7)를 피한 자리�
 test('앉는 방의 자리는 가구(탁자)와 짝: 팀장 자리 = 의자 자리, 모든 자리는 탁자 쪽을 본다', () => {
   const dirTo = (from, to) => [Math.sin(Math.atan2(to.x - from.x, to.y - from.y)), Math.cos(Math.atan2(to.x - from.x, to.y - from.y))];
   researchSeats().forEach((seat, i) => {
-    assert.deepEqual({ x: targetFor('read', i, 'research').x, y: targetFor('read', i, 'research').y }, { x: seat.x, y: seat.y });
+    if (i < TEAMS.length) assert.deepEqual({ x: targetFor('read', i, 'research').x, y: targetFor('read', i, 'research').y }, { x: seat.x, y: seat.y });
     const [fx, fy] = dirTo(seat, seat.table);
     assert.ok(Math.abs(Math.sin(seat.face) - fx) < 1e-9 && Math.abs(Math.cos(seat.face) - fy) < 1e-9, `research ${i} 방향`);
   });
@@ -227,7 +227,7 @@ test('freeSpotFor: 비어 있는 자리 중 팀장 자리에서 가장 가까운
   assert.equal(freeSpotFor('docs', 0, new Set([0, 1])), 2);
   assert.equal(freeSpotFor('docs', 0, new Set([0, 1, 2])), 3); // 같은 줄이 차면 건너편
   assert.equal(freeSpotFor('research', 0, new Set([0])), 2); // 같은 탁자에서 가장 가까운 의자(남쪽)
-  assert.equal(freeSpotFor('lab', 2, new Set([0, 1, 2, 3, 4, 5])), null);
+  assert.equal(freeSpotFor('lab', 2, new Set([0, 1, 2, 3, 4, 5, 6])), null);
   assert.throws(() => freeSpotFor('moon', 0, new Set()));
 });
 
@@ -238,5 +238,5 @@ test('pickMemberSpot: 이번 스냅샷의 팀장 자리·다른 팀원 자리를
   assert.equal(pickMemberSpot('docs', 0, { leaderRooms, current: { room: 'docs', idx: 4 } }), 4); // 비어 있는 잡은 자리는 유지
   assert.equal(pickMemberSpot('docs', 0, { leaderRooms, current: { room: 'docs', idx: 2 } }), 1); // 그 자리를 팀장이 차지했으면 새로 고른다
   assert.equal(pickMemberSpot('docs', 0, { leaderRooms, current: { room: 'research', idx: 4 } }), 1); // 다른 방의 옛 예약은 무시
-  assert.equal(pickMemberSpot('lab', 1, { leaderRooms: ['lab', 'lab', 'lab', 'lab', 'lab', 'lab'] }), null); // 모두 팀장 자리면 없음
+  assert.equal(pickMemberSpot('lab', 1, { leaderRooms: ['lab', 'lab', 'lab', 'lab', 'lab', 'lab', 'lab'] }), null); // 모두 팀장 자리면 없음
 });

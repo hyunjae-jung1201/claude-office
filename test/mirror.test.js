@@ -28,9 +28,9 @@ test('이미 push 원격이 있으면 중복 없이 두고, 같은 입력을 두
   assert.equal(once.remotes.length, 1);
 });
 
-test('합친 팀이 6개를 넘으면 오류(어느 팀이 넘는지 알려 준다)', () => {
-  const many = { projects: Array.from({ length: 6 }, (_, i) => ({ name: `T${i}`, path: `/p/${i}` })) };
-  assert.throws(() => mergeMirror(remote, many, 'PC1'), /6개|넘/);
+test('합친 팀이 7개를 넘으면 오류(어느 팀이 넘는지 알려 준다)', () => {
+  const many = { projects: Array.from({ length: 7 }, (_, i) => ({ name: `T${i}`, path: `/p/${i}` })) };
+  assert.throws(() => mergeMirror(remote, many, 'PC1'), /7개|넘/);
 });
 
 test('이름이 원격의 자체 팀과 같으면 거절한다(화면에 같은 이름이 두 개 생기지 않게)', () => {
